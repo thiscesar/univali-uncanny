@@ -24,7 +24,7 @@ out vec4 out_Color;
 // ---------- ajustes ----------
 const float ESCALA_TEXTURA = 0.25;  // uma repetição a cada 4 m
 const vec3  DIR_LUZ        = vec3(0.4, 1.0, 0.3);
-const float DENSIDADE      = 0.0025; // neblina provisória e fraca, para inspecionar o mapa (a da noite vem depois)
+const float DENSIDADE      = 0.035;  // a 60 m (o far da câmera) a neblina já cobre quase tudo: o horizonte não é cortado
 
 // ---------- ruído procedural, para as bordas entre materiais não ficarem retas ----------
 float hash(vec2 p){
