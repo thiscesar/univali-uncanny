@@ -1,0 +1,18 @@
+#version 330 core
+
+// Interface 2D: um quadrado unitário (0..1) esticado até o retângulo pedido, em pixels.
+
+in vec3 position; // att 0: canto do quadrado unitário
+in vec2 textuv;   // att 3: coordenada de textura do canto (0..1)
+
+uniform mat4 projecao;  // ortográfica: pixels (origem no canto superior esquerdo) -> tela
+uniform vec4 retangulo; // x, y, largura, altura em pixels
+uniform vec4 recorte;   // u0, v0, u1, v1: parte da textura usada (spritesheet)
+
+out vec2 uv;
+
+void main(void){
+	vec2 pixel = retangulo.xy + position.xy * retangulo.zw;
+	gl_Position = vec4(pixel, 0.0, 1.0) * projecao; // vetor-linha à esquerda, como no resto do projeto
+	uv = mix(recorte.xy, recorte.zw, textuv);
+}

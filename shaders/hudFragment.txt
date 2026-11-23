@@ -1,0 +1,17 @@
+#version 330 core
+
+uniform sampler2D tex;
+uniform vec4 cor;        // multiplicada pela textura: tinge e controla a transparência (fade)
+uniform int usaTextura;  // 0 = retângulo de cor sólida
+
+in vec2 uv;
+
+out vec4 out_Color;
+
+void main(void){
+	vec4 c = cor;
+	if(usaTextura == 1){
+		c *= texture(tex, uv);
+	}
+	out_Color = c;
+}

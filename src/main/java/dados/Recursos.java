@@ -2,14 +2,20 @@ package dados;
 
 import static org.lwjgl.opengl.GL11.glDeleteTextures;
 
+import java.awt.Font;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import render.Fonte;
+import render.Overlay2D;
+import render.TextoTextura;
 import shaders.ShaderProgram;
+import shaders.StaticShaderTerreno;
 import util.Caminhos;
+import util.TexturaTerreno;
 import util.TextureLoader;
 
 /**
@@ -28,6 +34,17 @@ public final class Recursos {
 
 	/** Shaders criados pelo jogo, para serem apagados no fim. */
 	private static final List<ShaderProgram> shaders = new ArrayList<>();
+
+	/** Shader do terreno, criado na primeira vez que alguém pede. */
+	private static StaticShaderTerreno shaderTerreno;
+
+	/** Desenho 2D (menus, HUD) e o cache de textos, criados na primeira vez. */
+	private static Overlay2D overlay;
+	private static TextoTextura textos;
+
+	/** Fontes da interface (não usam OpenGL, mas ficam aqui por serem compartilhadas). */
+	private static Fonte fonteTitulo;
+	private static Fonte fonteTexto;
 
 	private Recursos() {}
 
@@ -53,6 +70,60 @@ public final class Recursos {
 		return id;
 	}
 
+	/**
+	 * Carrega (uma vez só) uma textura para ser repetida sobre uma superfície grande,
+	 * com mipmaps e filtro anisotrópico, como as do terreno.
+	 */
+	public static int texturaRepetida(String relativo) {
+		String chave = "repetida:" + relativo; // a mesma imagem pode existir nas duas versões
+		Integer id = texturas.get(chave);
+		if (id == null) {
+			id = TexturaTerreno.carregar(Caminhos.caminho(relativo));
+			texturas.put(chave, id);
+		}
+		return id;
+	}
+
+	/** O shader do terreno, compartilhado por quem desenhar o terreno. */
+	public static StaticShaderTerreno shaderTerreno() {
+		if (shaderTerreno == null) {
+			shaderTerreno = registrar(new StaticShaderTerreno());
+		}
+		return shaderTerreno;
+	}
+
+	/** O desenhista 2D compartilhado por todas as telas. */
+	public static Overlay2D overlay() {
+		if (overlay == null) {
+			overlay = new Overlay2D();
+		}
+		return overlay;
+	}
+
+	/** O cache de textos transformados em textura. */
+	public static TextoTextura textos() {
+		if (textos == null) {
+			textos = new TextoTextura();
+		}
+		return textos;
+	}
+
+	/** Fonte do título e das telas finais (fontes/titulo.ttf; sem o arquivo, serifada do sistema). */
+	public static Fonte fonteTitulo() {
+		if (fonteTitulo == null) {
+			fonteTitulo = Fonte.carregar("fontes/titulo.ttf", Font.SERIF, Font.BOLD);
+		}
+		return fonteTitulo;
+	}
+
+	/** Fonte do HUD e dos botões (fontes/texto.ttf; sem o arquivo, sem serifa do sistema). */
+	public static Fonte fonteTexto() {
+		if (fonteTexto == null) {
+			fonteTexto = Fonte.carregar("fontes/texto.ttf", Font.SANS_SERIF, Font.PLAIN);
+		}
+		return fonteTexto;
+	}
+
 	/** Guarda um shader para ser apagado no liberar(). Devolve o próprio shader, por praticidade. */
 	public static <T extends ShaderProgram> T registrar(T shader) {
 		shaders.add(shader);
@@ -69,6 +140,15 @@ public final class Recursos {
 			s.cleanUp();
 		}
 		shaders.clear();
+		shaderTerreno = null;
+		if (overlay != null) {
+			overlay.liberar();
+			overlay = null;
+		}
+		if (textos != null) {
+			textos.liberar();
+			textos = null;
+		}
 	}
 
 	/** Textura substituta: xadrez magenta e preto de 64 x 64 pixels. */

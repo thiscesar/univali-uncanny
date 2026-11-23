@@ -5,6 +5,7 @@ import static org.lwjgl.glfw.GLFW.*;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector4f;
 
+import entrada.Entrada;
 import util.Utils3D;
 
 /**
@@ -16,10 +17,9 @@ import util.Utils3D;
  *   W A S D           anda para frente, para trás e para os lados
  *   Espaço / Ctrl     sobe / desce
  *   Shift             acelera
- *   setas             giram a visão
- *   botão direito     segurando e arrastando o mouse, gira a visão
+ *   mouse ou setas    giram a visão
  *
- * O teclado é lido direto do GLFW a cada quadro (glfwGetKey), sem depender do callback.
+ * Teclado e mouse vêm da classe Entrada. O mouse só gira a visão com o cursor preso.
  *
  * Orientação: a guinada (yaw) gira em torno do eixo Y e a arfagem (pitch) inclina para
  * cima e para baixo. Com os dois em zero, a câmera olha para -Z.
@@ -45,11 +45,6 @@ public class CameraLivre {
 	/** Topo da câmera. */
 	public final Vector4f cima = new Vector4f();
 
-	private final double[] mouseX = new double[1];
-	private final double[] mouseY = new double[1];
-	private double mouseXAnterior, mouseYAnterior;
-	private boolean arrastando = false;
-
 	public CameraLivre(float x, float y, float z, float guinada, float arfagem) {
 		this.x = x;
 		this.y = y;
@@ -60,28 +55,20 @@ public class CameraLivre {
 	}
 
 	/** Lê teclado e mouse e move a câmera. diftime em milissegundos, como no resto do projeto. */
-	public void atualizar(long janela, long diftime) {
+	public void atualizar(Entrada entrada, long diftime) {
 		float dt = diftime / 1000.0f;
 
 		// giro pelas setas
-		if (pressionada(janela, GLFW_KEY_LEFT))  guinada -= VELOCIDADE_GIRO * dt;
-		if (pressionada(janela, GLFW_KEY_RIGHT)) guinada += VELOCIDADE_GIRO * dt;
-		if (pressionada(janela, GLFW_KEY_UP))    arfagem += VELOCIDADE_GIRO * dt;
-		if (pressionada(janela, GLFW_KEY_DOWN))  arfagem -= VELOCIDADE_GIRO * dt;
+		if (pressionada(entrada, GLFW_KEY_LEFT))  guinada -= VELOCIDADE_GIRO * dt;
+		if (pressionada(entrada, GLFW_KEY_RIGHT)) guinada += VELOCIDADE_GIRO * dt;
+		if (pressionada(entrada, GLFW_KEY_UP))    arfagem += VELOCIDADE_GIRO * dt;
+		if (pressionada(entrada, GLFW_KEY_DOWN))  arfagem -= VELOCIDADE_GIRO * dt;
 
-		// giro pelo mouse, só enquanto o botão direito estiver apertado
-		glfwGetCursorPos(janela, mouseX, mouseY);
-		if (glfwGetMouseButton(janela, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-			if (arrastando) {
-				guinada += (float) (mouseX[0] - mouseXAnterior) * SENSIBILIDADE_MOUSE;
-				arfagem -= (float) (mouseY[0] - mouseYAnterior) * SENSIBILIDADE_MOUSE;
-			}
-			arrastando = true;
-		} else {
-			arrastando = false;
+		// giro pelo mouse (o y da tela cresce para baixo, por isso o sinal invertido)
+		if (entrada.cursorPreso()) {
+			guinada += entrada.deltaMouse().x * SENSIBILIDADE_MOUSE;
+			arfagem -= entrada.deltaMouse().y * SENSIBILIDADE_MOUSE;
 		}
-		mouseXAnterior = mouseX[0];
-		mouseYAnterior = mouseY[0];
 
 		// não deixa virar de cabeça para baixo
 		arfagem = Math.max(-ARFAGEM_MAXIMA, Math.min(ARFAGEM_MAXIMA, arfagem));
@@ -89,15 +76,15 @@ public class CameraLivre {
 
 		// movimento relativo à direção da câmera
 		float passo = VELOCIDADE * dt;
-		if (pressionada(janela, GLFW_KEY_LEFT_SHIFT)) passo *= FATOR_RAPIDO;
+		if (pressionada(entrada, GLFW_KEY_LEFT_SHIFT)) passo *= FATOR_RAPIDO;
 
 		float avanco = 0, lado = 0, subida = 0;
-		if (pressionada(janela, GLFW_KEY_W)) avanco += 1;
-		if (pressionada(janela, GLFW_KEY_S)) avanco -= 1;
-		if (pressionada(janela, GLFW_KEY_D)) lado += 1;
-		if (pressionada(janela, GLFW_KEY_A)) lado -= 1;
-		if (pressionada(janela, GLFW_KEY_SPACE)) subida += 1;
-		if (pressionada(janela, GLFW_KEY_LEFT_CONTROL)) subida -= 1;
+		if (pressionada(entrada, GLFW_KEY_W)) avanco += 1;
+		if (pressionada(entrada, GLFW_KEY_S)) avanco -= 1;
+		if (pressionada(entrada, GLFW_KEY_D)) lado += 1;
+		if (pressionada(entrada, GLFW_KEY_A)) lado -= 1;
+		if (pressionada(entrada, GLFW_KEY_SPACE)) subida += 1;
+		if (pressionada(entrada, GLFW_KEY_LEFT_CONTROL)) subida -= 1;
 
 		x += (frente.x * avanco + direita.x * lado) * passo;
 		y += (frente.y * avanco + direita.y * lado + subida) * passo;
@@ -141,7 +128,7 @@ public class CameraLivre {
 				0);
 	}
 
-	private static boolean pressionada(long janela, int tecla) {
-		return glfwGetKey(janela, tecla) == GLFW_PRESS;
+	private static boolean pressionada(Entrada entrada, int tecla) {
+		return entrada.estaPressionada(tecla);
 	}
 }
