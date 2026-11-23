@@ -1,0 +1,41 @@
+#version 330 core
+
+uniform sampler2D tex;
+
+in vec3 color;
+in vec3 norm;
+in vec2 uv;
+in float distancia;
+in float alturaMundo;
+
+out vec4 out_Color;
+
+// ---- ajustes da neblina ----
+const vec3  COR_CEU          = vec3(0.55, 0.75, 0.95); // mesma cor do glClearColor
+const float DENSIDADE        = 0.008;  // maior = neblina mais forte
+const float FORCA_CHAO       = 1.5;    // quanto a neblina engrossa perto do chão (0 = desliga)
+const float ALTURA_DISSIPA   = 4.0;    // altura em que a neblina baixa praticamente some
+
+void main(void){
+	vec4 colort = texture(tex,uv);
+
+	if(colort.w == 0){
+		discard;
+	}
+
+	// iluminação difusa
+	vec3 dirSol = normalize(vec3(0.4, 1.0, 0.3));
+	float difusa = max(dot(normalize(norm), dirSol), 0.0);
+	float luz = 0.35 + 0.65 * difusa;
+	vec3 corIluminada = colort.rgb * luz;
+
+	// neblina baixa: mais densa perto do nível da água, some com a altura
+	float fatorAltura = 1.0 + FORCA_CHAO * exp(-max(alturaMundo, 0.0) / ALTURA_DISSIPA);
+	float densidade = DENSIDADE * fatorAltura;
+
+	// neblina exponencial ao quadrado
+	float neblina = 1.0 - exp(-pow(densidade * distancia, 2.0));
+
+	vec3 corFinal = mix(corIluminada, COR_CEU, neblina);
+	out_Color = vec4(corFinal, colort.w);
+}

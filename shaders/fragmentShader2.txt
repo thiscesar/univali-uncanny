@@ -1,0 +1,25 @@
+#version 330 core
+
+uniform sampler2D tex;
+uniform float anim;     // oscila entre -1 e 1 (calculado no Projetil)
+uniform int liga_anim;  // 1 = tiro voando (pisca), 0 = explosão
+
+in vec3 color;
+in vec3 norm;
+in vec2 uv;
+
+out vec4 out_Color;
+
+void main(void){
+	vec4 colort = texture(tex,uv);
+
+	if(colort.w < 0.1){
+		discard; // parte transparente do billboard
+	}
+
+	float brilho = 1.0;
+	if(liga_anim == 1){
+		brilho = 0.75 + 0.25*anim; // tiro pulsando
+	}
+	out_Color = vec4(colort.rgb*brilho, colort.w);
+}

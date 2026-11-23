@@ -1,0 +1,32 @@
+#version 330 core
+
+// Shader exclusivo do terreno (texture splatting).
+
+in vec3 position; // att 0: posição (água já achatada no nível 0)
+in vec3 cor;      // att 1: cor.x = altura REAL em metros / 1000 (inclusive abaixo d'água)
+in vec3 normal;   // att 2: normal suave do vértice
+in vec2 textuv;   // att 3: coordenada da célula na grade (i, j)
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
+out vec3 normalMundo;
+out vec2 coordTerreno;
+out float alturaReal;
+out float alturaMundo;
+out float distancia;
+out vec3 posVista;
+
+void main(void){
+	mat4 modelview = model*view;
+	vec4 pv = vec4(position, 1.0) * modelview;
+	gl_Position = pv * projection;
+
+	posVista = pv.xyz;
+	distancia = length(pv.xyz);
+	alturaMundo = (vec4(position, 1.0) * model).y;
+	normalMundo = (vec4(normal, 0.0) * model).xyz;
+	coordTerreno = textuv;
+	alturaReal = cor.x * 1000.0;
+}
