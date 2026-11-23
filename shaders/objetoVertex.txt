@@ -1,0 +1,27 @@
+#version 330 core
+
+// Objetos do jogo (prédio, provas, caixas, escopeta...). Sucessor do vertexShader.txt
+// do projeto original, com os mesmos atributos 0 a 3, em espaço da câmera para a luz.
+
+in vec3 position; // att 0
+in vec3 cor;      // att 1 (não usado aqui)
+in vec3 normal;   // att 2
+in vec2 textuv;   // att 3
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
+out vec2 uv;
+out vec3 normalVista;
+out vec3 posVista;
+
+void main(void){
+	mat4 modelview = model * view;
+	vec4 pv = vec4(position, 1.0) * modelview;
+	gl_Position = pv * projection;
+	posVista = pv.xyz;
+	normalVista = (vec4(normal, 0.0) * modelview).xyz;
+	// mesma convenção de coordenada de textura do shader original (o ObjModel e o VboCube contam com ela)
+	uv = vec2(textuv.y, 1.0 - textuv.x);
+}

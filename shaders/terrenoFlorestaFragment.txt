@@ -4,7 +4,10 @@
 // altura e pela inclinação de cada ponto:
 //   folhas secas no chão plano, manchas de grama escura (mais comuns nas partes altas),
 //   terra exposta nos declives médios, pedra nos declives fortes, lama na beira dos
-//   lagos e água escura.
+//   lagos e água escura, que reflete a lanterna.
+// A luz e a neblina vêm do comum.glsl, iguais às dos outros objetos.
+
+#include "comum.glsl"
 
 uniform sampler2D texChao;
 uniform sampler2D texGrama;
@@ -12,19 +15,17 @@ uniform sampler2D texTerra;
 uniform sampler2D texPedra;
 uniform sampler2D texAgua;
 uniform float tempo;       // segundos, para a água se mexer
-uniform vec3 corNeblina;   // igual à cor do fundo (glClearColor)
+uniform mat4 view;         // para levar a normal da água ao espaço da câmera
 
 in vec3 normalMundo;
+in vec3 normalVista;
 in vec2 coordTerreno;      // posição na grade, em metros
 in float alturaReal;       // altura real em metros (negativa no fundo dos lagos)
-in float distancia;        // distância até a câmera
+in vec3 posVista;
 
 out vec4 out_Color;
 
-// ---------- ajustes ----------
 const float ESCALA_TEXTURA = 0.25;  // uma repetição a cada 4 m
-const vec3  DIR_LUZ        = vec3(0.4, 1.0, 0.3);
-const float DENSIDADE      = 0.035;  // a 60 m (o far da câmera) a neblina já cobre quase tudo: o horizonte não é cortado
 
 // ---------- ruído procedural, para as bordas entre materiais não ficarem retas ----------
 float hash(vec2 p){
@@ -51,8 +52,7 @@ vec3 amostra(sampler2D t, vec2 c){
 
 void main(void){
 	vec2 c = coordTerreno * ESCALA_TEXTURA;
-	vec3 n = normalize(normalMundo);
-	float inclinacao = 1.0 - n.y; // 0 = plano, 1 = parede
+	float inclinacao = 1.0 - normalize(normalMundo).y; // 0 = plano, 1 = parede
 	float h = alturaReal;
 
 	vec3 chao  = amostra(texChao, c);
@@ -75,8 +75,7 @@ void main(void){
 	float pesoLama = 1.0 - smoothstep(0.05, 0.6 + ruido(coordTerreno * 0.3) * 0.3, h);
 	cor = mix(cor, terra * 0.45, pesoLama);
 
-	float difusa = max(dot(n, normalize(DIR_LUZ)), 0.0);
-	vec3 chaoIluminado = cor * (0.35 + 0.65 * difusa);
+	vec3 chaoIluminado = iluminar(cor, normalVista, posVista);
 
 	// água escura, mais funda = mais escura, com o detalhe da textura deslizando
 	float profundidade = clamp(-h / 4.0, 0.0, 1.0);
@@ -86,10 +85,16 @@ void main(void){
 	float detalhe = (luminancia(texture(texAgua, c1).rgb) + luminancia(texture(texAgua, c2).rgb)) * 0.5;
 	corAgua *= 0.7 + 0.6 * detalhe;
 
+	// ondinhas: inclinam a normal da água; o reflexo da lanterna treme junto
+	vec2 p = coordTerreno;
+	float dx = 0.06 * cos(p.x * 1.3 + tempo * 1.5) + 0.03 * cos((p.x + p.y) * 2.1 + tempo * 2.3);
+	float dz = 0.06 * cos(p.y * 1.1 + tempo * 1.2) + 0.03 * cos((p.x - p.y) * 1.7 + tempo * 1.9);
+	vec3 normalAgua = (vec4(normalize(vec3(-dx, 1.0, -dz)), 0.0) * view).xyz;
+	vec3 aguaIluminada = iluminar(corAgua, normalAgua, posVista) + brilhoLanterna(normalAgua, posVista, 90.0) * 0.9;
+
 	// a margem: alturaReal é interpolada dentro do triângulo, então a linha da água sai suave
 	float pesoAgua = 1.0 - smoothstep(-0.05, 0.02, h);
-	vec3 corFinal = mix(chaoIluminado, corAgua, pesoAgua);
+	vec3 corFinal = mix(chaoIluminado, aguaIluminada, pesoAgua);
 
-	float neblina = 1.0 - exp(-pow(DENSIDADE * distancia, 2.0));
-	out_Color = vec4(mix(corFinal, corNeblina, neblina), 1.0);
+	out_Color = vec4(aplicarNeblina(corFinal, length(posVista), 0.0), 1.0);
 }

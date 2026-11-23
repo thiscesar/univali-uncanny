@@ -176,7 +176,12 @@ public class Audio {
 
 	/** Som "na cabeça" do jogador (interface, música de susto...). Devolve null se mudo. */
 	public SomTocando tocar(Efeito efeito, float volume) {
-		return tocarEm(efeito, volume, true, 0, 0, 0, false);
+		return tocar(efeito, volume, false);
+	}
+
+	/** O mesmo, podendo repetir sem parar (som ambiente, respiração). */
+	public SomTocando tocar(Efeito efeito, float volume, boolean loop) {
+		return tocarEm(efeito, volume, true, 0, 0, 0, loop);
 	}
 
 	/** Som num ponto do mundo, em metros. Para sons em loop, guarde o retorno para parar depois. */

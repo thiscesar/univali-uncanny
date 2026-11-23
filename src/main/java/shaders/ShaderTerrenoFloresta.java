@@ -1,15 +1,20 @@
 package shaders;
 
-import util.Caminhos;
+import static org.lwjgl.opengl.GL20.GL_FRAGMENT_SHADER;
+import static org.lwjgl.opengl.GL20.GL_VERTEX_SHADER;
+
+import render.PreprocessadorShader;
 
 /**
- * Shader do terreno da floresta, em metros. Usa o mesmo vertex shader do terreno da ilha
- * (terrenoVertex.txt) e um fragment shader próprio com os materiais da floresta.
+ * Shader do terreno da floresta, em metros, com a luz e a neblina do comum.glsl.
+ * Os arquivos passam pelo PreprocessadorShader (que resolve o #include) antes de chegar
+ * ao construtor do ShaderProgram.
  */
 public class ShaderTerrenoFloresta extends ShaderProgram {
 
 	public ShaderTerrenoFloresta() {
-		super(Caminhos.caminho("shaders/terrenoVertex.txt"), Caminhos.caminho("shaders/terrenoFlorestaFragment.txt"));
+		super(PreprocessadorShader.preparar("shaders/terrenoFlorestaVertex.txt", GL_VERTEX_SHADER),
+				PreprocessadorShader.preparar("shaders/terrenoFlorestaFragment.txt", GL_FRAGMENT_SHADER));
 	}
 
 	@Override

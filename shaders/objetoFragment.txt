@@ -1,0 +1,34 @@
+#version 330 core
+
+// Objetos do jogo, com a mesma luz e a mesma neblina do terreno (comum.glsl).
+
+#include "comum.glsl"
+
+uniform sampler2D tex;
+uniform float emissividade;   // 0 = só reflete luz; 1 = brilha sozinho (e sofre menos neblina)
+
+in vec2 uv;
+in vec3 normalVista;
+in vec3 posVista;
+
+out vec4 out_Color;
+
+void main(void){
+	vec4 c = texture(tex, uv);
+	if(c.a < 0.5){
+		discard;
+	}
+
+	// Modelos sem normal por vértice (o VboCube do projeto original) chegam com normal zero:
+	// usamos a normal da face, tirada das derivadas da posição na tela.
+	vec3 n = normalVista;
+	if(length(n) < 0.001){
+		n = cross(dFdx(posVista), dFdy(posVista));
+		if(dot(n, posVista) > 0.0){
+			n = -n; // sempre virada para a câmera
+		}
+	}
+
+	vec3 cor = iluminar(c.rgb, n, posVista) + c.rgb * emissividade;
+	out_Color = vec4(aplicarNeblina(cor, length(posVista), emissividade), 1.0);
+}

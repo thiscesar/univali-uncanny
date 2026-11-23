@@ -8,7 +8,7 @@ Conversões úteis:
   Estéreo para mono: ffmpeg -i grito.wav -ac 1 monstro_grito.ogg
 
 Arquivos esperados: musica_menu.ogg, menu_passar.ogg, menu_clique.ogg, ambiente_floresta.ogg, passo_1..4.ogg,
-respiracao.ogg, escopeta_tiro.ogg, escopeta_telha.ogg, escopeta_cartucho.ogg,
+respiracao.ogg, lanterna_clique.ogg, galho_quebrando.ogg, coruja.ogg, escopeta_tiro.ogg, escopeta_telha.ogg, escopeta_cartucho.ogg,
 escopeta_vazia.ogg, monstro_grito.ogg, monstro_morte.ogg, batimento.ogg,
 sussurro.ogg, pegar_prova.ogg, sinal_aula.ogg, susto.ogg.
 

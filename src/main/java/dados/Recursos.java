@@ -14,6 +14,7 @@ import render.Fonte;
 import render.Overlay2D;
 import render.TextoTextura;
 import shaders.ShaderProgram;
+import shaders.ShaderObjeto;
 import shaders.ShaderTerrenoFloresta;
 import shaders.StaticShaderTerreno;
 import util.Caminhos;
@@ -46,6 +47,7 @@ public final class Recursos {
 	/** Shader do terreno, criado na primeira vez que alguém pede. */
 	private static StaticShaderTerreno shaderTerreno;
 	private static ShaderTerrenoFloresta shaderFloresta;
+	private static ShaderObjeto shaderObjeto;
 
 	/** Desenho 2D (menus, HUD) e o cache de textos, criados na primeira vez. */
 	private static Overlay2D overlay;
@@ -143,6 +145,14 @@ public final class Recursos {
 		return shaderFloresta;
 	}
 
+	/** O shader dos objetos do jogo. */
+	public static ShaderObjeto shaderObjeto() {
+		if (shaderObjeto == null) {
+			shaderObjeto = registrar(new ShaderObjeto());
+		}
+		return shaderObjeto;
+	}
+
 	/** O shader do terreno, compartilhado por quem desenhar o terreno. */
 	public static StaticShaderTerreno shaderTerreno() {
 		if (shaderTerreno == null) {
@@ -205,6 +215,7 @@ public final class Recursos {
 		shaders.clear();
 		shaderTerreno = null;
 		shaderFloresta = null;
+		shaderObjeto = null;
 		if (overlay != null) {
 			overlay.liberar();
 			overlay = null;

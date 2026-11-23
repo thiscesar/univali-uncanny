@@ -7,11 +7,14 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
 import static org.lwjgl.opengl.GL20.glGetUniformLocation;
 import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
-import static org.lwjgl.opengl.GL20.glUniform3f;
+import static org.lwjgl.opengl.GL20.glDisableVertexAttribArray;
+import static org.lwjgl.opengl.GL20.glVertexAttrib3f;
 import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
 
 import java.awt.Color;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 import org.lwjgl.BufferUtils;
@@ -20,7 +23,9 @@ import org.lwjgl.util.vector.Matrix4f;
 import audio.Audio;
 import audio.Efeito;
 import audio.Sintetizador;
+import audio.SomAmbiente;
 import audio.SomTocando;
+import dados.Constantes;
 import dados.Opcoes;
 import dados.Recursos;
 import entidades.Jogador;
@@ -28,17 +33,21 @@ import entrada.Entrada;
 import mundo.ConsultaAltura;
 import mundo.Mundo;
 import mundo.TexturasFloresta;
+import obj.Cubo3D;
+import render.Ambiente;
 import render.Camera;
 import render.CameraLivre;
+import render.Lanterna;
 import render.Overlay2D;
 import render.Texto;
+import shaders.ShaderObjeto;
 import shaders.ShaderTerrenoFloresta;
 import util.Utils3D;
 
 /**
- * A partida: o jogador andando pela floresta em primeira pessoa.
+ * A partida: o jogador andando pela floresta à noite, em primeira pessoa, com a lanterna.
  *
- * ESC abre a pausa por cima. F3 mostra o painel de depuração; F4 troca para a câmera livre
+ * F liga e desliga a lanterna. ESC abre a pausa por cima. F3 mostra o painel de depuração; F4 troca para a câmera livre
  * (voa e atravessa o chão, para inspecionar o mapa). V e X forçam vitória e derrota, e T liga
  * um som 3D de teste: são atalhos provisórios até existirem as regras do jogo.
  */
@@ -49,7 +58,6 @@ public class TelaJogo implements Tela {
 	private static final float CAMPO_DE_VISAO = 70f; // graus, na vertical
 	private static final float PERTO = 0.1f;
 	private static final float LONGE = 60f;          // além disso a neblina já escondeu tudo
-	private static final float[] COR_CEU = { 0.02f, 0.025f, 0.03f };
 
 	private static final Color COR_PAINEL = new Color(0, 0, 0, 160);
 	private static final Color COR_DEPURACAO = new Color(200, 195, 185);
@@ -59,6 +67,14 @@ public class TelaJogo implements Tela {
 	/** O mundo pronto (terreno, chão e colisão), entregue pela tela de carregamento. */
 	private final Mundo mundo;
 	private final Jogador jogador;
+
+	/** Luz e neblina da cena, iguais para o terreno e para os objetos (ver comum.glsl). */
+	private final Ambiente ambiente = new Ambiente();
+	private final Lanterna lanterna = new Lanterna();
+
+	/** Cubos do projeto original espalhados perto do início, para conferir luz e neblina em objetos. */
+	private final List<Cubo3D> objetosTeste = new ArrayList<>();
+	private int texturaObjetos;
 
 	/** Câmera livre de depuração (F4), começando onde o jogador estiver. */
 	private CameraLivre cameraLivre = null;
@@ -72,6 +88,8 @@ public class TelaJogo implements Tela {
 	private final Random random = new Random();
 	private Efeito[] passos;
 	private Efeito respiracao;
+	private Efeito cliqueLanterna;
+	private SomAmbiente somAmbiente;
 	private SomTocando somRespiracao = null;
 	private SomTocando somTeste = null;
 
@@ -102,6 +120,27 @@ public class TelaJogo implements Tela {
 			passos[i] = audio.carregarEfeito("audio/passo_" + (i + 1) + ".ogg");
 		}
 		respiracao = audio.carregarEfeito("audio/respiracao.ogg");
+		cliqueLanterna = audio.carregarEfeito("audio/lanterna_clique.ogg");
+		somAmbiente = new SomAmbiente(audio);
+		somAmbiente.iniciar();
+
+		texturaObjetos = Recursos.textura("texturecube.png");
+		criarObjetosTeste();
+	}
+
+	/** Seis cubos de 1 m em volta do ponto de início, apoiados no chão. */
+	private void criarObjetosTeste() {
+		objetosTeste.clear();
+		for (int i = 0; i < 6; i++) {
+			double angulo = i * Math.PI / 3 + 0.4;
+			float distancia = 5 + i * 2;
+			float x = jogador.x + distancia * (float) Math.cos(angulo);
+			float z = jogador.z + distancia * (float) Math.sin(angulo);
+			float meio = 0.5f; // o VboCube vai de -1 a 1: com escala 0,5, o cubo tem 1 m
+			Cubo3D cubo = new Cubo3D(x, mundo.chao.alturaEm(x, z) + meio, z, meio);
+			cubo.model = Constantes.vboc;
+			objetosTeste.add(cubo);
+		}
 	}
 
 	@Override
@@ -112,6 +151,7 @@ public class TelaJogo implements Tela {
 		audio.parar(somRespiracao);
 		somTeste = null;
 		somRespiracao = null;
+		somAmbiente.parar();
 	}
 
 	// ---------- atualização ----------
@@ -140,6 +180,10 @@ public class TelaJogo implements Tela {
 		if (entrada.foiPressionada(GLFW_KEY_T)) {
 			alternarSomTeste();
 		}
+		if (entrada.foiPressionada(GLFW_KEY_F)) {
+			lanterna.alternar();
+			gerenciador.audio().tocar(cliqueLanterna, 0.8f);
+		}
 
 		if (cameraLivre != null) {
 			cameraLivre.atualizar(entrada, diftime);
@@ -152,8 +196,11 @@ public class TelaJogo implements Tela {
 		tempo += diftime / 1000.0f;
 		contarQuadros(diftime);
 
-		// o ouvinte acompanha a câmera: é assim que o OpenAL sabe de que lado vem cada som
 		Camera c = cameraAtual();
+		lanterna.atualizar(c, diftime / 1000f);
+		somAmbiente.atualizar(diftime / 1000f, c.x, c.y, c.z);
+
+		// o ouvinte acompanha a câmera: é assim que o OpenAL sabe de que lado vem cada som
 		gerenciador.audio().atualizarOuvinte(c.x, c.y, c.z,
 				c.frente.x, c.frente.y, c.frente.z, c.cima.x, c.cima.y, c.cima.z);
 	}
@@ -231,13 +278,16 @@ public class TelaJogo implements Tela {
 
 	@Override
 	public void desenhar() {
-		glClearColor(COR_CEU[0], COR_CEU[1], COR_CEU[2], 1.0f);
+		// fundo da mesma cor da neblina: o que some na neblina se funde com o céu
+		glClearColor(ambiente.corCeu[0], ambiente.corCeu[1], ambiente.corCeu[2], 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glEnable(GL_DEPTH_TEST);
 
 		guardar(projecao(), bufferProjecao);
 		guardar(cameraAtual().matrizVisao(), bufferVisao);
+		lanterna.aplicar(ambiente);
 		desenharTerreno();
+		desenharObjetosTeste();
 
 		Overlay2D overlay = Recursos.overlay();
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
@@ -274,7 +324,7 @@ public class TelaJogo implements Tela {
 		glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), false, bufferProjecao);
 		glUniformMatrix4fv(glGetUniformLocation(prog, "view"), false, bufferVisao);
 		glUniform1f(glGetUniformLocation(prog, "tempo"), tempo);
-		glUniform3f(glGetUniformLocation(prog, "corNeblina"), COR_CEU[0], COR_CEU[1], COR_CEU[2]);
+		ambiente.enviar(shader);
 
 		// cada textura vai numa "unidade" diferente: 0, 1, 2...
 		for (int i = 0; i < texturasTerreno.length; i++) {
@@ -286,6 +336,30 @@ public class TelaJogo implements Tela {
 		mundo.terreno.DesenhaSe(shader);
 
 		glActiveTexture(GL_TEXTURE0);
+		shader.stop();
+	}
+
+	/** Os cubos de teste, com o shader de objetos (mesma luz e neblina do terreno). */
+	private void desenharObjetosTeste() {
+		ShaderObjeto shader = Recursos.shaderObjeto();
+		shader.start();
+		int prog = shader.programID;
+		glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), false, bufferProjecao);
+		glUniformMatrix4fv(glGetUniformLocation(prog, "view"), false, bufferVisao);
+		glUniform1i(glGetUniformLocation(prog, "tex"), 0);
+		glUniform1f(glGetUniformLocation(prog, "emissividade"), 0f);
+		ambiente.enviar(shader);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texturaObjetos);
+		// O VboCube não tem normais (atributo 2). Desligamos o atributo e o deixamos em zero,
+		// senão ele usaria o que sobrou ligado do terreno; com normal zero, o shader calcula
+		// a normal da face sozinho.
+		glDisableVertexAttribArray(2);
+		glVertexAttrib3f(2, 0, 0, 0);
+		for (Cubo3D cubo : objetosTeste) {
+			cubo.DesenhaSe(shader);
+		}
 		shader.stop();
 	}
 
@@ -301,9 +375,10 @@ public class TelaJogo implements Tela {
 								: "terra firme"),
 				String.format("velocidade %.1f m/s   %s", jogador.velocidade(),
 						jogador.correndo() ? "correndo" : jogador.velocidade() > 0.1f ? "andando" : "parado"),
-				String.format("estamina %.0f%%%s", jogador.estamina() * 100, jogador.ofegante() ? "   ofegante" : ""),
+				String.format("estamina %.0f%%%s   lanterna %s", jogador.estamina() * 100,
+						jogador.ofegante() ? "   ofegante" : "", lanterna.ligada() ? "ligada" : "desligada"),
 				cameraLivre != null ? "câmera livre (F4 volta ao jogador)" : "F4: câmera livre",
-				"ESC pausa   T som de teste   V vitória   X derrota",
+				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota",
 		};
 		int tamanho = 16;
 		float linha = tamanho * 1.45f;

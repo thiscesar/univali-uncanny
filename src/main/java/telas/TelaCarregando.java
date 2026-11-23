@@ -258,7 +258,9 @@ public class TelaCarregando implements Tela {
 
 	private void carregarTexturas() {
 		Recursos.shaderFloresta();
+		Recursos.shaderObjeto();
 		TexturasFloresta.carregar();
+		Recursos.textura("texturecube.png"); // dos objetos de teste
 	}
 
 	// ---------- desenho ----------
