@@ -10,6 +10,7 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
 import static org.lwjgl.opengl.GL20.glGetUniformLocation;
 import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
+import static org.lwjgl.opengl.GL20.glUniform3f;
 import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
 
 import java.awt.Color;
@@ -23,11 +24,13 @@ import audio.Efeito;
 import audio.Sintetizador;
 import audio.SomTocando;
 import dados.Recursos;
-import obj.Mapa3D;
+import mundo.ConsultaAltura;
+import mundo.Mundo;
+import mundo.TexturasFloresta;
 import render.CameraLivre;
 import render.Overlay2D;
 import render.Texto;
-import shaders.StaticShaderTerreno;
+import shaders.ShaderTerrenoFloresta;
 import util.Utils3D;
 
 /**
@@ -38,47 +41,41 @@ public class TelaJogo implements Tela {
 
 	static final String TITULO = "JOGO (ESC: pausa, T: som de teste, V: vitória, X: derrota)";
 
-	/** Ponto fixo do som de teste: à direita de onde a câmera começa. Gire a câmera para ouvi-lo mudar de lado. */
-	private static final float[] POSICAO_TESTE = { 102f, 25f, 200f };
+	/** Ponto fixo do som de teste: 10 m à direita de onde a câmera começa. Gire a câmera para ouvi-lo mudar de lado. */
+	private static final float[] POSICAO_TESTE = { 160f, 30f, 330f };
 	private SomTocando somTeste = null;
 	private static final Color COR_ROTULO = new Color(200, 195, 185, 200);
 
 	private static final float CAMPO_DE_VISAO = 60f; // graus, na vertical
 	private static final float PERTO = 0.1f;
-	private static final float LONGE = 100f;
+	private static final float LONGE = 400f; // provisório: dá para ver o mapa inteiro de cima
 	private static final float[] COR_CEU = { 0.02f, 0.025f, 0.03f };
-
-	/** Texturas do terreno (a tela de carregamento as carrega antes, para a partida abrir sem travar). */
-	static final String[] ARQUIVOS_TERRENO = {
-			"texturas/agua.png", "texturas/areia.png", "texturas/grama.png", "texturas/pedra.png" };
-	private static final String[] UNIFORMS_TERRENO = { "texAgua", "texAreia", "texGrama", "texPedra" };
+	private static final Color COR_DEPURACAO = new Color(160, 155, 145, 200);
 
 	private final GerenciadorTelas gerenciador;
-	/** O terreno pronto, entregue pela tela de carregamento. */
-	private final Mapa3D mapa;
+	/** O mundo pronto (terreno e consulta do chão), entregue pela tela de carregamento. */
+	private final Mundo mundo;
 
-	/** Começa na borda sul do terreno, olhando para o centro e um pouco para baixo. */
-	private final CameraLivre camera = new CameraLivre(92f, 25f, 200f, 0f, (float) Math.toRadians(-20));
+	/** Começa fora do mapa, ao sul (o mapa vai de 0 a 300 m), olhando para o centro e para baixo. */
+	private final CameraLivre camera = new CameraLivre(150f, 30f, 330f, 0f, (float) Math.toRadians(-20));
 
 	private final FloatBuffer bufferProjecao = BufferUtils.createFloatBuffer(16);
 	private final FloatBuffer bufferVisao = BufferUtils.createFloatBuffer(16);
-	private final int[] texturasTerreno = new int[4];
+	private int[] texturasTerreno;
 
 	/** Tempo da partida em segundos; para quando a partida está pausada (anima a água). */
 	private float tempo = 0;
 
-	public TelaJogo(GerenciadorTelas gerenciador, Mapa3D mapa) {
+	public TelaJogo(GerenciadorTelas gerenciador, Mundo mundo) {
 		this.gerenciador = gerenciador;
-		this.mapa = mapa;
+		this.mundo = mundo;
 	}
 
 	@Override
 	public void entrar() {
 		gerenciador.definirTitulo(TITULO);
 		gerenciador.entrada().prenderCursor(true);
-		for (int i = 0; i < 4; i++) {
-			texturasTerreno[i] = Recursos.texturaRepetida(ARQUIVOS_TERRENO[i]);
-		}
+		texturasTerreno = TexturasFloresta.carregar(); // já carregadas na tela de carregamento: aqui só pega
 	}
 
 	@Override
@@ -135,7 +132,7 @@ public class TelaJogo implements Tela {
 		guardar(projecao(), bufferProjecao);
 		guardar(camera.matrizVisao(), bufferVisao);
 
-		if (mapa != null) {
+		if (mundo != null) {
 			desenharTerreno();
 		}
 
@@ -144,7 +141,23 @@ public class TelaJogo implements Tela {
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
 		Texto.desenhar(overlay, "JOGO    ESC: pausa    T: som de teste    V: vitória    X: derrota",
 				gerenciador.larguraJanela() / 2f, 14, 20, COR_ROTULO, Texto.Alinhamento.CENTRO);
+		if (mundo != null) {
+			desenharDepuracao(overlay);
+		}
 		overlay.finalizar();
+	}
+
+	/** Uma linha embaixo da legenda com o que a consulta do chão diz sobre o ponto sob a câmera. */
+	private void desenharDepuracao(Overlay2D overlay) {
+		ConsultaAltura chao = mundo.chao;
+		String texto = String.format("x %.0f  z %.0f  |  chão %.2f m  |  inclinação %.0f°  |  %s",
+				camera.x, camera.z, chao.alturaEm(camera.x, camera.z), chao.anguloEm(camera.x, camera.z),
+				!chao.dentroDoMapa(camera.x, camera.z, 0) ? "fora do mapa"
+						: chao.ehAgua(camera.x, camera.z)
+								? String.format("água, %.2f m de fundo", chao.profundidadeAgua(camera.x, camera.z))
+								: "terra firme");
+		Texto.desenhar(overlay, texto, gerenciador.larguraJanela() / 2f, 42, 16, COR_DEPURACAO,
+				Texto.Alinhamento.CENTRO);
 	}
 
 	/**
@@ -165,21 +178,22 @@ public class TelaJogo implements Tela {
 	}
 
 	private void desenharTerreno() {
-		StaticShaderTerreno shader = Recursos.shaderTerreno();
+		ShaderTerrenoFloresta shader = Recursos.shaderFloresta();
 		shader.start();
 		int prog = shader.programID;
 		glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), false, bufferProjecao);
 		glUniformMatrix4fv(glGetUniformLocation(prog, "view"), false, bufferVisao);
 		glUniform1f(glGetUniformLocation(prog, "tempo"), tempo);
+		glUniform3f(glGetUniformLocation(prog, "corNeblina"), COR_CEU[0], COR_CEU[1], COR_CEU[2]);
 
-		// cada textura vai numa "unidade" diferente: 0, 1, 2 e 3
-		for (int i = 0; i < 4; i++) {
+		// cada textura vai numa "unidade" diferente: 0, 1, 2...
+		for (int i = 0; i < texturasTerreno.length; i++) {
 			glActiveTexture(GL_TEXTURE0 + i);
 			glBindTexture(GL_TEXTURE_2D, texturasTerreno[i]);
-			glUniform1i(glGetUniformLocation(prog, UNIFORMS_TERRENO[i]), i);
+			glUniform1i(glGetUniformLocation(prog, TexturasFloresta.UNIFORMS[i]), i);
 		}
 
-		mapa.DesenhaSe(shader);
+		mundo.terreno.DesenhaSe(shader);
 
 		glActiveTexture(GL_TEXTURE0);
 		shader.stop();

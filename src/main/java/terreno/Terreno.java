@@ -51,6 +51,37 @@ public final class Terreno {
         return (double) conta / alturas.length;
     }
 
+    /**
+     * Fração do mapa ocupada pela maior região contínua abaixo do nível (o maior lago).
+     * Busca em largura (flood fill) com vizinhança de 4 direções.
+     */
+    public double maiorRegiaoAbaixo(float nivel) {
+        boolean[] visitado = new boolean[alturas.length];
+        int[] fila = new int[alturas.length];
+        int maior = 0;
+        for (int inicio = 0; inicio < alturas.length; inicio++) {
+            if (visitado[inicio] || alturas[inicio] >= nivel) continue;
+            int frente = 0, fim = 0, tamanho = 0;
+            fila[fim++] = inicio;
+            visitado[inicio] = true;
+            while (frente < fim) {
+                int p = fila[frente++];
+                tamanho++;
+                int x = p % largura, y = p / largura;
+                int[] vizinhos = { x > 0 ? p - 1 : -1, x < largura - 1 ? p + 1 : -1,
+                        y > 0 ? p - largura : -1, y < comprimento - 1 ? p + largura : -1 };
+                for (int v : vizinhos) {
+                    if (v >= 0 && !visitado[v] && alturas[v] < nivel) {
+                        visitado[v] = true;
+                        fila[fim++] = v;
+                    }
+                }
+            }
+            maior = Math.max(maior, tamanho);
+        }
+        return (double) maior / alturas.length;
+    }
+
     /** Diferença média de altura entre vizinhos: quanto maior, mais "acidentado". */
     public double rugosidade() {
         double soma = 0;

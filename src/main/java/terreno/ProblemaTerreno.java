@@ -12,19 +12,28 @@ import java.util.Random;
  * Mutação: adiciona um morro (ou uma depressão) suave em algum lugar.
  * Cruzamento: pega uma região circular de um pai e mistura suavemente no outro.
  * Fitness: o quão perto o terreno está das características desejadas
- *          (porcentagem de água, de montanha e o quão acidentado ele é).
+ *          (porcentagem de água, de montanha e o quão acidentado ele é) e, se pedido,
+ *          uma penalidade para lagos grandes demais (para a água vir em vários lagos pequenos).
  */
 public class ProblemaTerreno implements Problema<Terreno> {
     private final int tamanho;
     private final double alvoAgua;
     private final double alvoMontanha;
     private final double alvoRugosidade;
+    /** Maior fração do mapa que um único lago pode ocupar sem penalidade (1 = sem limite). */
+    private final double maiorLago;
 
     public ProblemaTerreno(int tamanho, double alvoAgua, double alvoMontanha, double alvoRugosidade) {
+        this(tamanho, alvoAgua, alvoMontanha, alvoRugosidade, 1.0);
+    }
+
+    public ProblemaTerreno(int tamanho, double alvoAgua, double alvoMontanha, double alvoRugosidade,
+            double maiorLago) {
         this.tamanho = tamanho;
         this.alvoAgua = alvoAgua;
         this.alvoMontanha = alvoMontanha;
         this.alvoRugosidade = alvoRugosidade;
+        this.maiorLago = maiorLago;
     }
 
     @Override
@@ -45,6 +54,9 @@ public class ProblemaTerreno implements Problema<Terreno> {
         double erroRugosidade = Math.abs(t.rugosidade() - alvoRugosidade) / alvoRugosidade;
 
         double erro = erroAgua + erroMontanha + 0.2 * erroRugosidade;
+        if (maiorLago < 1.0) {
+            erro += 20 * Math.max(0, t.maiorRegiaoAbaixo(Terreno.NIVEL_AGUA) - maiorLago);
+        }
         return 1.0 / (1.0 + 10 * erro); // erro zero = fitness 1
     }
 

@@ -25,6 +25,11 @@ public final class TexturaTerreno {
 		if (imagem == null) {
 			throw new RuntimeException("Textura não encontrada: " + arquivo);
 		}
+		return criar(imagem);
+	}
+
+	/** O mesmo, a partir de uma imagem já carregada ou gerada por código. */
+	public static int criar(BufferedImage imagem) {
 		int id = TextureLoader.loadTexture(imagem); // envia os pixels e deixa a textura ativa
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);

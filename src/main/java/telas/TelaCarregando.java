@@ -14,6 +14,9 @@ import java.util.concurrent.Future;
 
 import dados.Constantes;
 import dados.Recursos;
+import mundo.ConsultaAltura;
+import mundo.Mundo;
+import mundo.TexturasFloresta;
 import obj.Mapa3D;
 import obj.ObjHTGsrtm;
 import render.AtmosferaMenu;
@@ -21,6 +24,7 @@ import render.Fonte;
 import render.Overlay2D;
 import render.Texto;
 import terreno.GeradorTerreno;
+import terreno.PerfilTerreno;
 
 /**
  * Tela "Carregando mapa...": gera o mapa sem congelar a janela.
@@ -38,7 +42,13 @@ public class TelaCarregando implements Tela {
 
 	private enum Estado { GERANDO, MONTANDO, SAINDO, ERRO }
 
-	private static final int TAMANHO_GRADE = 512;
+	/** O terreno do jogo: 300 x 300 m, 1 m entre pontos, alturas em centímetros. */
+	private static final PerfilTerreno PERFIL = PerfilTerreno.FLORESTA;
+	private static final float METROS_ENTRE_PONTOS = 1f;
+	private static final float METROS_POR_UNIDADE = 1f / PERFIL.unidadesPorMetro(); // centímetros -> metros
+
+	/** O que a thread de geração entrega: só dados, nada de OpenGL. */
+	private record DadosTerreno(int[][] alturas, ConsultaAltura chao) {}
 	private static final float DURACAO_FADE = 0.6f;     // segundos
 	private static final float TROCA_FRASE = 3.2f;      // segundos
 	private static final String[] FRASES = {
@@ -61,8 +71,8 @@ public class TelaCarregando implements Tela {
 	private static final Color COR_FRASE = new Color(170, 160, 150);
 	private static final Color COR_ERRO = new Color(220, 45, 40);
 
-	/** Seed do terreno guardado em Constantes.mapa (para não gerar de novo a mesma seed). */
-	private static long seedCarregada;
+	/** O último mundo carregado (para não gerar de novo a mesma seed). */
+	private static Mundo mundoCarregado;
 
 	private final GerenciadorTelas gerenciador;
 	private final long seed;
@@ -82,10 +92,10 @@ public class TelaCarregando implements Tela {
 			this::carregarTexturas);
 
 	private ExecutorService executor;
-	private Future<int[][]> tarefa;
+	private Future<DadosTerreno> tarefa;
 	/** Fração do AG já feita, escrita pela thread do AG e lida pela principal. */
 	private volatile float fracaoRelevo = 0;
-	private int[][] alturas;
+	private DadosTerreno dados;
 	private boolean reaproveitar;
 
 	private Estado estado;
@@ -117,7 +127,7 @@ public class TelaCarregando implements Tela {
 		gerenciador.definirTitulo("Carregando mapa (seed " + seed + ")");
 		gerenciador.entrada().prenderCursor(false);
 
-		reaproveitar = Constantes.mapa != null && seedCarregada == seed;
+		reaproveitar = mundoCarregado != null && mundoCarregado.seed == seed;
 		if (reaproveitar) {
 			// a mesma seed já está carregada: pula a geração
 			progresso.concluirEtapa();
@@ -133,12 +143,13 @@ public class TelaCarregando implements Tela {
 		});
 		tarefa = executor.submit(() -> {
 			// tudo aqui roda na thread separada: só dados, nada de OpenGL
-			return GeradorTerreno.gerar(seed, TAMANHO_GRADE, (geracao, terreno, fitness) -> {
+			int[][] alturas = GeradorTerreno.gerar(PERFIL, seed, (geracao, terreno, fitness) -> {
 				if (Thread.currentThread().isInterrupted()) {
 					throw new CancellationException("geração cancelada");
 				}
 				fracaoRelevo = (float) geracao / GeradorTerreno.GERACOES;
 			});
+			return new DadosTerreno(alturas, new ConsultaAltura(alturas, METROS_ENTRE_PONTOS, METROS_POR_UNIDADE));
 		});
 		estado = Estado.GERANDO;
 	}
@@ -178,7 +189,7 @@ public class TelaCarregando implements Tela {
 			case SAINDO -> {
 				fade += dt / DURACAO_FADE;
 				if (fade >= 1) {
-					gerenciador.trocarPara(new TelaJogo(gerenciador, Constantes.mapa));
+					gerenciador.trocarPara(new TelaJogo(gerenciador, mundoCarregado));
 				}
 			}
 			case ERRO -> { }
@@ -191,7 +202,7 @@ public class TelaCarregando implements Tela {
 			return;
 		}
 		try {
-			alturas = tarefa.get();
+			dados = tarefa.get();
 			progresso.concluirEtapa(); // relevo
 			progresso.concluirEtapa(); // fase (ainda não existe)
 			estado = Estado.MONTANDO;
@@ -232,23 +243,22 @@ public class TelaCarregando implements Tela {
 		if (reaproveitar) {
 			return;
 		}
-		if (Constantes.mapa != null) {
-			Constantes.mapa.model.liberar(); // apaga da placa de vídeo a malha do mapa anterior
-			Constantes.mapa = null;
+		if (mundoCarregado != null) {
+			mundoCarregado.liberar(); // apaga da placa de vídeo a malha do mapa anterior
+			mundoCarregado = null;
 		}
-		ObjHTGsrtm malha = new ObjHTGsrtm(alturas);
+		ObjHTGsrtm malha = new ObjHTGsrtm(dados.alturas(), METROS_ENTRE_PONTOS, METROS_POR_UNIDADE);
 		malha.load();
-		Constantes.mapa = new Mapa3D(-10.0f, 0.0f, -10.0f, 10);
-		Constantes.mapa.model = malha;
-		seedCarregada = seed;
-		alturas = null; // a malha já foi montada; libera a memória
+		Mapa3D terreno = new Mapa3D(0, 0, 0, 1); // na origem, escala 1: o mapa vai de 0 a 300 m em x e z
+		terreno.model = malha;
+		mundoCarregado = new Mundo(seed, PERFIL, terreno, dados.chao());
+		Constantes.mapa = terreno; // o campo global do projeto original continua apontando para o terreno
+		dados = null;
 	}
 
 	private void carregarTexturas() {
-		Recursos.shaderTerreno();
-		for (String arquivo : TelaJogo.ARQUIVOS_TERRENO) {
-			Recursos.texturaRepetida(arquivo);
-		}
+		Recursos.shaderFloresta();
+		TexturasFloresta.carregar();
 	}
 
 	// ---------- desenho ----------

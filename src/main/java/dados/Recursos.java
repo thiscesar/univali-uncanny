@@ -14,6 +14,7 @@ import render.Fonte;
 import render.Overlay2D;
 import render.TextoTextura;
 import shaders.ShaderProgram;
+import shaders.ShaderTerrenoFloresta;
 import shaders.StaticShaderTerreno;
 import util.Caminhos;
 import util.TexturaTerreno;
@@ -44,6 +45,7 @@ public final class Recursos {
 
 	/** Shader do terreno, criado na primeira vez que alguém pede. */
 	private static StaticShaderTerreno shaderTerreno;
+	private static ShaderTerrenoFloresta shaderFloresta;
 
 	/** Desenho 2D (menus, HUD) e o cache de textos, criados na primeira vez. */
 	private static Overlay2D overlay;
@@ -117,6 +119,30 @@ public final class Recursos {
 		return t;
 	}
 
+	/**
+	 * Textura de terreno (repetida, com mipmaps): o arquivo, se existir; senão, a imagem
+	 * substituta gerada por código. Carregada uma vez só.
+	 */
+	public static int texturaTerreno(String relativo, Supplier<BufferedImage> substituta) {
+		String chave = "terreno:" + relativo;
+		Integer id = texturas.get(chave);
+		if (id == null) {
+			id = Caminhos.arquivo(relativo).exists()
+					? TexturaTerreno.carregar(Caminhos.caminho(relativo))
+					: TexturaTerreno.criar(substituta.get());
+			texturas.put(chave, id);
+		}
+		return id;
+	}
+
+	/** O shader do terreno da floresta. */
+	public static ShaderTerrenoFloresta shaderFloresta() {
+		if (shaderFloresta == null) {
+			shaderFloresta = registrar(new ShaderTerrenoFloresta());
+		}
+		return shaderFloresta;
+	}
+
 	/** O shader do terreno, compartilhado por quem desenhar o terreno. */
 	public static StaticShaderTerreno shaderTerreno() {
 		if (shaderTerreno == null) {
@@ -178,6 +204,7 @@ public final class Recursos {
 		}
 		shaders.clear();
 		shaderTerreno = null;
+		shaderFloresta = null;
 		if (overlay != null) {
 			overlay.liberar();
 			overlay = null;

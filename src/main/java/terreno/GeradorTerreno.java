@@ -13,17 +13,14 @@ import java.util.Random;
  * usa para o arquivo .hgt: int[linha][coluna], em metros, com a água em altura <= 0.
  */
 public final class GeradorTerreno {
-    private static final int TAMANHO_EVOLUCAO = 128;      // o AG evolui um mapa pequeno (rápido)...
-    // ...e a altura 0..1 vira metros. Com 750, o NIVEL_MONTANHA (0.75) cai em 300 m,
-    // exatamente onde o ObjHTGsrtm do professor começa a textura de pedra.
-    private static final float METROS_POR_UNIDADE = 750f;
-
     /** Quantas gerações o AG roda (usado também para calcular o progresso do carregamento). */
     public static final int GERACOES = 300;
 
     private GeradorTerreno() {}
 
     /**
+     * Terreno do perfil ILHA (o original).
+     *
      * @param seed         mesma seed = mesmo terreno
      * @param tamanhoFinal tamanho da grade entregue ao OpenGL (ex.: 512 = 512 x 512 vértices)
      */
@@ -31,42 +28,48 @@ public final class GeradorTerreno {
         return gerar(seed, tamanhoFinal, (geracao, terreno, fitness) -> {});
     }
 
+    /** Terreno do perfil ILHA, avisando o ouvinte ao fim de cada geração. */
+    public static int[][] gerar(long seed, int tamanhoFinal, OuvinteGeracao<Terreno> ouvinte) {
+        return gerar(PerfilTerreno.ILHA.comTamanho(tamanhoFinal), seed, ouvinte);
+    }
+
     /**
-     * O mesmo, avisando o ouvinte ao fim de cada geração (para mostrar o progresso).
+     * Gera o terreno de um perfil. Devolve as alturas no formato que o ObjHTGsrtm usa:
+     * int[linha][coluna], com a água em altura <= 0, na unidade do perfil (metros ou centímetros).
+     *
      * Pode rodar fora da thread principal: não usa OpenGL. Para cancelar, o ouvinte pode
      * lançar uma exceção (por exemplo, CancellationException), que interrompe o AG.
      */
-    public static int[][] gerar(long seed, int tamanhoFinal, OuvinteGeracao<Terreno> ouvinte) {
+    public static int[][] gerar(PerfilTerreno perfil, long seed, OuvinteGeracao<Terreno> ouvinte) {
         Random random = new Random(seed); // criado aqui dentro: a mesma seed dá sempre o mesmo terreno
 
         ProblemaTerreno problema = new ProblemaTerreno(
-                TAMANHO_EVOLUCAO,
-                0.30,  // 30% de água
-                0.10,  // 10% de montanha
-                0.012  // rugosidade desejada
-        );
+                perfil.tamanhoEvolucao(), perfil.alvoAgua(), perfil.alvoMontanha(), perfil.alvoRugosidade(),
+                perfil.maiorLago());
         Configuracao config = new Configuracao(60, GERACOES, 0.5, 3);
         AlgoritmoGenetico<Terreno> ag = new AlgoritmoGenetico<>(problema, config, random);
 
         Terreno melhor = ag.executar((geracao, terreno, fitness) -> {
             if (geracao % 50 == 0) {
-                System.out.printf("AG terreno: geração %d, fitness %.4f%n", geracao, fitness);
+                System.out.printf("AG terreno (%s): geração %d, fitness %.4f%n", perfil.nome(), geracao, fitness);
             }
             ouvinte.aoFimDaGeracao(geracao, terreno, fitness);
         });
 
-        return paraMetros(melhor, tamanhoFinal, new RuidoFractal(seed));
+        return paraAlturas(melhor, perfil, new RuidoFractal(seed));
     }
 
     /**
-     * Converte as alturas 0..1 para metros (o nível da água vira 0 metro),
-     * amplia a grade para tamanhoFinal com interpolação bilinear
-     * e acrescenta detalhe fractal por cima da forma que o AG gerou.
+     * Converte as alturas 0..1 do AG para a unidade do perfil (o nível da água vira 0),
+     * amplia a grade com interpolação bilinear, acrescenta detalhe fractal por cima da
+     * forma que o AG gerou e, se o perfil pedir, aplaina a faixa da borda.
      */
-    public static int[][] paraMetros(Terreno t, int tamanhoFinal, RuidoFractal ruido) {
-        int[][] metros = new int[tamanhoFinal][tamanhoFinal];
+    public static int[][] paraAlturas(Terreno t, PerfilTerreno perfil, RuidoFractal ruido) {
+        int tamanhoFinal = perfil.tamanhoFinal();
+        int[][] saida = new int[tamanhoFinal][tamanhoFinal];
         float escalaX = (float) (t.largura() - 1) / (tamanhoFinal - 1);
         float escalaY = (float) (t.comprimento() - 1) / (tamanhoFinal - 1);
+        double alturaBorda = Terreno.NIVEL_AGUA + perfil.alturaBorda() / perfil.escalaVertical();
 
         for (int j = 0; j < tamanhoFinal; j++) {
             for (int i = 0; i < tamanhoFinal; i++) {
@@ -85,26 +88,34 @@ public final class GeradorTerreno {
 
                 double u = (double) i / tamanhoFinal;
                 double v = (double) j / tamanhoFinal;
-                double alturaFinal = a + detalhe(a, u, v, ruido);
+                double alturaFinal = a + detalhe(a, u, v, ruido, perfil);
 
-                metros[j][i] = (int) Math.round((alturaFinal - Terreno.NIVEL_AGUA) * METROS_POR_UNIDADE);
+                if (perfil.larguraBorda() > 0) {
+                    // borda: plana na faixa externa, com uma rampa suave (o dobro da largura) para dentro
+                    int distancia = Math.min(Math.min(i, j), Math.min(tamanhoFinal - 1 - i, tamanhoFinal - 1 - j));
+                    double pesoBorda = 1 - suave(perfil.larguraBorda(), 3.0 * perfil.larguraBorda(), distancia);
+                    alturaFinal = alturaFinal * (1 - pesoBorda) + alturaBorda * pesoBorda;
+                }
+
+                double metros = (alturaFinal - Terreno.NIVEL_AGUA) * perfil.escalaVertical();
+                saida[j][i] = (int) Math.round(metros * perfil.unidadesPorMetro());
             }
         }
-        return metros;
+        return saida;
     }
 
     /**
      * Quanto somar à altura de um ponto. A quantidade depende de onde ele está:
-     * a costa fica suave (praias), as planícies ganham colinas leves
-     * e as regiões altas ganham cristas afiadas de montanha.
+     * a costa fica suave, as planícies ganham colinas e as regiões altas ganham cristas.
      */
-    private static double detalhe(float a, double u, double v, RuidoFractal ruido) {
+    private static double detalhe(float a, double u, double v, RuidoFractal ruido, PerfilTerreno perfil) {
         double terra = suave(Terreno.NIVEL_AGUA, Terreno.NIVEL_AGUA + 0.06, a);   // 0 na água, 1 em terra firme
         double montanha = suave(Terreno.NIVEL_AGUA + 0.10, Terreno.NIVEL_MONTANHA, a); // 0 na planície, 1 na montanha
 
-        double colinas = ruido.fbm(u * 6, v * 6, 5) * 0.12 * terra;
-        double cristas = (ruido.cristas(u * 4 + 17.3, v * 4 + 5.1, 5) - 0.35) * 0.6 * Math.pow(montanha, 1.5);
-        double fundo = ruido.fbm(u * 8 + 31.7, v * 8, 3) * 0.02 * (1 - terra); // leve variação no fundo do mar
+        double colinas = ruido.fbm(u * 6, v * 6, 5) * perfil.forcaColinas() * terra;
+        double cristas = perfil.forcaCristas() == 0 ? 0
+                : (ruido.cristas(u * 4 + 17.3, v * 4 + 5.1, 5) - 0.35) * perfil.forcaCristas() * Math.pow(montanha, 1.5);
+        double fundo = ruido.fbm(u * 8 + 31.7, v * 8, 3) * 0.02 * (1 - terra); // leve variação no fundo da água
 
         return colinas + cristas + fundo;
     }

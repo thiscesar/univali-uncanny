@@ -1,0 +1,95 @@
+#version 330 core
+
+// Terreno da floresta, com alturas e coordenadas em metros. Mistura os materiais pela
+// altura e pela inclinação de cada ponto:
+//   folhas secas no chão plano, manchas de grama escura (mais comuns nas partes altas),
+//   terra exposta nos declives médios, pedra nos declives fortes, lama na beira dos
+//   lagos e água escura.
+
+uniform sampler2D texChao;
+uniform sampler2D texGrama;
+uniform sampler2D texTerra;
+uniform sampler2D texPedra;
+uniform sampler2D texAgua;
+uniform float tempo;       // segundos, para a água se mexer
+uniform vec3 corNeblina;   // igual à cor do fundo (glClearColor)
+
+in vec3 normalMundo;
+in vec2 coordTerreno;      // posição na grade, em metros
+in float alturaReal;       // altura real em metros (negativa no fundo dos lagos)
+in float distancia;        // distância até a câmera
+
+out vec4 out_Color;
+
+// ---------- ajustes ----------
+const float ESCALA_TEXTURA = 0.25;  // uma repetição a cada 4 m
+const vec3  DIR_LUZ        = vec3(0.4, 1.0, 0.3);
+const float DENSIDADE      = 0.0025; // neblina provisória e fraca, para inspecionar o mapa (a da noite vem depois)
+
+// ---------- ruído procedural, para as bordas entre materiais não ficarem retas ----------
+float hash(vec2 p){
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float ruido(vec2 p){
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x),
+	           mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+}
+
+float luminancia(vec3 c){
+	return dot(c, vec3(0.299, 0.587, 0.114));
+}
+
+// lê a textura em duas escalas e mistura: disfarça a repetição do ladrilho
+vec3 amostra(sampler2D t, vec2 c){
+	vec3 perto = texture(t, c).rgb;
+	vec3 longe = texture(t, c * 0.23 + vec2(0.37, 0.11)).rgb;
+	return mix(perto, longe, 0.35);
+}
+
+void main(void){
+	vec2 c = coordTerreno * ESCALA_TEXTURA;
+	vec3 n = normalize(normalMundo);
+	float inclinacao = 1.0 - n.y; // 0 = plano, 1 = parede
+	float h = alturaReal;
+
+	vec3 chao  = amostra(texChao, c);
+	vec3 grama = amostra(texGrama, c * 1.3);
+	vec3 terra = amostra(texTerra, c);
+	vec3 pedra = amostra(texPedra, c * 0.7);
+
+	// manchas de grama: ruído em duas escalas, puxado para cima nas partes altas
+	float manchas = ruido(coordTerreno * 0.03) * 0.7 + ruido(coordTerreno * 0.11) * 0.3;
+	float pesoGrama = smoothstep(0.45, 0.65, manchas + h * 0.02);
+	vec3 cor = mix(chao, grama, pesoGrama);
+
+	// declives: terra exposta, depois pedra
+	float pesoTerra = smoothstep(0.05, 0.12, inclinacao + (ruido(coordTerreno * 0.2) - 0.5) * 0.04);
+	cor = mix(cor, terra, pesoTerra);
+	float pesoPedra = smoothstep(0.16, 0.26, inclinacao);
+	cor = mix(cor, pedra, pesoPedra);
+
+	// lama: faixa escura e úmida na beira dos lagos (até ~0,6 m acima da água)
+	float pesoLama = 1.0 - smoothstep(0.05, 0.6 + ruido(coordTerreno * 0.3) * 0.3, h);
+	cor = mix(cor, terra * 0.45, pesoLama);
+
+	float difusa = max(dot(n, normalize(DIR_LUZ)), 0.0);
+	vec3 chaoIluminado = cor * (0.35 + 0.65 * difusa);
+
+	// água escura, mais funda = mais escura, com o detalhe da textura deslizando
+	float profundidade = clamp(-h / 4.0, 0.0, 1.0);
+	vec3 corAgua = mix(vec3(0.07, 0.11, 0.11), vec3(0.01, 0.03, 0.04), profundidade);
+	vec2 c1 = c + vec2(tempo * 0.020, tempo * 0.013);
+	vec2 c2 = c * 0.6 - vec2(tempo * 0.012, -tempo * 0.017);
+	float detalhe = (luminancia(texture(texAgua, c1).rgb) + luminancia(texture(texAgua, c2).rgb)) * 0.5;
+	corAgua *= 0.7 + 0.6 * detalhe;
+
+	// a margem: alturaReal é interpolada dentro do triângulo, então a linha da água sai suave
+	float pesoAgua = 1.0 - smoothstep(-0.05, 0.02, h);
+	vec3 corFinal = mix(chaoIluminado, corAgua, pesoAgua);
+
+	float neblina = 1.0 - exp(-pow(DENSIDADE * distancia, 2.0));
+	out_Color = vec4(mix(corFinal, corNeblina, neblina), 1.0);
+}

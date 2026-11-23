@@ -59,6 +59,20 @@ public class ObjHTGsrtm extends Model {
         this.wh = alturas.length;
     }
 
+    // ALTERADO: escala configurável, para o terreno em metros do jogo
+    /**
+     * Usa alturas prontas numa escala escolhida.
+     *
+     * @param passoXZ          distância entre dois pontos da grade (ex.: 1 = um metro)
+     * @param metrosPorUnidade quantos metros vale cada unidade do int[][] (ex.: 0.01 para centímetros)
+     */
+    public ObjHTGsrtm(int[][] alturas, float passoXZ, float metrosPorUnidade) {
+        this(alturas);
+        this.passoXZ = passoXZ;
+        this.fatorAltura = metrosPorUnidade; // 1 unidade do mundo = 1 metro
+        this.metrosPorUnidade = metrosPorUnidade;
+    }
+
     @Override
     public void load() {
         if (data == null) {
@@ -116,6 +130,11 @@ public class ObjHTGsrtm extends Model {
     // escala da malha (iguais aos valores originais do professor)
     private static final float PASSO_XZ = 0.04f;
     private static final float FATOR_ALTURA = 0.004f; // era 0.002f
+
+    // ALTERADO: os valores acima viraram o padrão; o construtor com escala pode trocá-los
+    private float passoXZ = PASSO_XZ;           // distância entre pontos da grade na malha
+    private float fatorAltura = FATOR_ALTURA;   // unidade do int[][] -> altura na malha
+    private float metrosPorUnidade = 1f;        // unidade do int[][] -> metros (para o atributo de cor)
 
     /**
      * Monta a malha do terreno. Cada vértice leva:
@@ -176,11 +195,11 @@ public class ObjHTGsrtm extends Model {
 
     private void adicionarVertice(int i, int j, FloatBuffer vertex_data, FloatBuffer color_data,
             FloatBuffer normal_data, FloatBuffer texture_data) {
-        int metros = data[j][i];
+        float metros = data[j][i] * metrosPorUnidade; // ALTERADO: a grade pode estar em centímetros
 
-        vertex_data.put(i * PASSO_XZ);
+        vertex_data.put(i * passoXZ);
         vertex_data.put(alturaVisual(i, j));
-        vertex_data.put(j * PASSO_XZ);
+        vertex_data.put(j * passoXZ);
 
         color_data.put(metros / 1000.0f);
         color_data.put(0f);
@@ -196,13 +215,13 @@ public class ObjHTGsrtm extends Model {
     private float alturaVisual(int i, int j) {
         i = Math.max(0, Math.min(wh - 1, i));
         j = Math.max(0, Math.min(wh - 1, j));
-        return Math.max(data[j][i], 0) * FATOR_ALTURA;
+        return Math.max(data[j][i], 0) * fatorAltura;
     }
 
     /** Normal suave do vértice, por diferenças centrais entre os vizinhos. */
     private float[] normalEm(int i, int j) {
         float nx = alturaVisual(i - 1, j) - alturaVisual(i + 1, j);
-        float ny = 2 * PASSO_XZ;
+        float ny = 2 * passoXZ;
         float nz = alturaVisual(i, j - 1) - alturaVisual(i, j + 1);
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         return new float[] { nx / len, ny / len, nz / len };

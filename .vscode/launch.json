@@ -16,6 +16,15 @@
             "mainClass": "MainTerrenoPrevia",
             "cwd": "${workspaceFolder}",
             "vmArgs": "-Xmx1g"
+        },
+        {
+            "type": "java",
+            "name": "Prévia 2D do terreno (floresta)",
+            "request": "launch",
+            "mainClass": "MainTerrenoPrevia",
+            "args": "floresta",
+            "cwd": "${workspaceFolder}",
+            "vmArgs": "-Xmx1g"
         }
     ]
 }
