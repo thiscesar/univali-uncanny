@@ -89,6 +89,27 @@ class EntradaTest {
 	}
 
 	@Test
+	void textoDigitadoValeSoNoQuadro() {
+		Entrada e = new Entrada();
+		e.aoDigitar('ç');
+		e.aoDigitar('a');
+		assertEquals("ça", e.textoDigitado());
+		e.fimDoQuadro();
+		assertEquals("", e.textoDigitado());
+	}
+
+	@Test
+	void repeticaoContaParaFoiPressionadaOuRepetida() {
+		Entrada e = new Entrada();
+		e.aoTeclar(GLFW_KEY_LEFT, GLFW_PRESS);
+		e.fimDoQuadro();
+		assertFalse(e.foiPressionadaOuRepetida(GLFW_KEY_LEFT));
+		e.aoTeclar(GLFW_KEY_LEFT, GLFW_REPEAT);
+		assertTrue(e.foiPressionadaOuRepetida(GLFW_KEY_LEFT));
+		assertFalse(e.foiPressionada(GLFW_KEY_LEFT));
+	}
+
+	@Test
 	void rolagemAcumulaNoQuadro() {
 		Entrada e = new Entrada();
 		e.aoRolar(1);

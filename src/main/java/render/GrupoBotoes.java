@@ -59,7 +59,7 @@ public class GrupoBotoes {
 		Botao acionado = null;
 		for (int i = 0; i < n; i++) {
 			Botao b = botoes.get(i);
-			b.focado = (i == foco);
+			b.definirFoco(i == foco);
 			if (b.atualizar(entrada)) {
 				acionado = b;
 			}

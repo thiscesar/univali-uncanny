@@ -24,6 +24,11 @@ public class Entrada {
 	private final boolean[] teclas = new boolean[GLFW_KEY_LAST + 1];
 	private final boolean[] teclasApertadas = new boolean[GLFW_KEY_LAST + 1];
 	private final boolean[] teclasSoltas = new boolean[GLFW_KEY_LAST + 1];
+	/** Teclas que o sistema repetiu neste quadro por estarem seguradas (apagar texto, mover controles). */
+	private final boolean[] teclasRepetidas = new boolean[GLFW_KEY_LAST + 1];
+
+	/** Caracteres digitados neste quadro, já com acentos e maiúsculas resolvidos pelo sistema. */
+	private final StringBuilder digitado = new StringBuilder();
 
 	private final boolean[] botoes = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
 	private final boolean[] botoesApertados = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
@@ -49,6 +54,7 @@ public class Entrada {
 		glfwSetMouseButtonCallback(janela, (j, botao, acao, mods) -> aoClicar(botao, acao));
 		glfwSetCursorPosCallback(janela, (j, x, y) -> aoMoverMouse(x, y));
 		glfwSetScrollCallback(janela, (j, dx, dy) -> aoRolar(dy));
+		glfwSetCharCallback(janela, (j, codigo) -> aoDigitar(codigo));
 
 		// o callback só avisa quando o mouse se move; até lá, a posição seria (0, 0)
 		double[] x = new double[1], y = new double[1];
@@ -70,7 +76,14 @@ public class Entrada {
 			teclas[tecla] = false;
 			teclasSoltas[tecla] = true;
 		}
-		// GLFW_REPEAT (tecla segurada) é ignorado: a tecla já está marcada como pressionada
+		else if (acao == GLFW_REPEAT) {
+			teclasRepetidas[tecla] = true; // não conta como novo aperto, só como repetição
+		}
+	}
+
+	/** Chamado pelo callback de caracteres: recebe o código Unicode do que foi digitado. */
+	public void aoDigitar(int codigo) {
+		digitado.appendCodePoint(codigo);
 	}
 
 	public void aoClicar(int botao, int acao) {
@@ -113,6 +126,16 @@ public class Entrada {
 
 	public boolean foiSolta(int tecla) {
 		return valida(tecla) && teclasSoltas[tecla];
+	}
+
+	/** Apertada neste quadro ou repetida pelo sistema por estar segurada (como num editor de texto). */
+	public boolean foiPressionadaOuRepetida(int tecla) {
+		return valida(tecla) && (teclasApertadas[tecla] || teclasRepetidas[tecla]);
+	}
+
+	/** O texto digitado neste quadro (vazio se nada foi digitado). */
+	public String textoDigitado() {
+		return digitado.toString();
 	}
 
 	// ---------- consultas do mouse ----------
@@ -177,6 +200,8 @@ public class Entrada {
 	public void fimDoQuadro() {
 		java.util.Arrays.fill(teclasApertadas, false);
 		java.util.Arrays.fill(teclasSoltas, false);
+		java.util.Arrays.fill(teclasRepetidas, false);
+		digitado.setLength(0);
 		java.util.Arrays.fill(botoesApertados, false);
 		java.util.Arrays.fill(botoesSoltos, false);
 		deltaX = 0;

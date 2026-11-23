@@ -11,6 +11,7 @@ import static org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15.GL_STATIC_DRAW;
 import static org.lwjgl.opengl.GL15.glBindBuffer;
 import static org.lwjgl.opengl.GL15.glBufferData;
+import static org.lwjgl.opengl.GL15.glDeleteBuffers; // ALTERADO: usado no liberar()
 import static org.lwjgl.opengl.GL15.glGenBuffers;
 import static org.lwjgl.opengl.GL20.glEnableVertexAttribArray;
 import static org.lwjgl.opengl.GL20.glVertexAttribPointer;
@@ -234,6 +235,14 @@ public class ObjHTGsrtm extends Model {
 
         glDisableClientState(GL_COLOR_ARRAY);
         glDisableClientState(GL_VERTEX_ARRAY);
+    }
+
+    // ALTERADO: apaga os VBOs da malha, para gerar outro mapa sem acumular memória na placa de vídeo
+    public void liberar() {
+        glDeleteBuffers(vbo_vertex_handle);
+        glDeleteBuffers(vbo_color_handle);
+        glDeleteBuffers(vbo_texture_handle);
+        glDeleteBuffers(vbo_normal_handle);
     }
 
     public float[] calculaVetorNormal(float p1[], float p2[], float p3[]) {

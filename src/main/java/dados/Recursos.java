@@ -1,6 +1,6 @@
 package dados;
 
-import static org.lwjgl.opengl.GL11.glDeleteTextures;
+import static org.lwjgl.opengl.GL11.*;
 
 import java.awt.Font;
 import java.awt.image.BufferedImage;
@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import render.Fonte;
 import render.Overlay2D;
@@ -28,6 +29,12 @@ import util.TextureLoader;
  * Tudo aqui usa OpenGL, então só pode ser chamado na thread principal.
  */
 public final class Recursos {
+
+	/** Uma textura e o tamanho da imagem que a originou, em pixels. */
+	public record Textura(int id, int largura, int altura) {}
+
+	/** Texturas geradas por código (ou tratadas), pela chave escolhida por quem pediu. */
+	private static final Map<String, Textura> geradas = new HashMap<>();
 
 	/** Texturas já carregadas, pelo caminho relativo: pedir a mesma duas vezes não recarrega. */
 	private static final Map<String, Integer> texturas = new HashMap<>();
@@ -84,6 +91,32 @@ public final class Recursos {
 		return id;
 	}
 
+	/**
+	 * Uma textura criada a partir de uma imagem gerada por código (ruído, degradê, foto tratada...).
+	 * O gerador só roda na primeira vez; depois a mesma textura é devolvida pela chave.
+	 *
+	 * @param repetir true para a textura se repetir (GL_REPEAT), como um ladrilho
+	 * @param nitida  true para não suavizar os pixels ao ampliar (GL_NEAREST), bom para granulação
+	 */
+	public static Textura texturaGerada(String chave, Supplier<BufferedImage> gerador, boolean repetir, boolean nitida) {
+		Textura t = geradas.get(chave);
+		if (t == null) {
+			BufferedImage img = gerador.get();
+			int id = TextureLoader.loadTexture(img); // deixa a textura ativa para os ajustes abaixo
+			if (repetir) {
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			}
+			if (nitida) {
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			}
+			t = new Textura(id, img.getWidth(), img.getHeight());
+			geradas.put(chave, t);
+		}
+		return t;
+	}
+
 	/** O shader do terreno, compartilhado por quem desenhar o terreno. */
 	public static StaticShaderTerreno shaderTerreno() {
 		if (shaderTerreno == null) {
@@ -136,6 +169,10 @@ public final class Recursos {
 			glDeleteTextures(id);
 		}
 		texturas.clear();
+		for (Textura t : geradas.values()) {
+			glDeleteTextures(t.id());
+		}
+		geradas.clear();
 		for (ShaderProgram s : shaders) {
 			s.cleanUp();
 		}

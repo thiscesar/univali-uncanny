@@ -1,0 +1,16 @@
+# Univali Uncanny
+Jogo de terror em primeira pessoa
+Disciplina de Computação Gráfica, Univali
+
+# Desenvolvimento
+(seu nome aqui)
+
+# Base
+Projeto de OpenGL do professor da disciplina
+LWJGL 3, licença BSD
+
+# Imagens
+Foto do campus da Univali: (autor e licença)
+
+# Fontes
+Fontes do sistema (provisórias)

@@ -5,6 +5,7 @@ import static org.lwjgl.glfw.GLFW.*;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector4f;
 
+import dados.Opcoes;
 import entrada.Entrada;
 import util.Utils3D;
 
@@ -66,8 +67,9 @@ public class CameraLivre {
 
 		// giro pelo mouse (o y da tela cresce para baixo, por isso o sinal invertido)
 		if (entrada.cursorPreso()) {
-			guinada += entrada.deltaMouse().x * SENSIBILIDADE_MOUSE;
-			arfagem -= entrada.deltaMouse().y * SENSIBILIDADE_MOUSE;
+			float sensibilidade = SENSIBILIDADE_MOUSE * Opcoes.atual().sensibilidade; // ajustável nas opções
+			guinada += entrada.deltaMouse().x * sensibilidade;
+			arfagem -= entrada.deltaMouse().y * sensibilidade;
 		}
 
 		// não deixa virar de cabeça para baixo

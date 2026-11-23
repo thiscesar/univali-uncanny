@@ -35,6 +35,22 @@ public final class Texto {
 				new Color(255, 255, 255, cor.getAlpha()));
 	}
 
+	/** Texto com o centro vertical em cy e alinhamento horizontal em relação a x. */
+	public static void desenharAlinhado(Overlay2D overlay, Fonte fonte, String texto, float x, float cy,
+			int tamanho, Color cor, Alinhamento alinhamento, boolean contorno, boolean sombra) {
+		TextoTextura.Imagem img = Recursos.textos().obter(texto, fonte, tamanho, cor, contorno, sombra);
+		if (img == null) {
+			return;
+		}
+		desenhar(overlay, fonte, texto, x, cy - img.altura() / 2f, tamanho, cor, alinhamento, contorno, sombra);
+	}
+
+	/** Largura em pixels que o texto ocupa (0 para texto vazio). */
+	public static int largura(Fonte fonte, String texto, int tamanho) {
+		TextoTextura.Imagem img = Recursos.textos().obter(texto, fonte, tamanho, Color.WHITE, false, false);
+		return img == null ? 0 : img.largura();
+	}
+
 	/** Texto centralizado nos dois eixos em torno de (cx, cy). */
 	public static void desenharCentralizado(Overlay2D overlay, Fonte fonte, String texto, float cx, float cy,
 			int tamanho, Color cor, boolean contorno, boolean sombra) {

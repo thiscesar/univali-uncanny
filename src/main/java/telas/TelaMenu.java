@@ -1,50 +1,130 @@
 package telas;
 
+import static org.lwjgl.opengl.GL11.*;
+
+import java.awt.Color;
+import java.util.Random;
+
+import dados.Opcoes;
+import dados.Recursos;
+import render.AtmosferaMenu;
 import render.Botao;
 import render.GrupoBotoes;
 import render.Overlay2D;
+import render.Texto;
 
 /**
- * Menu provisório com dois botões de teste. Funcionam com o mouse ou com as setas e o Enter.
- * O Enter, sem mexer em nada, aciona o "Jogar" (o primeiro).
+ * Menu principal: a Univali à noite ao fundo, neblina, vinheta, granulação, a lâmpada
+ * falhando, o título tremendo e os botões. Controles, Opções e Créditos abrem painéis
+ * por cima, com o menu ainda animando atrás.
  */
-public class TelaMenu extends TelaProvisoria {
+public class TelaMenu implements Tela {
 
-	private static final float LARGURA_BOTAO = 260;
-	private static final float ALTURA_BOTAO = 52;
-	private static final float ESPACO = 18;
+	private static final String TITULO = "UNIVALI UNCANNY";
+	private static final String SUBTITULO = "Três provas. Uma floresta. Três segundos.";
+	private static final Color COR_SUBTITULO = new Color(150, 140, 130);
+	private static final Color COR_DICA = new Color(95, 90, 88);
+
+	private final GerenciadorTelas gerenciador;
+	private final AtmosferaMenu atmosfera = new AtmosferaMenu();
+	private final Random random = new Random();
 
 	private final GrupoBotoes botoes = new GrupoBotoes();
-	private final Botao jogar = botoes.adicionar(new Botao("Jogar", 0, 0, LARGURA_BOTAO, ALTURA_BOTAO));
-	private final Botao sair = botoes.adicionar(new Botao("Sair", 0, 0, LARGURA_BOTAO, ALTURA_BOTAO));
+	private final Botao jogar = criarBotao("Jogar");
+	private final Botao controles = criarBotao("Controles");
+	private final Botao opcoes = criarBotao("Opções");
+	private final Botao creditos = criarBotao("Créditos");
+	private final Botao sair = criarBotao("Sair");
+
+	/** Painel aberto por cima do menu, ou null. */
+	private Painel painel = null;
 
 	public TelaMenu(GerenciadorTelas gerenciador) {
-		super(gerenciador, "MENU", "setas e Enter, ou clique", 0.15f, 0.05f, 0.20f);
+		this.gerenciador = gerenciador;
+	}
+
+	private Botao criarBotao(String texto) {
+		Botao b = botoes.adicionar(new Botao(texto, 0, 0, 380, 50));
+		b.estilo = Botao.Estilo.TEXTO;
+		b.fonte = Recursos.fonteTitulo();
+		return b;
+	}
+
+	@Override
+	public void entrar() {
+		gerenciador.definirTitulo("Menu");
+		gerenciador.entrada().prenderCursor(false);
+	}
+
+	@Override
+	public void sair() {
 	}
 
 	@Override
 	public void atualizar(long diftime) {
-		posicionarBotoes();
+		atmosfera.atualizar(diftime);
+		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
+
+		if (painel != null) {
+			if (painel.atualizar(gerenciador.entrada(), w, h, diftime)) {
+				painel = null;
+			}
+			return;
+		}
+
+		posicionarBotoes(w, h);
 		Botao acionado = botoes.atualizar(gerenciador.entrada());
 		if (acionado == jogar) {
-			gerenciador.trocarPara(new TelaCarregando(gerenciador));
+			long seed = Opcoes.atual().seedDaPartida(random);
+			gerenciador.trocarPara(new TelaCarregando(gerenciador, seed));
+		} else if (acionado == controles) {
+			painel = new PainelControles();
+		} else if (acionado == opcoes) {
+			painel = new PainelOpcoes();
+		} else if (acionado == creditos) {
+			painel = new PainelCreditos();
 		} else if (acionado == sair) {
 			gerenciador.fecharJogo();
 		}
 	}
 
-	/** Botões empilhados abaixo do nome, centralizados (acompanham o tamanho da janela). */
-	private void posicionarBotoes() {
-		float x = (gerenciador.larguraJanela() - LARGURA_BOTAO) / 2;
-		float y = gerenciador.alturaJanela() / 2f + 70;
+	/** Coluna de botões à esquerda, abaixo da linha do horizonte da foto. */
+	private void posicionarBotoes(int w, int h) {
+		int tamanho = Math.max(22, Math.min(46, Math.round(h * 0.042f)));
+		float passo = tamanho * 1.55f;
+		float x = w * 0.07f;
+		float y = h * 0.47f;
 		for (Botao b : botoes.botoes()) {
+			b.tamanhoTexto = tamanho;
+			b.altura = passo - 4;
 			b.posicionar(x, y);
-			y += ALTURA_BOTAO + ESPACO;
+			y += passo;
 		}
 	}
 
 	@Override
-	protected void desenharExtras(Overlay2D overlay, int largura, int altura) {
-		botoes.desenhar(overlay);
+	public void desenhar() {
+		glClearColor(0, 0, 0, 1);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
+		Overlay2D overlay = Recursos.overlay();
+		overlay.iniciar(w, h);
+		atmosfera.desenharFundo(overlay, w, h);
+
+		if (painel == null) {
+			int tamanhoTitulo = Math.max(36, Math.min(120, Math.round(h * 0.10f)));
+			atmosfera.desenharTitulo(overlay, TITULO, w / 2f, h * 0.15f, tamanhoTitulo);
+			Texto.desenharAlinhado(overlay, Recursos.fonteTexto(), SUBTITULO, w / 2f, h * 0.15f + tamanhoTitulo * 0.75f,
+					Math.max(14, Math.round(h * 0.022f)), COR_SUBTITULO, Texto.Alinhamento.CENTRO, false, true);
+			botoes.desenhar(overlay);
+			Texto.desenhar(overlay, "setas e Enter, ou mouse", w * 0.07f, h - 40, 16, COR_DICA,
+					Texto.Alinhamento.ESQUERDA);
+		} else {
+			painel.desenhar(overlay, w, h);
+		}
+
+		atmosfera.desenharEfeitos(overlay, w, h);
+		overlay.finalizar();
 	}
 }
