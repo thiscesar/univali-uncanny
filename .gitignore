@@ -12,3 +12,6 @@ textura.png
 
 # Opções salvas pelo jogo
 config.properties
+
+# Originais em MP3 (o jogo usa as versões em OGG)
+*.mp3
