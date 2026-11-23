@@ -27,7 +27,7 @@ import shaders.ShaderMd2;
 import util.Utils3D;
 
 /**
- * Ferramenta de depuração (F9 no menu): o Dragon Knight girando, para conferir o modelo,
+ * Bestiário (botão do menu, ou F9/M): o Dragon Knight girando, para conferir o modelo,
  * a escala e todas as animações.
  *
  * Setas esquerda e direita trocam a animação; + e - mudam a velocidade; Espaço recomeça;
@@ -59,7 +59,7 @@ public class TelaVisualizadorMd2 implements Tela {
 
 	@Override
 	public void entrar() {
-		gerenciador.definirTitulo("Visualizador MD2");
+		gerenciador.definirTitulo("Bestiário");
 		gerenciador.entrada().prenderCursor(false);
 
 		PersonagemMd2.Dados dados = PersonagemMd2.ler(PASTA, ALTURA);
@@ -163,7 +163,7 @@ public class TelaVisualizadorMd2 implements Tela {
 		} else {
 			Animacao a = animacoes.get(indice);
 			String[] linhas = {
-					"Visualizador MD2: Dragon Knight",
+					"Bestiário: Dragon Knight",
 					String.format("animação %s   (%d de %d, quadros %d a %d)%s", a.nome(), indice + 1, animacoes.size(),
 							a.primeiro(), a.ultimo(), animador.terminou() ? "   fim" : ""),
 					String.format("quadro %d -> %d   fator %.2f", animador.quadroA(), animador.quadroB(), animador.fator()),

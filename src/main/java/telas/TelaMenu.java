@@ -40,6 +40,7 @@ public class TelaMenu implements Tela {
 	private final Botao controles = criarBotao("Controles");
 	private final Botao opcoes = criarBotao("Opções");
 	private final Botao creditos = criarBotao("Créditos");
+	private final Botao bestiario = criarBotao("Bestiário"); // o Dragon Knight girando, com as animações
 	private final Botao sair = criarBotao("Sair");
 
 	/** Painel aberto por cima do menu, ou null. */
@@ -78,8 +79,11 @@ public class TelaMenu implements Tela {
 	@Override
 	public void atualizar(long diftime) {
 		atmosfera.atualizar(diftime);
-		if (painel == null && gerenciador.entrada().foiPressionada(org.lwjgl.glfw.GLFW.GLFW_KEY_F9)) {
-			gerenciador.trocarPara(new TelaVisualizadorMd2(gerenciador)); // ferramenta de depuração
+		// visualizador do modelo do monstro (depuração): F9 ou M, porque em muitos notebooks
+		// o F9 é uma tecla de mídia e não chega ao jogo
+		if (painel == null && (gerenciador.entrada().foiPressionada(org.lwjgl.glfw.GLFW.GLFW_KEY_F9)
+				|| gerenciador.entrada().foiPressionada(org.lwjgl.glfw.GLFW.GLFW_KEY_M))) {
+			gerenciador.trocarPara(new TelaVisualizadorMd2(gerenciador));
 			return;
 		}
 		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
@@ -108,6 +112,8 @@ public class TelaMenu implements Tela {
 			painel = new PainelOpcoes(gerenciador.audio());
 		} else if (acionado == creditos) {
 			painel = new PainelCreditos();
+		} else if (acionado == bestiario) {
+			gerenciador.trocarPara(new TelaVisualizadorMd2(gerenciador));
 		} else if (acionado == sair) {
 			gerenciador.fecharJogo();
 		}
