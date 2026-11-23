@@ -78,6 +78,10 @@ public class TelaMenu implements Tela {
 	@Override
 	public void atualizar(long diftime) {
 		atmosfera.atualizar(diftime);
+		if (painel == null && gerenciador.entrada().foiPressionada(org.lwjgl.glfw.GLFW.GLFW_KEY_F9)) {
+			gerenciador.trocarPara(new TelaVisualizadorMd2(gerenciador)); // ferramenta de depuração
+			return;
+		}
 		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
 
 		if (painel != null) {

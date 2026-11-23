@@ -9,6 +9,11 @@ Disciplina de Computação Gráfica, Univali
 Projeto de OpenGL do professor da disciplina
 LWJGL 3, licença BSD
 
+# Modelos
+Dragon Knight: modelo de Magarnigal (1998)
+Skin vermelha do Dragon Knight: Deranged
+Formato MD2: Quake II, id Software
+
 # Imagens
 Foto do campus da Univali: (autor e licença)
 

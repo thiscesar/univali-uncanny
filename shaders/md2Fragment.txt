@@ -1,0 +1,29 @@
+#version 330 core
+
+// Modelos MD2: skin, normal map opcional, brilho próprio e o tom vermelho de quando leva dano.
+// Luz e neblina do comum.glsl, iguais às do resto da cena.
+
+#include "comum.glsl"
+
+uniform sampler2D skin;
+uniform sampler2D texNormal;
+uniform int usaNormalMap;     // 1 = usa o texNormal para o relevo fino
+uniform float emissividade;   // brilho próprio (para ser visto no escuro)
+uniform float dano;           // 0 a 1: tom avermelhado logo depois de levar um tiro
+
+in vec2 uv;
+in vec3 normalVista;
+in vec3 posVista;
+
+out vec4 out_Color;
+
+void main(void){
+	vec4 c = texture(skin, uv);
+	vec3 n = normalVista;
+	if(usaNormalMap == 1){
+		n = perturbarNormal(normalVista, posVista, uv, texture(texNormal, uv).rgb);
+	}
+	vec3 base = mix(c.rgb, vec3(0.85, 0.05, 0.03), clamp(dano, 0.0, 1.0) * 0.6);
+	vec3 corFinal = iluminar(base, n, posVista) + base * emissividade;
+	out_Color = vec4(aplicarNeblina(corFinal, length(posVista), emissividade), 1.0);
+}

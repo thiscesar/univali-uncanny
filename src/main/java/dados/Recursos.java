@@ -17,6 +17,7 @@ import render.Overlay2D;
 import render.TextoTextura;
 import shaders.ShaderProgram;
 import shaders.ShaderArvore;
+import shaders.ShaderMd2;
 import shaders.ShaderObjeto;
 import shaders.ShaderTerrenoFloresta;
 import shaders.StaticShaderTerreno;
@@ -52,6 +53,7 @@ public final class Recursos {
 	private static ShaderTerrenoFloresta shaderFloresta;
 	private static ShaderObjeto shaderObjeto;
 	private static ShaderArvore shaderArvore;
+	private static ShaderMd2 shaderMd2;
 
 	/** Desenho 2D (menus, HUD) e o cache de textos, criados na primeira vez. */
 	private static Overlay2D overlay;
@@ -149,6 +151,14 @@ public final class Recursos {
 		return shaderFloresta;
 	}
 
+	/** O shader dos modelos MD2 animados. */
+	public static ShaderMd2 shaderMd2() {
+		if (shaderMd2 == null) {
+			shaderMd2 = registrar(new ShaderMd2());
+		}
+		return shaderMd2;
+	}
+
 	/** O shader das árvores. */
 	public static ShaderArvore shaderArvore() {
 		if (shaderArvore == null) {
@@ -239,6 +249,7 @@ public final class Recursos {
 		shaderFloresta = null;
 		shaderObjeto = null;
 		shaderArvore = null;
+		shaderMd2 = null;
 		if (overlay != null) {
 			overlay.liberar();
 			overlay = null;
