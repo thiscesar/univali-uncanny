@@ -22,8 +22,8 @@ import audio.Audio;
 import audio.Efeito;
 import audio.Sintetizador;
 import audio.SomTocando;
-import dados.Constantes;
 import dados.Recursos;
+import obj.Mapa3D;
 import render.CameraLivre;
 import render.Overlay2D;
 import render.Texto;
@@ -48,11 +48,14 @@ public class TelaJogo implements Tela {
 	private static final float LONGE = 100f;
 	private static final float[] COR_CEU = { 0.02f, 0.025f, 0.03f };
 
-	private static final String[] ARQUIVOS_TERRENO = {
+	/** Texturas do terreno (a tela de carregamento as carrega antes, para a partida abrir sem travar). */
+	static final String[] ARQUIVOS_TERRENO = {
 			"texturas/agua.png", "texturas/areia.png", "texturas/grama.png", "texturas/pedra.png" };
 	private static final String[] UNIFORMS_TERRENO = { "texAgua", "texAreia", "texGrama", "texPedra" };
 
 	private final GerenciadorTelas gerenciador;
+	/** O terreno pronto, entregue pela tela de carregamento. */
+	private final Mapa3D mapa;
 
 	/** Começa na borda sul do terreno, olhando para o centro e um pouco para baixo. */
 	private final CameraLivre camera = new CameraLivre(92f, 25f, 200f, 0f, (float) Math.toRadians(-20));
@@ -64,8 +67,9 @@ public class TelaJogo implements Tela {
 	/** Tempo da partida em segundos; para quando a partida está pausada (anima a água). */
 	private float tempo = 0;
 
-	public TelaJogo(GerenciadorTelas gerenciador) {
+	public TelaJogo(GerenciadorTelas gerenciador, Mapa3D mapa) {
 		this.gerenciador = gerenciador;
+		this.mapa = mapa;
 	}
 
 	@Override
@@ -131,7 +135,7 @@ public class TelaJogo implements Tela {
 		guardar(projecao(), bufferProjecao);
 		guardar(camera.matrizVisao(), bufferVisao);
 
-		if (Constantes.mapa != null) {
+		if (mapa != null) {
 			desenharTerreno();
 		}
 
@@ -175,7 +179,7 @@ public class TelaJogo implements Tela {
 			glUniform1i(glGetUniformLocation(prog, UNIFORMS_TERRENO[i]), i);
 		}
 
-		Constantes.mapa.DesenhaSe(shader);
+		mapa.DesenhaSe(shader);
 
 		glActiveTexture(GL_TEXTURE0);
 		shader.stop();

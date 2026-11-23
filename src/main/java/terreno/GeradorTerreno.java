@@ -2,6 +2,7 @@ package terreno;
 
 import ag.AlgoritmoGenetico;
 import ag.Configuracao;
+import ag.OuvinteGeracao;
 
 import java.util.Random;
 
@@ -17,6 +18,9 @@ public final class GeradorTerreno {
     // exatamente onde o ObjHTGsrtm do professor começa a textura de pedra.
     private static final float METROS_POR_UNIDADE = 750f;
 
+    /** Quantas gerações o AG roda (usado também para calcular o progresso do carregamento). */
+    public static final int GERACOES = 300;
+
     private GeradorTerreno() {}
 
     /**
@@ -24,7 +28,16 @@ public final class GeradorTerreno {
      * @param tamanhoFinal tamanho da grade entregue ao OpenGL (ex.: 512 = 512 x 512 vértices)
      */
     public static int[][] gerar(long seed, int tamanhoFinal) {
-        Random random = new Random(seed);
+        return gerar(seed, tamanhoFinal, (geracao, terreno, fitness) -> {});
+    }
+
+    /**
+     * O mesmo, avisando o ouvinte ao fim de cada geração (para mostrar o progresso).
+     * Pode rodar fora da thread principal: não usa OpenGL. Para cancelar, o ouvinte pode
+     * lançar uma exceção (por exemplo, CancellationException), que interrompe o AG.
+     */
+    public static int[][] gerar(long seed, int tamanhoFinal, OuvinteGeracao<Terreno> ouvinte) {
+        Random random = new Random(seed); // criado aqui dentro: a mesma seed dá sempre o mesmo terreno
 
         ProblemaTerreno problema = new ProblemaTerreno(
                 TAMANHO_EVOLUCAO,
@@ -32,13 +45,14 @@ public final class GeradorTerreno {
                 0.10,  // 10% de montanha
                 0.012  // rugosidade desejada
         );
-        Configuracao config = new Configuracao(60, 300, 0.5, 3);
+        Configuracao config = new Configuracao(60, GERACOES, 0.5, 3);
         AlgoritmoGenetico<Terreno> ag = new AlgoritmoGenetico<>(problema, config, random);
 
         Terreno melhor = ag.executar((geracao, terreno, fitness) -> {
             if (geracao % 50 == 0) {
                 System.out.printf("AG terreno: geração %d, fitness %.4f%n", geracao, fitness);
             }
+            ouvinte.aoFimDaGeracao(geracao, terreno, fitness);
         });
 
         return paraMetros(melhor, tamanhoFinal, new RuidoFractal(seed));
