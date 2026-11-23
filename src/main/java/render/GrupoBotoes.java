@@ -17,6 +17,7 @@ public class GrupoBotoes {
 
 	private final List<Botao> botoes = new ArrayList<>();
 	private int foco = 0;
+	private boolean focoMudou = false;
 
 	public Botao adicionar(Botao botao) {
 		botoes.add(botao);
@@ -33,6 +34,18 @@ public class GrupoBotoes {
 
 	/** Devolve o botão acionado neste quadro (por clique ou Enter), ou null. */
 	public Botao atualizar(Entrada entrada) {
+		int focoAntes = foco;
+		Botao acionado = atualizarFoco(entrada);
+		focoMudou = foco != focoAntes;
+		return acionado;
+	}
+
+	/** true no quadro em que a seleção passou para outro botão (para tocar um som). */
+	public boolean focoMudou() {
+		return focoMudou;
+	}
+
+	private Botao atualizarFoco(Entrada entrada) {
 		int n = botoes.size();
 		if (n == 0) {
 			return null;

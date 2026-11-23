@@ -5,6 +5,7 @@ import static org.lwjgl.glfw.GLFW.glfwSetWindowShouldClose;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowSizeCallback;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowTitle;
 
+import audio.Audio;
 import entrada.Entrada;
 
 /**
@@ -25,6 +26,7 @@ public class GerenciadorTelas {
 
 	private final long janela;
 	private final Entrada entrada;
+	private final Audio audio;
 
 	private Tela atual;
 	private Tela sobreposta;
@@ -44,9 +46,15 @@ public class GerenciadorTelas {
 	private int larguraJanela = 1;
 	private int alturaJanela = 1;
 
+	/** Sem áudio (usado nos testes): um Audio que não foi iniciado fica mudo. */
 	public GerenciadorTelas(long janela, Entrada entrada) {
+		this(janela, entrada, new Audio());
+	}
+
+	public GerenciadorTelas(long janela, Entrada entrada, Audio audio) {
 		this.janela = janela;
 		this.entrada = entrada;
+		this.audio = audio;
 		if (janela != 0) {
 			int[] w = new int[1], h = new int[1];
 			glfwGetWindowSize(janela, w, h);
@@ -149,6 +157,10 @@ public class GerenciadorTelas {
 
 	public Entrada entrada() {
 		return entrada;
+	}
+
+	public Audio audio() {
+		return audio;
 	}
 
 	/** Tamanho da área de desenho em pixels, atualizado pelo callback de redimensionamento. */

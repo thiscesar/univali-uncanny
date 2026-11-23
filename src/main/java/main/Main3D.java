@@ -28,6 +28,8 @@ import static org.lwjgl.opengl.GL13.*;
 import terreno.GeradorTerreno;
 import util.TextureLoader;
 import util.Utils3D;
+import audio.Audio; // ALTERADO: som do jogo
+import dados.Opcoes;
 import entrada.Entrada; // ALTERADO: entrada centralizada
 import telas.GerenciadorTelas; // ALTERADO: o laço delega para as telas
 import telas.TelaMenu;
@@ -78,6 +80,7 @@ public class Main3D {
     // ALTERADO: teclado/mouse centralizados e a máquina de telas
     Entrada entrada;
     GerenciadorTelas gerenciador;
+    Audio audio; // ALTERADO: som do jogo (OpenAL)
 
     float angle = 0;
 
@@ -89,6 +92,7 @@ public class Main3D {
 
         // ALTERADO: libera texturas e shaders comuns enquanto o contexto OpenGL ainda existe
         Recursos.liberar();
+        audio.encerrar(); // ALTERADO: fecha o OpenAL
 
         // Free the window callbacks and destroy the window
         glfwFreeCallbacks(window);
@@ -123,7 +127,14 @@ public class Main3D {
         // tratado por cada tela, e o jogo só fecha pelo X da janela ou pelo menu.
         entrada = new Entrada();
         entrada.registrar(window);
-        gerenciador = new GerenciadorTelas(window, entrada);
+
+        // ALTERADO: som do jogo; sem placa de som, o jogo continua mudo
+        audio = new Audio();
+        audio.iniciar();
+        Opcoes opcoes = Opcoes.atual();
+        audio.definirVolumes(opcoes.volumeGeral, opcoes.volumeMusica, opcoes.volumeEfeitos);
+
+        gerenciador = new GerenciadorTelas(window, entrada, audio);
 
         // ALTERADO: quando a janela muda de tamanho, a área de desenho e a proporção da
         // projeção acompanham (antes a proporção era fixa e a imagem distorcia).

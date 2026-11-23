@@ -1,6 +1,7 @@
 package telas;
 
 import static org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_T;
 import static org.lwjgl.glfw.GLFW.GLFW_KEY_V;
 import static org.lwjgl.glfw.GLFW.GLFW_KEY_X;
 import static org.lwjgl.opengl.GL11.*;
@@ -17,6 +18,10 @@ import java.nio.FloatBuffer;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.util.vector.Matrix4f;
 
+import audio.Audio;
+import audio.Efeito;
+import audio.Sintetizador;
+import audio.SomTocando;
 import dados.Constantes;
 import dados.Recursos;
 import render.CameraLivre;
@@ -31,7 +36,11 @@ import util.Utils3D;
  */
 public class TelaJogo implements Tela {
 
-	static final String TITULO = "JOGO (ESC: pausa, V: vitória, X: derrota)";
+	static final String TITULO = "JOGO (ESC: pausa, T: som de teste, V: vitória, X: derrota)";
+
+	/** Ponto fixo do som de teste: à direita de onde a câmera começa. Gire a câmera para ouvi-lo mudar de lado. */
+	private static final float[] POSICAO_TESTE = { 102f, 25f, 200f };
+	private SomTocando somTeste = null;
 	private static final Color COR_ROTULO = new Color(200, 195, 185, 200);
 
 	private static final float CAMPO_DE_VISAO = 60f; // graus, na vertical
@@ -71,6 +80,8 @@ public class TelaJogo implements Tela {
 	@Override
 	public void sair() {
 		gerenciador.entrada().prenderCursor(false);
+		gerenciador.audio().parar(somTeste);
+		somTeste = null;
 	}
 
 	@Override
@@ -87,8 +98,28 @@ public class TelaJogo implements Tela {
 			gerenciador.trocarPara(new TelaDerrota(gerenciador));
 			return;
 		}
+		if (gerenciador.entrada().foiPressionada(GLFW_KEY_T)) {
+			alternarSomTeste();
+		}
 		camera.atualizar(gerenciador.entrada(), diftime);
 		tempo += diftime / 1000.0f;
+
+		// o ouvinte acompanha a câmera: é assim que o OpenAL sabe de que lado vem cada som
+		gerenciador.audio().atualizarOuvinte(camera.x, camera.y, camera.z,
+				camera.frente.x, camera.frente.y, camera.frente.z, camera.cima.x, camera.cima.y, camera.cima.z);
+	}
+
+	/** Liga ou desliga um bipe em loop num ponto fixo do mundo (teste do som 3D). */
+	private void alternarSomTeste() {
+		Audio audio = gerenciador.audio();
+		if (audio.estaTocando(somTeste)) {
+			audio.parar(somTeste);
+			somTeste = null;
+			return;
+		}
+		// um "ping" gerado por código, repetido a cada 0,7 s: não depende de arquivo
+		Efeito bipe = audio.criarEfeito("bipe de teste", Sintetizador.ping(44100, 880, 120, 700), 44100);
+		somTeste = audio.tocar3D(bipe, POSICAO_TESTE[0], POSICAO_TESTE[1], POSICAO_TESTE[2], 1f, true);
 	}
 
 	@Override
@@ -107,7 +138,7 @@ public class TelaJogo implements Tela {
 		// rótulo 2D por cima da cena 3D (o overlay devolve o estado do OpenGL no fim)
 		Overlay2D overlay = Recursos.overlay();
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
-		Texto.desenhar(overlay, "JOGO    ESC: pausa    V: vitória    X: derrota",
+		Texto.desenhar(overlay, "JOGO    ESC: pausa    T: som de teste    V: vitória    X: derrota",
 				gerenciador.larguraJanela() / 2f, 14, 20, COR_ROTULO, Texto.Alinhamento.CENTRO);
 		overlay.finalizar();
 	}

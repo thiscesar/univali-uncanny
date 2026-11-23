@@ -5,6 +5,7 @@ import static org.lwjgl.glfw.GLFW.*;
 import java.util.Locale;
 import java.util.function.Function;
 
+import audio.Audio;
 import dados.Opcoes;
 import entrada.Entrada;
 import render.Botao;
@@ -29,11 +30,15 @@ class PainelOpcoes extends Painel {
 	private final Botao salvar = new Botao("Salvar", 0, 0, 200, 46);
 	private final Botao cancelar = new Botao("Cancelar", 0, 0, 200, 46);
 
+	/** Para ouvir a mudança de volume na hora, enquanto o controle é arrastado. */
+	private final Audio audio;
+
 	/** 0 a 3: deslizantes; 4: seed; 5: Salvar; 6: Cancelar. */
 	private int foco = 0;
 	private static final int ITENS = 7;
 
-	PainelOpcoes() {
+	PainelOpcoes(Audio audio) {
+		this.audio = audio;
 		Opcoes o = Opcoes.atual();
 		volumeGeral = new Deslizante("Volume geral", o.volumeGeral, PORCENTAGEM);
 		volumeMusica = new Deslizante("Música", o.volumeMusica, PORCENTAGEM);
@@ -50,6 +55,7 @@ class PainelOpcoes extends Painel {
 		posicionar();
 
 		if (entrada.foiPressionada(GLFW_KEY_ESCAPE)) {
+			restaurarVolumes();
 			return true;
 		}
 		if (entrada.foiPressionadaOuRepetida(GLFW_KEY_DOWN) || entrada.foiPressionada(GLFW_KEY_TAB)) {
@@ -77,12 +83,16 @@ class PainelOpcoes extends Painel {
 		boolean clicouSalvar = salvar.atualizar(entrada);
 		boolean clicouCancelar = cancelar.atualizar(entrada);
 
+		// prévia: os volumes mudam na hora; "Cancelar" volta aos salvos
+		audio.definirVolumes(volumeGeral.valor, volumeMusica.valor, volumeEfeitos.valor);
+
 		boolean enter = entrada.foiPressionada(GLFW_KEY_ENTER) || entrada.foiPressionada(GLFW_KEY_KP_ENTER);
 		if (clicouSalvar || (enter && foco == 5)) {
 			aplicarESalvar();
 			return true;
 		}
 		if (clicouCancelar || (enter && foco == 6)) {
+			restaurarVolumes();
 			return true;
 		}
 		if (enter) {
@@ -113,6 +123,11 @@ class PainelOpcoes extends Painel {
 		o.sensibilidade = deDeslizante(sensibilidade.valor);
 		o.seed = seed.texto();
 		o.salvar();
+	}
+
+	private void restaurarVolumes() {
+		Opcoes o = Opcoes.atual();
+		audio.definirVolumes(o.volumeGeral, o.volumeMusica, o.volumeEfeitos);
 	}
 
 	@Override

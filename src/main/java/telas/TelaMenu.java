@@ -5,6 +5,8 @@ import static org.lwjgl.opengl.GL11.*;
 import java.awt.Color;
 import java.util.Random;
 
+import audio.Audio;
+import audio.Efeito;
 import dados.Opcoes;
 import dados.Recursos;
 import render.AtmosferaMenu;
@@ -24,6 +26,10 @@ public class TelaMenu implements Tela {
 	private static final String SUBTITULO = "Três provas. Uma floresta. Três segundos.";
 	private static final Color COR_SUBTITULO = new Color(150, 140, 130);
 	private static final Color COR_DICA = new Color(95, 90, 88);
+
+	private static final String MUSICA = "audio/musica_menu.ogg";
+	private static final long FADE_ENTRADA_MS = 2500;
+	private static final long FADE_SAIDA_MS = 1200;
 
 	private final GerenciadorTelas gerenciador;
 	private final AtmosferaMenu atmosfera = new AtmosferaMenu();
@@ -50,14 +56,23 @@ public class TelaMenu implements Tela {
 		return b;
 	}
 
+	/** Sons curtos dos botões (arquivos ausentes tocam silêncio). */
+	private Efeito somPassar, somClique;
+
 	@Override
 	public void entrar() {
 		gerenciador.definirTitulo("Menu");
 		gerenciador.entrada().prenderCursor(false);
+		Audio audio = gerenciador.audio();
+		somPassar = audio.carregarEfeito("audio/menu_passar.ogg");
+		somClique = audio.carregarEfeito("audio/menu_clique.ogg");
+		audio.musica().tocar(MUSICA, true);
+		audio.musica().fadeIn(FADE_ENTRADA_MS);
 	}
 
 	@Override
 	public void sair() {
+		gerenciador.audio().musica().fadeOut(FADE_SAIDA_MS);
 	}
 
 	@Override
@@ -74,13 +89,19 @@ public class TelaMenu implements Tela {
 
 		posicionarBotoes(w, h);
 		Botao acionado = botoes.atualizar(gerenciador.entrada());
+		if (botoes.focoMudou()) {
+			gerenciador.audio().tocar(somPassar, 0.6f);
+		}
+		if (acionado != null) {
+			gerenciador.audio().tocar(somClique, 0.9f);
+		}
 		if (acionado == jogar) {
 			long seed = Opcoes.atual().seedDaPartida(random);
 			gerenciador.trocarPara(new TelaCarregando(gerenciador, seed));
 		} else if (acionado == controles) {
 			painel = new PainelControles();
 		} else if (acionado == opcoes) {
-			painel = new PainelOpcoes();
+			painel = new PainelOpcoes(gerenciador.audio());
 		} else if (acionado == creditos) {
 			painel = new PainelCreditos();
 		} else if (acionado == sair) {
