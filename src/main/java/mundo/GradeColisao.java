@@ -76,6 +76,35 @@ public class GradeColisao {
 		return new float[] { x, z };
 	}
 
+	/**
+	 * O segmento de (x1, z1) a (x2, z2) passa sem tocar em nenhum obstáculo?
+	 * Usado para saber se o monstro enxerga o jogador e se um tiro passa entre os troncos.
+	 */
+	public boolean linhaLivre(float x1, float z1, float x2, float z2) {
+		int i0 = celula(Math.min(x1, x2)) - 1, i1 = celula(Math.max(x1, x2)) + 1;
+		int j0 = celula(Math.min(z1, z2)) - 1, j1 = celula(Math.max(z1, z2)) + 1;
+		for (int j = Math.max(0, j0); j <= Math.min(celulas - 1, j1); j++) {
+			for (int i = Math.max(0, i0); i <= Math.min(celulas - 1, i1); i++) {
+				for (Circulo c : grade.get(indice(i, j))) {
+					if (distanciaAoSegmento(c.x(), c.z(), x1, z1, x2, z2) < c.raio()) {
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
+	/** Distância do ponto (px, pz) ao segmento de A a B: projeta o ponto na reta e limita ao segmento. */
+	static float distanciaAoSegmento(float px, float pz, float ax, float az, float bx, float bz) {
+		float abx = bx - ax, abz = bz - az;
+		float comprimento2 = abx * abx + abz * abz;
+		float t = comprimento2 == 0 ? 0 : ((px - ax) * abx + (pz - az) * abz) / comprimento2;
+		t = Math.max(0, Math.min(1, t));
+		float cx = ax + abx * t - px, cz = az + abz * t - pz;
+		return (float) Math.sqrt(cx * cx + cz * cz);
+	}
+
 	/** Os obstáculos das 9 células em volta do ponto (suficiente para raios de até 4 m). */
 	private List<Circulo> proximos(float x, float z) {
 		List<Circulo> lista = new ArrayList<>();

@@ -1,0 +1,168 @@
+package mundo;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+import terreno.RuidoFractal;
+
+/**
+ * Decide onde fica cada árvore. Só dados: roda na thread de carregamento.
+ *
+ * 1. Amostragem de Poisson em disco (algoritmo de Bridson): pontos espalhados ao acaso,
+ *    mas nunca a menos de 2,5 m uns dos outros. Fica natural, sem fileiras e sem montes.
+ * 2. Cada ponto fica ou não conforme um mapa de densidade feito de ruído fractal: bosques
+ *    fechados em alguns lugares, áreas abertas em outros.
+ * 3. Na faixa da borda, a densidade é máxima: uma muralha que esconde o fim do mapa.
+ * 4. Nada de árvores na água, na beira dos lagos, em declives fortes nem nas clareiras
+ *    pedidas (o início do jogador e, depois, as provas e a Univali).
+ *
+ * A mesma seed dá sempre as mesmas árvores.
+ */
+public final class DistribuidorArvores {
+
+	/** Uma árvore: posição (y = chão), tamanho, giro em radianos, brilho e qual das texturas. */
+	public record Arvore(float x, float y, float z, float altura, float largura, float rotacao, float brilho,
+			int textura) {}
+
+	/** Um círculo onde não pode haver árvore. */
+	public record Clareira(float x, float z, float raio) {}
+
+	public static final float DISTANCIA_MINIMA = 2.5f;
+	/** Largura, em metros a partir da borda, da faixa com densidade máxima. */
+	public static final float FAIXA_MURALHA = 24f;
+	public static final float RAIO_TRONCO = 0.35f;
+	/** Quantas texturas de árvore existem (pinheiro, abeto, árvore seca, copa redonda). */
+	public static final int VARIACOES = 4;
+
+	private static final float ALTURA_MINIMA = 8f, ALTURA_MAXIMA = 16f;
+	private static final float DECLIVE_MAXIMO = 32f;  // graus
+	private static final float ALTURA_MINIMA_CHAO = 0.25f; // m acima da água (nada na margem dos lagos)
+
+	private DistribuidorArvores() {}
+
+	public static List<Arvore> distribuir(ConsultaAltura chao, long seed, List<Clareira> clareiras) {
+		Random random = new Random(seed * 31 + 7);
+		RuidoFractal ruido = new RuidoFractal(seed + 99);
+		float tamanho = chao.tamanho();
+
+		List<Arvore> arvores = new ArrayList<>();
+		for (float[] p : poisson(tamanho, DISTANCIA_MINIMA, random)) {
+			float x = p[0], z = p[1];
+			// o sorteio da densidade vem antes dos filtros, para a sequência de números
+			// aleatórios não depender deles (mesma seed, mesmo resultado)
+			boolean fica = random.nextFloat() < densidade(x, z, tamanho, ruido);
+			if (!fica || dentroDeClareira(x, z, clareiras)) continue;
+			if (chao.alturaEm(x, z) < ALTURA_MINIMA_CHAO) continue;  // água e margem
+			if (chao.anguloEm(x, z) > DECLIVE_MAXIMO) continue;
+
+			float altura = ALTURA_MINIMA + random.nextFloat() * (ALTURA_MAXIMA - ALTURA_MINIMA);
+			float largura = altura * (0.38f + random.nextFloat() * 0.14f);
+			float rotacao = random.nextFloat() * (float) Math.PI;
+			float brilho = 0.75f + random.nextFloat() * 0.35f;
+			arvores.add(new Arvore(x, chao.alturaEm(x, z) - 0.15f, z, altura, largura, rotacao, brilho,
+					sortearTextura(random)));
+		}
+		return arvores;
+	}
+
+	/** Coloca um tronco na grade de colisão para cada árvore. */
+	public static void registrarTroncos(List<Arvore> arvores, GradeColisao grade) {
+		for (Arvore a : arvores) {
+			grade.adicionar(a.x(), a.z(), RAIO_TRONCO);
+		}
+	}
+
+	/**
+	 * Densidade de 0 a 1 num ponto: ruído fractal em manchas de ~70 m (bosques e áreas
+	 * abertas), e 1 na faixa da borda.
+	 */
+	static float densidade(float x, float z, float tamanho, RuidoFractal ruido) {
+		float manchas = (float) ruido.fbm(x / 70.0, z / 70.0, 4);
+		float interior = 0.06f + 0.86f * suave(-0.20f, 0.30f, manchas);
+		float distanciaBorda = Math.min(Math.min(x, z), Math.min(tamanho - x, tamanho - z));
+		float muralha = 1 - suave(FAIXA_MURALHA - 6, FAIXA_MURALHA, distanciaBorda);
+		return Math.max(interior, muralha);
+	}
+
+	/** Pinheiros são os mais comuns; árvores secas e de copa redonda aparecem de vez em quando. */
+	private static int sortearTextura(Random random) {
+		float r = random.nextFloat();
+		if (r < 0.40f) return 0;
+		if (r < 0.72f) return 1;
+		if (r < 0.86f) return 2;
+		return 3;
+	}
+
+	private static boolean dentroDeClareira(float x, float z, List<Clareira> clareiras) {
+		for (Clareira c : clareiras) {
+			float dx = x - c.x(), dz = z - c.z();
+			if (dx * dx + dz * dz < c.raio() * c.raio()) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Amostragem de Poisson em disco (Bridson, 2007). Uma grade de células de lado r/√2
+	 * (cabe no máximo um ponto em cada) torna rápida a pergunta "tem alguém perto demais?".
+	 * Começa de um ponto; para cada ponto "ativo", tenta até 30 vizinhos no anel entre r e 2r;
+	 * se nenhum couber, o ponto deixa de ser ativo.
+	 */
+	static List<float[]> poisson(float tamanho, float r, Random random) {
+		float celula = r / (float) Math.sqrt(2);
+		int n = (int) Math.ceil(tamanho / celula);
+		int[] grade = new int[n * n];
+		java.util.Arrays.fill(grade, -1);
+		List<float[]> pontos = new ArrayList<>();
+		List<Integer> ativos = new ArrayList<>();
+
+		float[] primeiro = { random.nextFloat() * tamanho, random.nextFloat() * tamanho };
+		pontos.add(primeiro);
+		ativos.add(0);
+		grade[(int) (primeiro[1] / celula) * n + (int) (primeiro[0] / celula)] = 0;
+
+		while (!ativos.isEmpty()) {
+			int k = random.nextInt(ativos.size());
+			float[] base = pontos.get(ativos.get(k));
+			boolean achou = false;
+			for (int tentativa = 0; tentativa < 30; tentativa++) {
+				double angulo = random.nextDouble() * 2 * Math.PI;
+				double distancia = r * (1 + random.nextDouble());
+				float x = base[0] + (float) (Math.cos(angulo) * distancia);
+				float z = base[1] + (float) (Math.sin(angulo) * distancia);
+				if (x < 0 || z < 0 || x >= tamanho || z >= tamanho) continue;
+				int ci = (int) (x / celula), cj = (int) (z / celula);
+				if (temVizinhoPerto(x, z, ci, cj, n, grade, pontos, r)) continue;
+				grade[cj * n + ci] = pontos.size();
+				ativos.add(pontos.size());
+				pontos.add(new float[] { x, z });
+				achou = true;
+				break;
+			}
+			if (!achou) {
+				ativos.remove(k);
+			}
+		}
+		return pontos;
+	}
+
+	private static boolean temVizinhoPerto(float x, float z, int ci, int cj, int n, int[] grade, List<float[]> pontos,
+			float r) {
+		for (int j = Math.max(0, cj - 2); j <= Math.min(n - 1, cj + 2); j++) {
+			for (int i = Math.max(0, ci - 2); i <= Math.min(n - 1, ci + 2); i++) {
+				int indice = grade[j * n + i];
+				if (indice >= 0) {
+					float[] p = pontos.get(indice);
+					float dx = p[0] - x, dz = p[1] - z;
+					if (dx * dx + dz * dz < r * r) return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static float suave(float inicio, float fim, float x) {
+		float t = Math.max(0, Math.min(1, (x - inicio) / (fim - inicio)));
+		return t * t * (3 - 2 * t);
+	}
+}

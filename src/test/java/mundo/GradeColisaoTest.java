@@ -40,4 +40,27 @@ class GradeColisaoTest {
 		assertEquals(44, p[1], 0);
 		assertEquals(0, g.quantidade());
 	}
+
+	@Test
+	void linhaLivreSoSeNenhumTroncoCortaOCaminho() {
+		GradeColisao g = new GradeColisao(100);
+		g.adicionar(50, 50, 0.35f);
+		assertFalse(g.linhaLivre(40, 50, 60, 50), "passa pelo centro do tronco");
+		assertFalse(g.linhaLivre(40, 50.3f, 60, 50.3f), "raspa no tronco");
+		assertTrue(g.linhaLivre(40, 50.5f, 60, 50.5f), "passa ao lado");
+		assertTrue(g.linhaLivre(40, 50, 49, 50), "termina antes do tronco");
+	}
+
+	@Test
+	void linhaLivreAchaTroncoLongeDasPontas() {
+		GradeColisao g = new GradeColisao(100);
+		g.adicionar(30, 30, 0.35f);
+		assertFalse(g.linhaLivre(10, 10, 50, 50), "diagonal longa, tronco no meio");
+	}
+
+	@Test
+	void distanciaAoSegmento() {
+		assertEquals(1f, GradeColisao.distanciaAoSegmento(5, 1, 0, 0, 10, 0), 1e-5);
+		assertEquals(5f, GradeColisao.distanciaAoSegmento(13, 4, 0, 0, 10, 0), 1e-5, "além da ponta: mede até a ponta");
+	}
 }

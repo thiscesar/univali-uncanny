@@ -14,7 +14,11 @@ import java.util.concurrent.Future;
 
 import dados.Constantes;
 import dados.Recursos;
+import entidades.Jogador;
+import mundo.Arvores;
 import mundo.ConsultaAltura;
+import mundo.DistribuidorArvores;
+import mundo.GradeColisao;
 import mundo.Mundo;
 import mundo.TexturasFloresta;
 import obj.Mapa3D;
@@ -48,7 +52,13 @@ public class TelaCarregando implements Tela {
 	private static final float METROS_POR_UNIDADE = 1f / PERFIL.unidadesPorMetro(); // centímetros -> metros
 
 	/** O que a thread de geração entrega: só dados, nada de OpenGL. */
-	private record DadosTerreno(int[][] alturas, ConsultaAltura chao) {}
+	private record DadosTerreno(int[][] alturas, ConsultaAltura chao, GradeColisao colisao,
+			List<DistribuidorArvores.Arvore> arvores, float[] inicio) {}
+
+	/** Raio, em metros, da clareira sem árvores em volta do início do jogador. */
+	private static final float CLAREIRA_INICIO = 6f;
+	/** Quantas etapas rodam na thread separada (as primeiras da lista de progresso). */
+	private static final int ETAPAS_NA_THREAD = 3;
 	private static final float DURACAO_FADE = 0.6f;     // segundos
 	private static final float TROCA_FRASE = 3.2f;      // segundos
 	private static final String[] FRASES = {
@@ -79,16 +89,17 @@ public class TelaCarregando implements Tela {
 	private final AtmosferaMenu atmosfera = new AtmosferaMenu(); // granulação e lâmpada falhando
 
 	private final ProgressoEtapas progresso = new ProgressoEtapas()
-			.adicionar("gerando o relevo", 0.70f)      // thread separada
-			.adicionar("planejando a fase", 0.03f)     // thread separada (ainda não existe)
-			.adicionar("montando a malha", 0.12f)      // thread principal (OpenGL)
-			.adicionar("plantando as árvores", 0.05f)  // thread principal (ainda não existem)
-			.adicionar("carregando texturas e sons", 0.10f); // thread principal (OpenGL)
+			.adicionar("gerando o relevo", 0.66f)        // thread separada
+			.adicionar("planejando a fase", 0.02f)       // thread separada (ainda não existe)
+			.adicionar("espalhando as árvores", 0.04f)   // thread separada
+			.adicionar("montando a malha", 0.10f)        // thread principal (OpenGL)
+			.adicionar("plantando as árvores", 0.06f)    // thread principal (OpenGL)
+			.adicionar("carregando texturas e sons", 0.12f); // thread principal (OpenGL)
 
 	/** As etapas da thread principal, na ordem, uma por quadro. */
 	private final List<Runnable> etapasPrincipais = List.of(
 			this::montarMalha,
-			() -> {}, // árvores: ainda não existem
+			this::montarArvores,
 			this::carregarTexturas);
 
 	private ExecutorService executor;
@@ -96,6 +107,7 @@ public class TelaCarregando implements Tela {
 	/** Fração do AG já feita, escrita pela thread do AG e lida pela principal. */
 	private volatile float fracaoRelevo = 0;
 	private DadosTerreno dados;
+	private Mapa3D terrenoNovo;
 	private boolean reaproveitar;
 
 	private Estado estado;
@@ -130,8 +142,9 @@ public class TelaCarregando implements Tela {
 		reaproveitar = mundoCarregado != null && mundoCarregado.seed == seed;
 		if (reaproveitar) {
 			// a mesma seed já está carregada: pula a geração
-			progresso.concluirEtapa();
-			progresso.concluirEtapa();
+			for (int i = 0; i < ETAPAS_NA_THREAD; i++) {
+				progresso.concluirEtapa();
+			}
 			estado = Estado.MONTANDO;
 			return;
 		}
@@ -149,7 +162,18 @@ public class TelaCarregando implements Tela {
 				}
 				fracaoRelevo = (float) geracao / GeradorTerreno.GERACOES;
 			});
-			return new DadosTerreno(alturas, new ConsultaAltura(alturas, METROS_ENTRE_PONTOS, METROS_POR_UNIDADE));
+			ConsultaAltura chao = new ConsultaAltura(alturas, METROS_ENTRE_PONTOS, METROS_POR_UNIDADE);
+
+			// início do jogador: o centro, ou o ponto bom mais próximo (até o AG da fase decidir)
+			GradeColisao colisao = new GradeColisao(chao.tamanho());
+			float centro = chao.tamanho() / 2;
+			float[] inicio = Jogador.pontoDeInicio(chao, colisao, centro, centro);
+
+			// árvores, com uma clareira no início, e os troncos na grade de colisão
+			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed,
+					List.of(new DistribuidorArvores.Clareira(inicio[0], inicio[1], CLAREIRA_INICIO)));
+			DistribuidorArvores.registrarTroncos(arvores, colisao);
+			return new DadosTerreno(alturas, chao, colisao, arvores, inicio);
 		});
 		estado = Estado.GERANDO;
 	}
@@ -203,8 +227,9 @@ public class TelaCarregando implements Tela {
 		}
 		try {
 			dados = tarefa.get();
-			progresso.concluirEtapa(); // relevo
-			progresso.concluirEtapa(); // fase (ainda não existe)
+			for (int i = 0; i < ETAPAS_NA_THREAD; i++) {
+				progresso.concluirEtapa(); // relevo, fase e árvores
+			}
 			estado = Estado.MONTANDO;
 		} catch (ExecutionException e) {
 			falhar(e.getCause());
@@ -216,7 +241,7 @@ public class TelaCarregando implements Tela {
 	}
 
 	private void executarProximaEtapa() {
-		int indice = progresso.indiceAtual() - 2; // as duas primeiras etapas são da outra thread
+		int indice = progresso.indiceAtual() - ETAPAS_NA_THREAD; // as primeiras etapas são da outra thread
 		try {
 			etapasPrincipais.get(indice).run();
 		} catch (RuntimeException e) {
@@ -249,18 +274,28 @@ public class TelaCarregando implements Tela {
 		}
 		ObjHTGsrtm malha = new ObjHTGsrtm(dados.alturas(), METROS_ENTRE_PONTOS, METROS_POR_UNIDADE);
 		malha.load();
-		Mapa3D terreno = new Mapa3D(0, 0, 0, 1); // na origem, escala 1: o mapa vai de 0 a 300 m em x e z
-		terreno.model = malha;
-		mundoCarregado = new Mundo(seed, PERFIL, terreno, dados.chao());
-		Constantes.mapa = terreno; // o campo global do projeto original continua apontando para o terreno
-		dados = null;
+		terrenoNovo = new Mapa3D(0, 0, 0, 1); // na origem, escala 1: o mapa vai de 0 a 300 m em x e z
+		terrenoNovo.model = malha;
+		Constantes.mapa = terrenoNovo; // o campo global do projeto original continua apontando para o terreno
+	}
+
+	private void montarArvores() {
+		if (reaproveitar) {
+			return;
+		}
+		Arvores arvores = new Arvores(dados.arvores());
+		arvores.load();
+		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, dados.inicio());
+		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo
+		terrenoNovo = null;
 	}
 
 	private void carregarTexturas() {
 		Recursos.shaderFloresta();
 		Recursos.shaderObjeto();
+		Recursos.shaderArvore();
 		TexturasFloresta.carregar();
-		Recursos.textura("texturecube.png"); // dos objetos de teste
+		Recursos.texturaArvores();
 	}
 
 	// ---------- desenho ----------

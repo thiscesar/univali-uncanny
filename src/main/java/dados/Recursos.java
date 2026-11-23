@@ -10,10 +10,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import mundo.TexturaArvores;
 import render.Fonte;
+import render.MipmapsCobertura;
 import render.Overlay2D;
 import render.TextoTextura;
 import shaders.ShaderProgram;
+import shaders.ShaderArvore;
 import shaders.ShaderObjeto;
 import shaders.ShaderTerrenoFloresta;
 import shaders.StaticShaderTerreno;
@@ -48,6 +51,7 @@ public final class Recursos {
 	private static StaticShaderTerreno shaderTerreno;
 	private static ShaderTerrenoFloresta shaderFloresta;
 	private static ShaderObjeto shaderObjeto;
+	private static ShaderArvore shaderArvore;
 
 	/** Desenho 2D (menus, HUD) e o cache de textos, criados na primeira vez. */
 	private static Overlay2D overlay;
@@ -145,6 +149,24 @@ public final class Recursos {
 		return shaderFloresta;
 	}
 
+	/** O shader das árvores. */
+	public static ShaderArvore shaderArvore() {
+		if (shaderArvore == null) {
+			shaderArvore = registrar(new ShaderArvore());
+		}
+		return shaderArvore;
+	}
+
+	/** A textura das árvores (as variações lado a lado), com mipmaps que preservam o recorte. */
+	public static int texturaArvores() {
+		Integer id = texturas.get("arvores");
+		if (id == null) {
+			id = MipmapsCobertura.enviar(TexturaArvores.atlas());
+			texturas.put("arvores", id);
+		}
+		return id;
+	}
+
 	/** O shader dos objetos do jogo. */
 	public static ShaderObjeto shaderObjeto() {
 		if (shaderObjeto == null) {
@@ -216,6 +238,7 @@ public final class Recursos {
 		shaderTerreno = null;
 		shaderFloresta = null;
 		shaderObjeto = null;
+		shaderArvore = null;
 		if (overlay != null) {
 			overlay.liberar();
 			overlay = null;

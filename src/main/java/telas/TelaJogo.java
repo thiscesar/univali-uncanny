@@ -7,14 +7,10 @@ import static org.lwjgl.opengl.GL13.glActiveTexture;
 import static org.lwjgl.opengl.GL20.glGetUniformLocation;
 import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
-import static org.lwjgl.opengl.GL20.glDisableVertexAttribArray;
-import static org.lwjgl.opengl.GL20.glVertexAttrib3f;
 import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
 
 import java.awt.Color;
 import java.nio.FloatBuffer;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 import org.lwjgl.BufferUtils;
@@ -25,22 +21,21 @@ import audio.Efeito;
 import audio.Sintetizador;
 import audio.SomAmbiente;
 import audio.SomTocando;
-import dados.Constantes;
 import dados.Opcoes;
 import dados.Recursos;
 import entidades.Jogador;
 import entrada.Entrada;
 import mundo.ConsultaAltura;
 import mundo.Mundo;
+import mundo.DistribuidorArvores;
 import mundo.TexturasFloresta;
-import obj.Cubo3D;
 import render.Ambiente;
 import render.Camera;
 import render.CameraLivre;
 import render.Lanterna;
 import render.Overlay2D;
 import render.Texto;
-import shaders.ShaderObjeto;
+import shaders.ShaderArvore;
 import shaders.ShaderTerrenoFloresta;
 import util.Utils3D;
 
@@ -72,10 +67,6 @@ public class TelaJogo implements Tela {
 	private final Ambiente ambiente = new Ambiente();
 	private final Lanterna lanterna = new Lanterna();
 
-	/** Cubos do projeto original espalhados perto do início, para conferir luz e neblina em objetos. */
-	private final List<Cubo3D> objetosTeste = new ArrayList<>();
-	private int texturaObjetos;
-
 	/** Câmera livre de depuração (F4), começando onde o jogador estiver. */
 	private CameraLivre cameraLivre = null;
 	private boolean mostrarDepuracao = false;
@@ -102,10 +93,7 @@ public class TelaJogo implements Tela {
 	public TelaJogo(GerenciadorTelas gerenciador, Mundo mundo) {
 		this.gerenciador = gerenciador;
 		this.mundo = mundo;
-		// começa no centro do mapa, ou no ponto bom mais próximo dele (até o AG da fase decidir)
-		float centro = mundo.tamanho() / 2;
-		float[] inicio = Jogador.pontoDeInicio(mundo.chao, mundo.colisao, centro, centro);
-		this.jogador = new Jogador(inicio[0], inicio[1], mundo.chao, mundo.colisao);
+		this.jogador = new Jogador(mundo.inicio[0], mundo.inicio[1], mundo.chao, mundo.colisao);
 	}
 
 	@Override
@@ -123,24 +111,6 @@ public class TelaJogo implements Tela {
 		cliqueLanterna = audio.carregarEfeito("audio/lanterna_clique.ogg");
 		somAmbiente = new SomAmbiente(audio);
 		somAmbiente.iniciar();
-
-		texturaObjetos = Recursos.textura("texturecube.png");
-		criarObjetosTeste();
-	}
-
-	/** Seis cubos de 1 m em volta do ponto de início, apoiados no chão. */
-	private void criarObjetosTeste() {
-		objetosTeste.clear();
-		for (int i = 0; i < 6; i++) {
-			double angulo = i * Math.PI / 3 + 0.4;
-			float distancia = 5 + i * 2;
-			float x = jogador.x + distancia * (float) Math.cos(angulo);
-			float z = jogador.z + distancia * (float) Math.sin(angulo);
-			float meio = 0.5f; // o VboCube vai de -1 a 1: com escala 0,5, o cubo tem 1 m
-			Cubo3D cubo = new Cubo3D(x, mundo.chao.alturaEm(x, z) + meio, z, meio);
-			cubo.model = Constantes.vboc;
-			objetosTeste.add(cubo);
-		}
 	}
 
 	@Override
@@ -287,7 +257,7 @@ public class TelaJogo implements Tela {
 		guardar(cameraAtual().matrizVisao(), bufferVisao);
 		lanterna.aplicar(ambiente);
 		desenharTerreno();
-		desenharObjetosTeste();
+		desenharArvores();
 
 		Overlay2D overlay = Recursos.overlay();
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
@@ -339,27 +309,21 @@ public class TelaJogo implements Tela {
 		shader.stop();
 	}
 
-	/** Os cubos de teste, com o shader de objetos (mesma luz e neblina do terreno). */
-	private void desenharObjetosTeste() {
-		ShaderObjeto shader = Recursos.shaderObjeto();
+	/** Todas as árvores numa chamada, com a luz e a neblina do comum.glsl. */
+	private void desenharArvores() {
+		ShaderArvore shader = Recursos.shaderArvore();
 		shader.start();
 		int prog = shader.programID;
 		glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), false, bufferProjecao);
 		glUniformMatrix4fv(glGetUniformLocation(prog, "view"), false, bufferVisao);
+		glUniform1f(glGetUniformLocation(prog, "tempo"), tempo);
+		glUniform1f(glGetUniformLocation(prog, "numeroTexturas"), DistribuidorArvores.VARIACOES);
 		glUniform1i(glGetUniformLocation(prog, "tex"), 0);
-		glUniform1f(glGetUniformLocation(prog, "emissividade"), 0f);
 		ambiente.enviar(shader);
 
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, texturaObjetos);
-		// O VboCube não tem normais (atributo 2). Desligamos o atributo e o deixamos em zero,
-		// senão ele usaria o que sobrou ligado do terreno; com normal zero, o shader calcula
-		// a normal da face sozinho.
-		glDisableVertexAttribArray(2);
-		glVertexAttrib3f(2, 0, 0, 0);
-		for (Cubo3D cubo : objetosTeste) {
-			cubo.DesenhaSe(shader);
-		}
+		glBindTexture(GL_TEXTURE_2D, Recursos.texturaArvores());
+		mundo.arvores.draw();
 		shader.stop();
 	}
 
@@ -368,7 +332,7 @@ public class TelaJogo implements Tela {
 		ConsultaAltura chao = mundo.chao;
 		Camera c = cameraAtual();
 		String[] linhas = {
-				String.format("FPS %.0f    seed %d", fps, mundo.seed),
+				String.format("FPS %.0f    seed %d    árvores %d", fps, mundo.seed, mundo.arvores.quantidade()),
 				String.format("posição  x %.1f  z %.1f   olhos %.2f m", c.x, c.z, c.y),
 				String.format("chão %.2f m   inclinação %.0f°   %s", chao.alturaEm(c.x, c.z), chao.anguloEm(c.x, c.z),
 						chao.ehAgua(c.x, c.z) ? String.format("água, %.2f m de fundo", chao.profundidadeAgua(c.x, c.z))

@@ -1,0 +1,26 @@
+#version 330 core
+
+// Árvores: recorte pelo alfa (sem precisar ordenar de trás para frente), iluminadas dos
+// dois lados do plano, com a luz e a neblina do comum.glsl.
+
+#include "comum.glsl"
+
+uniform sampler2D tex;
+
+in vec2 uv;
+in vec3 normalVista;
+in vec3 posVista;
+in float brilho;
+
+out vec4 out_Color;
+
+void main(void){
+	vec4 c = texture(tex, uv);
+	if(c.a < 0.5){
+		discard; // fora da silhueta: o pixel nem é desenhado
+	}
+	// o plano é fino: quem olha por trás vê a "outra face", com a normal invertida
+	vec3 n = gl_FrontFacing ? normalVista : -normalVista;
+	vec3 cor = iluminar(c.rgb * brilho, n, posVista);
+	out_Color = vec4(aplicarNeblina(cor, length(posVista), 0.0), 1.0);
+}
