@@ -115,5 +115,42 @@
 		    <version>2.9.1</version>
 		</dependency>
 
+		<!-- ALTERADO: JUnit 5 para os testes automatizados da lógica do jogo -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>5.11.4</version>
+			<scope>test</scope>
+		</dependency>
+
 	</dependencies>
+
+	<!-- ALTERADO: plugins de compilação, testes e execução -->
+	<build>
+		<plugins>
+			<!-- Versão fixa: sem ela o Maven 3.8 usa a 3.1, que ignora o maven.compiler.release
+			     e tenta compilar para Java 5 (o JDK 21 recusa). -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.13.0</version>
+			</plugin>
+			<!-- Roda os testes JUnit 5 com "mvn test". -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.5.4</version>
+			</plugin>
+			<!-- "mvn exec:java" abre o jogo. O exec:java roda dentro da JVM do próprio Maven,
+			     por isso o -Xmx1g fica no arquivo .mvn/jvm.config, e não aqui. -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.5.0</version>
+				<configuration>
+					<mainClass>main.Main3D</mainClass>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
 </project>

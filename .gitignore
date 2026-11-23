@@ -1,6 +1,11 @@
 /target/
 
-
 # Cópias da etapa anterior, sem uso no jogo
 parte4-texturas/
 parte4-texturas.zip
+
+# Arquivos gerados ao rodar
+*.log
+hs_err_pid*
+heightmap.png
+textura.png

@@ -12,6 +12,7 @@ import org.lwjgl.util.vector.Vector4f;
 import Model.VboBilboard;
 import Model.VboCube;
 import dados.Constantes;
+import dados.Recursos; // ALTERADO: recursos comuns do jogo
 import obj.Cubo3D;
 import obj.Mapa3D;
 import obj.ObjHTGsrtm;
@@ -27,6 +28,7 @@ import static org.lwjgl.opengl.GL13.*;
 import terreno.GeradorTerreno;
 import util.TextureLoader;
 import util.Utils3D;
+import render.CameraLivre; // ALTERADO: câmera livre para inspecionar o terreno
 
 import java.awt.image.BufferedImage;
 
@@ -72,6 +74,9 @@ public class Main3D {
 
     public static int ttverde = -1;
 
+    // ALTERADO: câmera livre no lugar da câmera que seguia o avião
+    CameraLivre camera;
+
     float angle = 0;
 
     public void run() {
@@ -79,6 +84,9 @@ public class Main3D {
 
         init();
         loop();
+
+        // ALTERADO: libera texturas e shaders comuns enquanto o contexto OpenGL ainda existe
+        Recursos.liberar();
 
         // Free the window callbacks and destroy the window
         glfwFreeCallbacks(window);
@@ -267,18 +275,19 @@ public class Main3D {
         // x35.loadObj("x-35_obj.obj");
         // x35.load();
 
-        System.out.println("f104starfighter.obj");
-        ObjModel f101 = new ObjModel();
-        f101.loadObj("x-35_obj.obj"); // caminho ajustado: funciona no Windows e no Linux
-        f101.load();
-        System.out.println("Faces: " + f101.f.size());
-
-        System.out.println("AIM120D");
-        ObjModel sr71 = new ObjModel();
-        // sr71.loadObj("..\\OBJ\\SR71.obj");
-        sr71.loadObj("SR71.obj"); // caminho ajustado: funciona no Windows e no Linux
-        sr71.load();
-        System.out.println("Faces: " + sr71.f.size());
+        // ALTERADO: o avião e o SR71 saíram da cena. As classes continuam no projeto.
+        // System.out.println("f104starfighter.obj");
+        // ObjModel f101 = new ObjModel();
+        // f101.loadObj("x-35_obj.obj"); // caminho ajustado: funciona no Windows e no Linux
+        // f101.load();
+        // System.out.println("Faces: " + f101.f.size());
+        //
+        // System.out.println("AIM120D");
+        // ObjModel sr71 = new ObjModel();
+        // // sr71.loadObj("..\\OBJ\\SR71.obj");
+        // sr71.loadObj("SR71.obj"); // caminho ajustado: funciona no Windows e no Linux
+        // sr71.load();
+        // System.out.println("Faces: " + sr71.f.size());
 
         // Relevo real (arquivo .hgt da NASA), como no original:
         // ObjHTGsrtm mapmodel = new ObjHTGsrtm();
@@ -291,22 +300,24 @@ public class Main3D {
         Constantes.mapa = new Mapa3D(-10.0f, 0.0f, -10.0f, 10);
         Constantes.mapa.model = mapmodel;
 
-        for (int i = 0; i < 1000; i++) {
-            // Cubo3D cubo = new Cubo3D(rnd.nextFloat()*2-1,rnd.nextFloat()*2-1,
-            // rnd.nextFloat()*2-1, rnd.nextFloat()*0.005f+0.0001f);
-            // cubo.model = x35;
-            Cubo3D cubo = new Cubo3D(rnd.nextFloat() * 40 - 20, rnd.nextFloat() * 40 - 20, rnd.nextFloat() * 40 - 20,
-                    0.4f);
-            cubo.model = Constantes.vboc;
-            cubo.vx = 0;
-            cubo.vy = 0;
-            cubo.vz = 0;
-            cubo.rotvel = rnd.nextFloat() * 9;
-            listaObjetos.add(cubo);
-        }
+        // ALTERADO: os 1000 cubos saíram da cena. A lista continua existindo (vazia),
+        // porque o Projetil percorre Main3D.listaObjetos.
+        // for (int i = 0; i < 1000; i++) {
+        //     Cubo3D cubo = new Cubo3D(rnd.nextFloat() * 40 - 20, rnd.nextFloat() * 40 - 20, rnd.nextFloat() * 40 - 20,
+        //             0.4f);
+        //     cubo.model = Constantes.vboc;
+        //     cubo.vx = 0;
+        //     cubo.vy = 0;
+        //     cubo.vz = 0;
+        //     cubo.rotvel = rnd.nextFloat() * 9;
+        //     listaObjetos.add(cubo);
+        // }
 
+        // ALTERADO: o personagem continua sendo criado, porque o callback de teclado escreve
+        // nos campos dele (sem o objeto, apertar W derrubaria o jogo). Mas ele não tem mais
+        // modelo e não é simulado nem desenhado.
         personagem = new Personagem(0, 0, 0, 0.01f);
-        personagem.model = f101;
+        // personagem.model = f101;
 
         BufferedImage imgcube = TextureLoader.loadImage("texturecube.png");
         int tcube = TextureLoader.loadTexture(imgcube);
@@ -326,7 +337,12 @@ public class Main3D {
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
 
-        glClearColor(0.55f, 0.75f, 0.95f, 1.0f);
+        // ALTERADO: céu escuro (era 0.55f, 0.75f, 0.95f)
+        glClearColor(0.02f, 0.025f, 0.03f, 1.0f);
+
+        // ALTERADO: câmera livre começando na borda sul do terreno, olhando para o centro
+        // e um pouco para baixo. O terreno ocupa x e z de -10 a ~194.
+        camera = new CameraLivre(92f, 25f, 200f, 0f, (float) Math.toRadians(-20));
 
         long ultimoTempo = System.currentTimeMillis();
         while (!glfwWindowShouldClose(window)) {
@@ -409,21 +425,23 @@ public class Main3D {
         // Matrix4f view = new Matrix4f();
         // view.setIdentity();
 
-        Matrix4f transf = new Matrix4f();
-        transf.setIdentity();
-        transf.translate(new Vector3f(-1, 0.5f, -3));
-        transf.rotate((float) Math.PI, new Vector3f(0, 1, 0));
+        // ALTERADO: a matriz de visão vem da câmera livre, e não mais do avião.
+        // Matrix4f transf = new Matrix4f();
+        // transf.setIdentity();
+        // transf.translate(new Vector3f(-1, 0.5f, -3));
+        // transf.rotate((float) Math.PI, new Vector3f(0, 1, 0));
 
         // view.scale(new Vector3f(scale,scale,scale));
         // view.rotate(viewAngX*0.0174532f, new Vector3f(1,0,0));
         // view.rotate(viewAngY*0.0174532f, new Vector3f(0,1,0));
         // view.translate(new
         // Vector3f(-personagem.x,-personagem.y-0.5f,-personagem.z-1.5f));
-        Vector4f pos = new Vector4f(personagem.x, personagem.y, personagem.z, 1);
-        Vector4f t = new Vector4f(pos.dot(pos, personagem.right), pos.dot(pos, personagem.up),
-                pos.dot(pos, personagem.front), 1.0f);
-        Matrix4f view = Utils3D.setLookAtMatrix(t, personagem.front, personagem.up, personagem.right);
-        view.mul(transf, view, view);
+        // Vector4f pos = new Vector4f(personagem.x, personagem.y, personagem.z, 1);
+        // Vector4f t = new Vector4f(pos.dot(pos, personagem.right), pos.dot(pos, personagem.up),
+        //         pos.dot(pos, personagem.front), 1.0f);
+        // Matrix4f view = Utils3D.setLookAtMatrix(t, personagem.front, personagem.up, personagem.right);
+        // view.mul(transf, view, view);
+        Matrix4f view = camera.matrizVisao();
 
         FloatBuffer matrixView = MemoryUtil.memAllocFloat(16);
         view.storeTranspose(matrixView);
@@ -456,7 +474,8 @@ public class Main3D {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, Constantes.tgato);
 
-        personagem.DesenhaSe(shader);
+        // ALTERADO: o avião não é mais desenhado
+        // personagem.DesenhaSe(shader);
 
         shader.stop();
 
@@ -483,7 +502,9 @@ public class Main3D {
                 i--;
             }
         }
-        personagem.SimulaSe(diftime);
+        // ALTERADO: o avião não é mais simulado; quem se move agora é a câmera livre
+        // personagem.SimulaSe(diftime);
+        camera.atualizar(window, diftime);
 
         angle += 0.1;
     }

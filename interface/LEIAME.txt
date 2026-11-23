@@ -1,0 +1,5 @@
+Imagens das telas e menus.
+
+  menu_fundo.png   foto da Univali tratada, fundo do menu (PNG ou JPG)
+
+Se um arquivo não existir, o jogo usa um substituto gerado por código.

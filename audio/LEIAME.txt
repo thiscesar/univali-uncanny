@@ -1,0 +1,15 @@
+Sons e músicas, sempre em OGG Vorbis.
+
+Sons posicionados em 3D (grito do monstro, sussurro das provas...) precisam ser
+MONO: o OpenAL não posiciona sons estéreo.
+
+Conversões úteis:
+  MP3 para OGG:     ffmpeg -i musica.mp3 -c:a libvorbis -q:a 5 musica_menu.ogg
+  Estéreo para mono: ffmpeg -i grito.wav -ac 1 monstro_grito.ogg
+
+Arquivos esperados: musica_menu.ogg, ambiente_floresta.ogg, passo_1..4.ogg,
+respiracao.ogg, escopeta_tiro.ogg, escopeta_telha.ogg, escopeta_cartucho.ogg,
+escopeta_vazia.ogg, monstro_grito.ogg, monstro_morte.ogg, batimento.ogg,
+sussurro.ogg, pegar_prova.ogg, sinal_aula.ogg, susto.ogg.
+
+Se um arquivo não existir, o jogo toca silêncio no lugar.

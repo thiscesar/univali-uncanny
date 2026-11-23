@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Univali Uncanny",
+            "request": "launch",
+            "mainClass": "main.Main3D",
+            "cwd": "${workspaceFolder}",
+            "vmArgs": "-Xmx1g"
+        },
+        {
+            "type": "java",
+            "name": "Prévia 2D do terreno",
+            "request": "launch",
+            "mainClass": "MainTerrenoPrevia",
+            "cwd": "${workspaceFolder}",
+            "vmArgs": "-Xmx1g"
+        }
+    ]
+}

@@ -1,0 +1,6 @@
+Imagens 2D desenhadas dentro da cena ou por cima dela.
+
+  professor.png   silhueta do professor na janela da Univali (PNG com transparência)
+  susto.png       rosto do monstro no susto final
+
+Se um arquivo não existir, o jogo usa um substituto gerado por código.

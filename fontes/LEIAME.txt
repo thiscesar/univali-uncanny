@@ -1,0 +1,7 @@
+Fontes TrueType usadas nos textos.
+
+  titulo.ttf   título e telas finais
+  texto.ttf    HUD e botões
+
+Use fontes com licença livre (OFL, por exemplo). Sem os arquivos, o jogo usa as
+fontes do sistema.

@@ -1,0 +1,12 @@
+Modelos 3D do jogo.
+
+  dragonknight/tris.md2     monstro (MD2)
+  dragonknight/skin.png     pele do monstro (PNG; converter de PCX se vier assim)
+  dragonknight/normal.png   normal map do monstro (opcional)
+  dragonknight/weapon.md2   arma do monstro (opcional)
+  escopeta/escopeta.obj     escopeta em OBJ, triangulada, exportada com grupos "corpo" e "telha"
+  escopeta/cor.png          textura de cor da escopeta
+  escopeta/normal.png       normal map da escopeta (opcional)
+
+Se um arquivo não existir, o jogo usa um substituto gerado por código.
+Todo modelo de terceiros precisa ter autor e licença anotados nos créditos.
