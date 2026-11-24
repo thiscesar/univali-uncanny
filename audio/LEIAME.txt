@@ -26,3 +26,6 @@ passo_piso_*: a gravação tinha quase toda a energia abaixo de 90 Hz (um ronco 
 batida); foi cortada abaixo de 120 Hz, renormalizada e encurtada para 0,2 s.
 musica_monstro.ogg veio de headbanger-monster.mp3, sem os 5 s de silêncio do fim (para o loop não ter pausa).
 risada_professor.ogg veio de teacher-laugh.mp3: sem o silêncio do começo e do fim, mono, normalizada.
+maquina_tecla_1..8.ogg: as 8 batidas mais fortes recortadas de type-writer.mp3 (100 ms cada). O espaço, o
+sininho com o retorno do carro e a folha continuam sintetizados (maquina_espaco/retorno/folha.ogg substituem).
+lampada_falhando.ogg: de flicker.mp3, só as rajadas (1,25 s a 3,6 s), mono (toca em 3D na lâmpada que falha).

@@ -39,7 +39,7 @@ import util.TextureLoader;
  *
  * Por dentro (o térreo): piso de granilite, forro, paredes pintadas como corredor de escola, as
  * paredes do corredor e das salas (com placas, armários, murais e a mobília de cada sala), lâmpadas no teto (acesas, piscando ou queimadas), a placa de SAÍDA,
- * a porta de entrada e a da sala do professor (enquanto trancadas), o crachá numa mesinha e a
+ * a porta de entrada e a da sala do professor (enquanto trancadas), o crachá numa mesinha (só depois que o professor responde pela porta) e a
  * sala do professor: mesa, papéis, luminária e ele, um boneco de caixas que vira a cabeça para
  * acompanhar o jogador.
  */
@@ -53,7 +53,11 @@ public class DesenhoPredio {
 	// por fora
 	private final MalhaCaixas casca, concreto, letreiro, metal, lampadasPoste, acesas, apagadas, piscando, vulto;
 	// por dentro
-	private final MalhaCaixas pintura, piso, forro, lampadasTeto, lampadasPiscando, saida, portaEntrada, portaProfessor;
+	private final MalhaCaixas pintura, piso, forro, saida, portaEntrada, portaProfessor;
+	/** Uma malha por lâmpada do teto (null nas queimadas), na ordem de andar.lampadas(): cada uma com o seu brilho. */
+	private final List<MalhaCaixas> lampadas = new ArrayList<>();
+	/** O brilho de cada lâmpada agora (0 a 1), escrito pela TelaJogo a partir das FalhasDeLuz. */
+	public final float[] brilhoLampadas;
 	private final MalhaCaixas portasTrancadas, madeira, metalInterno, lousas, monitores, telas, louca, armarios, murais;
 	private final MalhaCaixas logoSaguao;
 	private final List<MalhaCaixas> placas = new ArrayList<>();
@@ -69,6 +73,8 @@ public class DesenhoPredio {
 
 	// o que muda durante o jogo
 	public boolean portaEntradaAberta = false, portaProfessorAberta = false, crachaPego = false;
+	/** O crachá só aparece depois que o professor diz, lá de dentro, que sem ele ninguém entra. */
+	public boolean crachaVisivel = false;
 
 	/** Só na thread principal. */
 	public DesenhoPredio(PredioUnivali p) {
@@ -142,15 +148,13 @@ public class DesenhoPredio {
 		// lâmpadas no teto, uma por sala: a maioria apagada (no desenho, junto com o forro escuro),
 		// umas acesas fracas, umas piscando
 		// as lâmpadas do teto (as queimadas não aparecem: o forro escuro já é a lâmpada apagada)
-		lampadasTeto = new MalhaCaixas();
-		lampadasPiscando = new MalhaCaixas();
+		brilhoLampadas = new float[p.andar.lampadas().size()];
 		for (AndarUnivali.Lampada l : p.andar.lampadas()) {
-			if (l.estado() == AndarUnivali.Lampada.Estado.QUEIMADA) continue;
-			MalhaCaixas m = l.estado() == AndarUnivali.Lampada.Estado.PISCANDO ? lampadasPiscando : lampadasTeto;
-			m.caixa(l.x() - 0.6f, l.x() + 0.6f, pe - 0.04f, pe, l.z() - 0.3f, l.z() + 0.3f, TUDO, TUDO, TUDO);
+			boolean queimada = l.estado() == AndarUnivali.Lampada.Estado.QUEIMADA;
+			lampadas.add(queimada ? null : new MalhaCaixas()
+					.caixa(l.x() - 0.6f, l.x() + 0.6f, pe - 0.04f, pe, l.z() - 0.3f, l.z() + 0.3f, TUDO, TUDO, TUDO).enviar());
+			brilhoLampadas[lampadas.size() - 1] = queimada ? 0 : 1;
 		}
-		lampadasTeto.enviar();
-		lampadasPiscando.enviar();
 		saida = new MalhaCaixas().caixa(-0.6f, 0.6f, 3.15f, 3.45f, P - e - 0.12f, P - e - 0.04f, TUDO, TUDO, TUDO).enviar();
 		portaEntrada = new MalhaCaixas().caixa(-vao, vao, 0, 3.0f, P - 0.2f, P - 0.12f, TUDO, TUDO, TUDO).enviar();
 		AndarUnivali.Caixa pp = p.andar.portaProfessor();
@@ -382,11 +386,6 @@ public class DesenhoPredio {
 		cabeca += (cabecaAlvo - cabeca) * (1 - (float) Math.exp(-4 * dt));
 	}
 
-	/** As lâmpadas que piscam estão acesas agora? (A mesma conta do desenho, para a luz bater com ele.) */
-	public boolean lampadaPiscandoAcesa() {
-		return Math.sin(tempo * 17.0) * Math.sin(tempo * 5.3 + 2.0) > 0.3;
-	}
-
 	/** Onde fica a lâmpada da luminária, no mundo (a TelaJogo põe uma luz pontual ali). */
 	public float[] luminariaNoMundo() {
 		float[] prof = predio.professorNoModelo();
@@ -437,10 +436,11 @@ public class DesenhoPredio {
 		desenhar(p, pintura, "predio: pintura", DesenhoPredio::pintura, 0f, true);
 		desenhar(p, piso, "predio: piso", DesenhoPredio::piso, 0f, true);
 		desenhar(p, forro, "predio: forro", DesenhoPredio::forro, 0f, true);
-		desenhar(p, lampadasTeto, "predio: lampada do teto", () -> liso(new Color(210, 225, 230)), 0.55f, false);
-		float falha = (float) (Math.sin(tempo * 17.0) * Math.sin(tempo * 5.3 + 2.0));
-		desenhar(p, lampadasPiscando, "predio: lampada do teto", () -> liso(new Color(210, 225, 230)),
-				falha > 0.3f ? 0.9f : 0.02f, false);
+		for (int i = 0; i < lampadas.size(); i++) { // cada lâmpada com o seu brilho (as que falham piscam)
+			if (lampadas.get(i) == null) continue;
+			desenhar(p, lampadas.get(i), "predio: lampada do teto", () -> liso(new Color(210, 225, 230)),
+					0.02f + 0.6f * brilhoLampadas[i], false);
+		}
 		desenhar(p, saida, "predio: saida", DesenhoPredio::placaSaida, 1.0f, false);
 		if (!portaEntradaAberta) desenhar(p, portaEntrada, "predio: porta", DesenhoPredio::porta, 0.05f, false);
 		if (!portaProfessorAberta) desenhar(p, portaProfessor, "predio: porta de madeira", DesenhoPredio::portaMadeira, 0f, false);
@@ -458,7 +458,7 @@ public class DesenhoPredio {
 			String nome = nomesPlacas.get(i);
 			desenhar(p, placas.get(i), "placa da porta: " + nome, () -> placaDaPorta(nome), 0.2f, false);
 		}
-		if (!crachaPego) desenhar(p, cracha, "predio: cracha", DesenhoPredio::cracha, 0.6f, false);
+		if (crachaVisivel && !crachaPego) desenhar(p, cracha, "predio: cracha", DesenhoPredio::cracha, 0.6f, false);
 
 		// a sala do professor, no espaço dele
 		float[] prof = predio.professorNoModelo();
@@ -494,7 +494,7 @@ public class DesenhoPredio {
 			halos.adicionar(w[0], w[1], w[2]);
 		}
 		halos.desenhar(2.0f, COR_LAMPADA, projecao, visao, ambiente, alturaImagem, 0.3f);
-		if (!crachaPego) {
+		if (crachaVisivel && !crachaPego) {
 			halos.limpar();
 			float[] k = predio.chaveNoModelo();
 			float[] w = predio.noMundo(k[0], 0.8f, k[1]);
@@ -519,12 +519,13 @@ public class DesenhoPredio {
 
 	public void liberar() {
 		for (MalhaCaixas m : new MalhaCaixas[] { casca, concreto, letreiro, metal, lampadasPoste, acesas, apagadas, piscando,
-				vulto, pintura, piso, forro, lampadasTeto, lampadasPiscando, saida, portaEntrada, portaProfessor, portasTrancadas,
+				vulto, pintura, piso, forro, saida, portaEntrada, portaProfessor, portasTrancadas,
 				madeira, metalInterno, lousas, monitores, telas, louca, armarios, murais, logoSaguao, cracha, mesa, papeis,
 				luminaria, cadeira, corpoProfessor, cabecaProfessor }) {
 			m.liberar();
 		}
 		for (MalhaCaixas m : placas) m.liberar();
+		for (MalhaCaixas m : lampadas) if (m != null) m.liberar();
 		halos.liberar();
 	}
 

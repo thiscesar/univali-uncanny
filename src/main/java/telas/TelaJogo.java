@@ -170,6 +170,9 @@ public class TelaJogo implements Tela {
 	/** audio/risada_professor.ogg: ele ri quando o jogador sai da sala depois da negativa (null = sem o arquivo). */
 	private Efeito somRisadaProfessor;
 	private boolean risadaPendente = false, naSalaDoProfessor = false;
+	/** As lâmpadas da Univali falhando (cada uma no seu tempo, e às vezes todas juntas) e o som disso. */
+	private jogo.FalhasDeLuz falhasDeLuz;
+	private Efeito somLampada;
 	private int ultimaFalaEntrega = -1;
 	/** audio/risada.ogg (null = sem o arquivo: a risada vira galho). */
 	private Efeito somRisada;
@@ -304,6 +307,14 @@ public class TelaJogo implements Tela {
 		somRisada = Caminhos.existe("audio/risada.ogg") ? audio.carregarEfeito("audio/risada.ogg") : null;
 		somRisadaProfessor = Caminhos.existe("audio/risada_professor.ogg") ? audio.carregarEfeito("audio/risada_professor.ogg")
 				: null;
+		somLampada = efeitoOuSintetizado("audio/lampada_falhando.ogg", () -> Sintetizador.zumbido(44100));
+		List<fase.AndarUnivali.Lampada> lampadas = mundo.predio.andar.lampadas();
+		boolean[] funciona = new boolean[lampadas.size()], pisca = new boolean[lampadas.size()];
+		for (int i = 0; i < lampadas.size(); i++) {
+			funciona[i] = lampadas.get(i).estado() != fase.AndarUnivali.Lampada.Estado.QUEIMADA;
+			pisca[i] = lampadas.get(i).estado() == fase.AndarUnivali.Lampada.Estado.PISCANDO;
+		}
+		falhasDeLuz = new jogo.FalhasDeLuz(funciona, pisca, mundo.seed + 11);
 		sustos = new SustosFalsos(mundo.seed + 5);
 		desenhoSilhueta = new DesenhoSilhueta();
 		desenhoFantasma = new DesenhoFantasma();
@@ -529,6 +540,10 @@ public class TelaJogo implements Tela {
 			sustos.forcar(SustosFalsos.Tipo.GALHO);
 			mostrarMensagem("Susto falso: galho (só na floresta, sem o monstro)");
 		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_B)) {
+			falhasDeLuz.forcarFalhaGeral();
+			mostrarMensagem("Falha geral das luzes (só dentro da Univali)");
+		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_N)) {
 			sustos.forcar(SustosFalsos.Tipo.FANTASMA);
 			mostrarMensagem("Susto falso: fantasma (na Univali, só no corredor olhando ao longo dele)");
@@ -610,7 +625,7 @@ public class TelaJogo implements Tela {
 
 	private Uso usoPerto() {
 		var p = mundo.predio;
-		if (!objetivos.temCracha() && p.perto(jogador.x, jogador.z, p.chaveNoModelo())) return Uso.CRACHA;
+		if (objetivos.podePegarCracha() && p.perto(jogador.x, jogador.z, p.chaveNoModelo())) return Uso.CRACHA;
 		float[] prof = p.professorNoModelo();
 		if (objetivos.portaProfessorAberta() && p.perto(jogador.x, jogador.z, new float[] { prof[0], prof[1] })) return Uso.PROFESSOR;
 		if (!objetivos.portaProfessorAberta() && p.perto(jogador.x, jogador.z, p.centroPortaProfessor())) return Uso.PORTA_PROFESSOR;
@@ -639,7 +654,17 @@ public class TelaJogo implements Tela {
 				mostrarMensagem("A porta abriu.", 2f);
 			} else {
 				gerenciador.audio().tocar(somVazia, 1f);
-				mostrarMensagem("Trancada. Deve haver um crachá em alguma sala.", 3f);
+				List<String> resposta = objetivos.respostaDaPorta();
+				if (!resposta.isEmpty()) { // a primeira vez: ele responde lá de dentro, e o crachá passa a existir
+					falas.clear();
+					falas.addAll(resposta);
+					falaComVoz = null;
+					tempoFala = 0;
+					desenhoPredio.crachaVisivel = true;
+					mostrarMensagem("Trancada.", 2f);
+				} else {
+					mostrarMensagem("Trancada. Procure o crachá dele nas salas.", 3f);
+				}
 			}
 		}
 		case PROFESSOR -> falarComProfessor();
@@ -671,6 +696,42 @@ public class TelaJogo implements Tela {
 		float[] cabeca = mundo.predio.noMundo(prof[0], 1.3f, prof[1]);
 		audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, 3f);
 		return amostras.length / 44100f;
+	}
+
+	/**
+	 * As lâmpadas falhando: o brilho de cada uma vai para o desenho; quando uma rajada começa perto
+	 * do jogador, o estalo da lâmpada sai dela (3D). Na falha geral, o som sai da lâmpada mais perto,
+	 * mais forte.
+	 */
+	private void atualizarLuzes(float dt) {
+		boolean dentro = mundo.predio.dentro(jogador.x, jogador.z);
+		List<fase.AndarUnivali.Lampada> lampadas = mundo.predio.andar.lampadas();
+		for (jogo.FalhasDeLuz.Evento e : falhasDeLuz.atualizar(dt, dentro)) {
+			int i = e.geral() ? lampadaMaisPerto() : e.lampada();
+			if (i < 0) continue;
+			float[] w = mundo.predio.noMundo(lampadas.get(i).x(), entidades.PredioUnivali.PE_DIREITO - 0.1f, lampadas.get(i).z());
+			if (e.geral() || Math.hypot(w[0] - jogador.x, w[2] - jogador.z) < 18) {
+				gerenciador.audio().tocar3D(somLampada, w[0], w[1], w[2], e.geral() ? 1f : 0.55f, false, e.geral() ? 5f : 2.5f);
+			}
+		}
+		for (int i = 0; i < falhasDeLuz.quantidade(); i++) desenhoPredio.brilhoLampadas[i] = falhasDeLuz.brilho(i);
+	}
+
+	/** A lâmpada acesa mais perto do jogador (-1 se nenhuma). */
+	private int lampadaMaisPerto() {
+		List<fase.AndarUnivali.Lampada> lampadas = mundo.predio.andar.lampadas();
+		int melhor = -1;
+		double menor = Double.MAX_VALUE;
+		for (int i = 0; i < lampadas.size(); i++) {
+			if (lampadas.get(i).estado() == fase.AndarUnivali.Lampada.Estado.QUEIMADA) continue;
+			float[] w = mundo.predio.noMundo(lampadas.get(i).x(), 0, lampadas.get(i).z());
+			double d = Math.hypot(w[0] - jogador.x, w[2] - jogador.z);
+			if (d < menor) {
+				menor = d;
+				melhor = i;
+			}
+		}
+		return melhor;
 	}
 
 	/** Uma frase sussurrada de cada prova não pega, a cada 7–13 s, só se o jogador estiver a menos de 30 m. */
@@ -743,10 +804,10 @@ public class TelaJogo implements Tela {
 		irPara(mundo.predio.professorNoModelo(), 1.9f);
 	}
 
-	/** Depuração (F3 + P): o crachá, depois a porta da sala, o professor, as provas e o professor de novo. */
+	/** Depuração (F3 + P): a porta da sala, o crachá, a porta de novo, o professor, as provas e o professor de novo. */
 	private void irParaOProximoObjetivo() {
 		var p = mundo.predio;
-		if (!objetivos.temCracha()) {
+		if (objetivos.podePegarCracha()) {
 			irPara(p.chaveNoModelo(), 1.2f);
 		} else if (!objetivos.portaProfessorAberta()) {
 			irPara(fase.AndarUnivali.noCorredor(p.andar.professores()), 0);
@@ -821,6 +882,7 @@ public class TelaJogo implements Tela {
 		particulas.atualizar(dt);
 		mundo.predio.SimulaSe(Math.round(dt * 1000));
 		desenhoPredio.atualizar(dt, jogador.x, jogador.z);
+		atualizarLuzes(dt);
 		// depois da negativa, quando o jogador sai da sala do professor, ele ri (lá da mesa)
 		fase.AndarUnivali.Sala sala = mundo.predio.andar.professores();
 		float[] noModelo = mundo.predio.paraModelo(jogador.x, jogador.z);
@@ -1693,12 +1755,13 @@ public class TelaJogo implements Tela {
 		}
 		float[] l = desenhoPredio.luminariaNoMundo();
 		luzes.add(new float[] { l[0], l[1], l[2], 1.1f, 0.95f, 0.6f, 6f });
-		boolean falhaAcesa = desenhoPredio.lampadaPiscandoAcesa();
-		for (fase.AndarUnivali.Lampada lamp : mundo.predio.andar.lampadas()) {
-			if (lamp.estado() == fase.AndarUnivali.Lampada.Estado.QUEIMADA) continue;
-			if (lamp.estado() == fase.AndarUnivali.Lampada.Estado.PISCANDO && !falhaAcesa) continue;
+		List<fase.AndarUnivali.Lampada> lampadas = mundo.predio.andar.lampadas();
+		for (int i = 0; i < lampadas.size(); i++) {
+			float brilho = falhasDeLuz.brilho(i); // a mesma conta do desenho: a luz pisca junto com a lâmpada
+			if (brilho < 0.05f) continue;
+			fase.AndarUnivali.Lampada lamp = lampadas.get(i);
 			float[] w = mundo.predio.noMundo(lamp.x(), entidades.PredioUnivali.PE_DIREITO - 0.2f, lamp.z());
-			luzes.add(new float[] { w[0], w[1], w[2], 0.75f, 0.82f, 0.9f, 7f });
+			luzes.add(new float[] { w[0], w[1], w[2], 0.75f * brilho, 0.82f * brilho, 0.9f * brilho, 7f });
 		}
 		// as 4 mais perto da câmera (o shader aceita 4)
 		Camera c = cameraAtual();
@@ -1782,7 +1845,7 @@ public class TelaJogo implements Tela {
 				String.format("arma %s   cano %d   reserva %d   partículas %d   caixas %d", escopeta.estado().name().toLowerCase(),
 						escopeta.cano(), escopeta.reserva(), particulas.quantidade(),
 						caixas.stream().filter(cx -> !cx.pega()).count()),
-				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata   N fantasma   H silhueta   J galho   L risada",
+				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata   B luzes   N fantasma   H silhueta   J galho   L risada",
 				"clique atira   R recarrega   E pega   P vai até a próxima prova   I salva o mapa da fase   setas e PgUp/PgDn: arma",
 		};
 		int tamanho = 16;

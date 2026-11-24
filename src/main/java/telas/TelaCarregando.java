@@ -177,11 +177,18 @@ public class TelaCarregando implements Tela {
 		if (!historiaContada) {
 			historia = new Historia();
 			historiaContada = true;
-			teclas = new audio.Efeito[4];
-			for (int i = 0; i < teclas.length; i++) {
-				int n = i + 1;
-				teclas[i] = somOuSintetizado("audio/maquina_tecla_" + n + ".ogg", () -> audio.Sintetizador.teclaMaquina(44100, n));
+			// as teclas gravadas que existirem (audio/maquina_tecla_1.ogg, _2...); sem nenhuma, quatro sintetizadas
+			List<audio.Efeito> gravadas = new java.util.ArrayList<>();
+			for (int n = 1; n <= 8 && util.Caminhos.existe("audio/maquina_tecla_" + n + ".ogg"); n++) {
+				gravadas.add(gerenciador.audio().carregarEfeito("audio/maquina_tecla_" + n + ".ogg"));
 			}
+			if (gravadas.isEmpty()) {
+				for (int n = 1; n <= 4; n++) {
+					gravadas.add(gerenciador.audio().criarEfeito("tecla da máquina " + n + " (sintetizada)",
+							audio.Sintetizador.teclaMaquina(44100, n), 44100));
+				}
+			}
+			teclas = gravadas.toArray(new audio.Efeito[0]);
 			espaco = somOuSintetizado("audio/maquina_espaco.ogg", () -> audio.Sintetizador.espacoMaquina(44100, 5));
 			retorno = somOuSintetizado("audio/maquina_retorno.ogg", () -> audio.Sintetizador.retornoMaquina(44100, 6));
 			folha = somOuSintetizado("audio/maquina_folha.ogg", () -> audio.Sintetizador.folhaPapel(44100, 7));
