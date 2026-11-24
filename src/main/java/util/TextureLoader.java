@@ -64,7 +64,9 @@ public class TextureLoader {
        public static BufferedImage loadImage(String loc)
        {
             try {
-               return ImageIO.read(new FileInputStream(loc));
+               // ALTERADO: caminho resolvido pelo util.Caminhos, para achar as texturas mesmo quando
+               // o jogo empacotado é aberto de outra pasta
+               return ImageIO.read(new FileInputStream(Caminhos.caminho(loc)));
             } catch (IOException e) {
                 //Error Handling Here
             }

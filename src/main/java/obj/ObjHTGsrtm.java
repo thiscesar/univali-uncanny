@@ -47,6 +47,8 @@ public class ObjHTGsrtm extends Model {
     public int wh;
 
     /** Comportamento original: lê o relevo real do arquivo S28W049.hgt. */
+    // ALTERADO: o S28W049.hgt (25 MB) saiu do projeto, porque o jogo só usa o construtor com as
+    // alturas geradas pelo AG. Para usar este construtor, recoloque o arquivo na pasta do jogo.
     public ObjHTGsrtm() {
     }
 

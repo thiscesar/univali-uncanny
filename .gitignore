@@ -22,3 +22,6 @@ audio/professor/
 # Ambientes Python (ferramentas de geração de texturas)
 venv/
 fase_*.png
+
+# Pacotes gerados por empacotamento/
+dist/

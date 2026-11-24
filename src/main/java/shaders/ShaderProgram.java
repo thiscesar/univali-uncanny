@@ -51,7 +51,9 @@ public abstract class ShaderProgram {
     private static int loadShader(String file, int type){
         StringBuilder shaderSource = new StringBuilder();
         try{
-            BufferedReader reader = new BufferedReader(new FileReader(file));
+            // ALTERADO: caminho resolvido pelo util.Caminhos, para achar os shaders mesmo quando o
+            // jogo empacotado é aberto de outra pasta
+            BufferedReader reader = new BufferedReader(new FileReader(util.Caminhos.caminho(file)));
             String line;
             while((line = reader.readLine())!=null){
                 shaderSource.append(line).append(System.getProperty("line.separator"));

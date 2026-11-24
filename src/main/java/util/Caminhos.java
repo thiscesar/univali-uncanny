@@ -35,7 +35,7 @@ public final class Caminhos {
 	 * chamou decidir o que fazer (normalmente, usar um substituto).
 	 */
 	public static File arquivo(String relativo) {
-		File f = new File(pastaBase(), relativo);
+		File f = resolver(relativo);
 		if (!f.exists() && avisados.add(f.getPath())) {
 			System.out.println("[Caminhos] arquivo não encontrado: " + f.getPath());
 		}
@@ -49,6 +49,15 @@ public final class Caminhos {
 
 	/** Verifica se o arquivo existe, sem gerar aviso. */
 	public static boolean existe(String relativo) {
-		return new File(pastaBase(), relativo).exists();
+		return resolver(relativo).exists();
+	}
+
+	/**
+	 * Junta o caminho à pasta base. Um caminho que já é absoluto (porque já passou por aqui)
+	 * fica como está; sem isso, new File(base, "/x/y") viraria "base/x/y".
+	 */
+	private static File resolver(String caminho) {
+		File f = new File(caminho);
+		return f.isAbsolute() ? f : new File(pastaBase(), caminho);
 	}
 }

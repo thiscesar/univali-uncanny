@@ -186,22 +186,25 @@ public class Main3D {
         Constantes.vboBilbord = new VboBilboard();
         Constantes.vboBilbord.load();
 
-        Constantes.tgato = TextureLoader.loadTexture_from_image("texturaGato.jpeg");
+        // ALTERADO: as texturas do gato, da multtexture, do Mig, dos tiros, da explosão, do cubo e
+        // do tiro verde não são usadas pelo jogo (o personagem original não atira mais) e os
+        // arquivos saíram do projeto. O código fica comentado para mostrar como era.
+        // Constantes.tgato = TextureLoader.loadTexture_from_image("texturaGato.jpeg");
         // BufferedImage imgf104 =
         // TextureLoader.loadTexture_from_image("texturaf104.jpg");
         // BufferedImage imgsr71 = TextureLoader.loadTexture_from_image("sr71.jpg");
 
-        Constantes.tmult = TextureLoader.loadTexture_from_image("multtexture.png");
-        System.out.println("tmult " + Constantes.tmult);
+        // Constantes.tmult = TextureLoader.loadTexture_from_image("multtexture.png");
+        // System.out.println("tmult " + Constantes.tmult);
 
-        Constantes.txtmig = TextureLoader.loadTexture_from_image("TexturaMig01.png");
-        System.out.println("tmult " + Constantes.tmult);
+        // Constantes.txtmig = TextureLoader.loadTexture_from_image("TexturaMig01.png");
+        // System.out.println("tmult " + Constantes.tmult);
 
-        Constantes.texturaTiro = TextureLoader.loadTexture_from_image("texturaTiro.png");
-        System.out.println("texturaTiro " + Constantes.texturaTiro);
+        // Constantes.texturaTiro = TextureLoader.loadTexture_from_image("texturaTiro.png");
+        // System.out.println("texturaTiro " + Constantes.texturaTiro);
 
-        Constantes.texturaExplosao = TextureLoader.loadTexture_from_image("texturaExplosao.png");
-        System.out.println("texturaExplosao " + Constantes.texturaExplosao);
+        // Constantes.texturaExplosao = TextureLoader.loadTexture_from_image("texturaExplosao.png");
+        // System.out.println("texturaExplosao " + Constantes.texturaExplosao);
 
         // Cubo3D cubo = new Cubo3D(0.0f, 0.0f, -1.0f, 0.2f);
         // cubo.vbocube = vboc;
@@ -246,11 +249,12 @@ public class Main3D {
         personagem = new Personagem(0, 0, 0, 0.01f);
         // personagem.model = f101;
 
-        BufferedImage imgcube = TextureLoader.loadImage("texturecube.png");
-        int tcube = TextureLoader.loadTexture(imgcube);
+        // ALTERADO: texturas sem uso, ver acima
+        // BufferedImage imgcube = TextureLoader.loadImage("texturecube.png");
+        // int tcube = TextureLoader.loadTexture(imgcube);
 
-        BufferedImage imgtverde = TextureLoader.loadImage("tiro_verde.png");
-        ttverde = TextureLoader.loadTexture(imgtverde);
+        // BufferedImage imgtverde = TextureLoader.loadImage("tiro_verde.png");
+        // ttverde = TextureLoader.loadTexture(imgtverde);
 
         // Run the rendering loop until the user has attempted to close
         // the window or has pressed the ESCAPE key.

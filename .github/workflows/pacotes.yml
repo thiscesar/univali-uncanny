@@ -1,0 +1,59 @@
+# Gera os pacotes do jogo para Linux e Windows nos servidores do GitHub.
+#
+# - Botão "Run workflow" na aba Actions: gera os dois pacotes e deixa para baixar no fim da execução.
+# - Tag que começa com "v" (ex.: git tag v1.0.0 && git push origin v1.0.0): gera os dois pacotes e
+#   cria uma Release com eles, que é o link para mandar aos colegas.
+name: Pacotes
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  pacote:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            script: bash empacotamento/empacotar.sh
+            arquivo: dist/UnivaliUncanny-linux.tar.gz
+          - os: windows-latest
+            script: pwsh -File empacotamento/empacotar.ps1
+            arquivo: dist/UnivaliUncanny-windows.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Gerar pacote
+        run: ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pacote-${{ matrix.os }}
+          path: ${{ matrix.arquivo }}
+          compression-level: 0
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: pacote
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Criar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "Univali Uncanny ${{ github.ref_name }}" \
+            --notes "Windows: extraia o .zip e abra UnivaliUncanny.exe. Linux: extraia o .tar.gz e abra bin/UnivaliUncanny (ou rode ./criar-atalho-linux.sh para criar o atalho no menu). Não precisa instalar Java."
