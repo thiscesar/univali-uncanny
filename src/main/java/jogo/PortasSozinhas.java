@@ -16,7 +16,7 @@ public class PortasSozinhas {
 	/** Quanto a porta abre (graus) e quanto tempo leva ao todo, em segundos. */
 	public static final float ABERTURA = 100f, DURACAO = 2.2f;
 	/** A porta do início: abre a partir deste tempo de jogo, ou antes, com o jogador a esta distância. */
-	public static final float TEMPO_DO_INICIO = 6f, PERTO_DO_INICIO = 3f;
+	public static final float TEMPO_DO_INICIO = 7.5f, PERTO_DO_INICIO = 3f; // 1,5 s depois de ele acordar
 	/** As outras abrem com o jogador a esta distância. */
 	public static final float PERTO = 7f;
 

@@ -150,6 +150,8 @@ public class TelaJogo implements Tela {
 
 	// as dicas do começo e os sustos falsos
 	private final Tutorial tutorial = new Tutorial();
+	/** Os primeiros segundos: acordar com a cabeça na carteira (ver jogo.Despertar). */
+	private final jogo.Despertar despertar = new jogo.Despertar();
 	private float andado = 0, ultimoX, ultimoZ;
 	private SustosFalsos sustos;
 	private DesenhoSilhueta desenhoSilhueta;
@@ -377,7 +379,8 @@ public class TelaJogo implements Tela {
 		// as duas portas começam trancadas: um retângulo no vão de cada uma
 		mundo.colisao.adicionarRetangulo(mundo.predio.portaEntrada());
 		mundo.colisao.adicionarRetangulo(mundo.predio.portaProfessor());
-		mostrarMensagem("Encontre a sala do professor.", 4f);
+		// o despertar: o zumbido no ouvido, a respiração (a mensagem do objetivo vem quando ele acordar)
+		gerenciador.audio().tocar(gerenciador.audio().criarEfeito("despertar", Sintetizador.despertar(44100), 44100), 0.8f);
 		somSussurro = efeitoOuSintetizado("audio/sussurro.ogg", () -> Sintetizador.sussurro(44100, 13));
 		somPegarProva = efeitoOuSintetizado("audio/pegar_prova.ogg", () -> Sintetizador.ping(44100, 660, 600, 900));
 		somSinal = efeitoOuSintetizado("audio/sinal_aula.ogg", () -> Sintetizador.sinal(44100));
@@ -577,6 +580,11 @@ public class TelaJogo implements Tela {
 			mostrarMensagem("Mapa salvo em " + arquivo);
 		}
 
+		if (!despertar.terminou()) { // acordando: Enter ou espaço pulam
+			despertar.atualizar(diftime / 1000f);
+			if (entrada.foiPressionada(GLFW_KEY_ENTER) || entrada.foiPressionada(GLFW_KEY_SPACE)) despertar.pular();
+			if (despertar.terminou()) mostrarMensagem("Encontre a sala do professor.", 4f);
+		}
 		if (cameraLivre != null) {
 			cameraLivre.atualizar(entrada, diftime);
 		} else {
@@ -587,7 +595,7 @@ public class TelaJogo implements Tela {
 			}
 			jogador.SimulaSe(diftime);
 			tocarSonsDoJogador();
-			if (monstro.estado() != DragonKnight.Estado.ATACANDO) {
+			if (monstro.estado() != DragonKnight.Estado.ATACANDO && despertar.terminou()) {
 				comandarArma(entrada);
 			}
 		}
@@ -962,7 +970,7 @@ public class TelaJogo implements Tela {
 		ultimoX = jogador.x;
 		ultimoZ = jogador.z;
 		if (andado > 2) tutorial.registrar(Tutorial.Acao.ANDOU);
-		tutorial.atualizar(dt);
+		if (despertar.terminou()) tutorial.atualizar(dt); // as dicas, só depois de acordar
 		tempoMensagem = Math.max(0, tempoMensagem - dt);
 		for (Prova p : partida.provas()) {
 			p.SimulaSe(Math.round(dt * 1000));
@@ -1153,6 +1161,13 @@ public class TelaJogo implements Tela {
 	/** Lê o teclado e o mouse e passa os comandos para o jogador. */
 	private void comandarJogador(Entrada entrada) {
 		float frente = 0, lado = 0;
+		if (!despertar.podeAndar()) { // ainda acordando: parado (e, antes de levantar a cabeça, sem olhar em volta)
+			jogador.comandar(0, 0, false);
+			if (!despertar.podeOlhar()) return;
+			float s = CameraLivre.SENSIBILIDADE_MOUSE * Opcoes.atual().sensibilidade;
+			jogador.girar(entrada.deltaMouse().x * s, (Opcoes.atual().inverterY ? 1 : -1) * entrada.deltaMouse().y * s);
+			return;
+		}
 		if (entrada.estaPressionada(GLFW_KEY_W)) frente += 1;
 		if (entrada.estaPressionada(GLFW_KEY_S)) frente -= 1;
 		if (entrada.estaPressionada(GLFW_KEY_D)) lado += 1;
@@ -1263,6 +1278,7 @@ public class TelaJogo implements Tela {
 	public void desenhar() {
 		Matrix4f visao = visaoComTremor();
 		lanterna.aplicar(ambiente);
+		ambiente.intensidadeLanterna *= 1 - despertar.deitado(); // a lanterna só acende quando ele levanta a cabeça
 		desenharMapaDeSombra(visao); // antes da cena: o que a lanterna enxerga
 
 		// a cena vai para uma imagem à parte: pequena no modo PS1, do tamanho da janela fora dele
@@ -1300,13 +1316,14 @@ public class TelaJogo implements Tela {
 		desenhoProvas.desenhar(partida.provas(), bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		desenhoProvas.desenharFeixes(partida.provas(), camera.x, camera.z, bufferProjecao, bufferVisao, ambiente);
-		if (tempoSusto < 0) { // no susto, só a cara dele
+		if (tempoSusto < 0 && despertar.deitado() <= 0) { // no susto, só a cara dele (e acordando, ainda sem a arma)
 			desenhoEscopeta.desenhar(escopeta, ambiente, gerenciador.proporcao(), alturaImagem);
 		}
 		// a passagem para a tela: amplia (modo PS1), escurece os cantos, granula e, com o monstro, distorce
 		filtroPs1.vinheta = 1;
 		filtroPs1.granulacao = 1;
 		filtroPs1.aberracao = presencaMonstro;
+		filtroPs1.desfoque = despertar.desfoque();
 		filtroPs1.tempo = tempo;
 		filtroPs1.terminar(gerenciador.largura(), gerenciador.altura());
 		if (fim == Fim.DERROTA && fotoFim == null) {
@@ -1316,9 +1333,10 @@ public class TelaJogo implements Tela {
 		Overlay2D overlay = Recursos.overlay();
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
 		desenharEfeitosMonstro(overlay);
-		if (tempoSusto < 0 && fim == null && tempoEntrega < 0) {
+		if (tempoSusto < 0 && fim == null && tempoEntrega < 0 && despertar.terminou()) {
 			desenharHudArma(overlay);
 		}
+		if (!despertar.terminou()) desenharPalpebras(overlay);
 		if (tempoEntrega >= 0) {
 			desenharEntrega(overlay);
 		}
@@ -1539,6 +1557,16 @@ public class TelaJogo implements Tela {
 	 */
 	private Matrix4f visaoComTremor() {
 		Matrix4f visao = cameraAtual().matrizVisao();
+		float deitado = despertar.deitado();
+		if (deitado > 0 && cameraLivre == null) {
+			// a cabeça na carteira: os olhos mais baixos, olhando para a mesa e tombados para o lado.
+			// Aplicado depois da visão (no espaço da câmera): baixar os olhos = subir o mundo
+			Matrix4f cabeca = new Matrix4f();
+			cabeca.rotate(jogo.Despertar.ROLAGEM_DEITADO * deitado, new Vector3f(0, 0, 1));
+			cabeca.rotate(-jogo.Despertar.ARFAGEM_DEITADO * deitado, new Vector3f(1, 0, 0));
+			cabeca.translate(new Vector3f(0, jogo.Despertar.ALTURA_DEITADO * deitado, 0));
+			Matrix4f.mul(cabeca, visao, visao);
+		}
 		if (tremor > 0) {
 			float forca = tremor * tremor * 0.03f; // radianos
 			Matrix4f giro = new Matrix4f();
@@ -1547,6 +1575,24 @@ public class TelaJogo implements Tela {
 			Matrix4f.mul(giro, visao, visao);
 		}
 		return visao;
+	}
+
+	/**
+	 * As pálpebras do despertar: duas faixas pretas (de cima e de baixo) que se abrem e fecham,
+	 * com a borda esmaecida; enquanto a visão está borrada, tudo também um pouco mais escuro.
+	 */
+	private void desenharPalpebras(Overlay2D o) {
+		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
+		float aberto = despertar.palpebras();
+		o.retangulo(0, 0, w, h, new Color(0f, 0f, 0f, 0.45f * despertar.desfoque()));
+		float fechado = h / 2f * (1 - aberto) + 1, borda = h * 0.08f;
+		o.retangulo(0, 0, w, fechado, Color.BLACK);
+		o.retangulo(0, h - fechado, w, fechado, Color.BLACK);
+		for (int i = 0; i < 10; i++) { // a borda esmaecida da pálpebra
+			float a = 1 - (i + 1) / 11f, y = fechado + i * borda / 10;
+			o.retangulo(0, y, w, borda / 10 + 1, new Color(0f, 0f, 0f, a));
+			o.retangulo(0, h - y - borda / 10, w, borda / 10 + 1, new Color(0f, 0f, 0f, a));
+		}
 	}
 
 	/**

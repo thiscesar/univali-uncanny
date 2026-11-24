@@ -7,7 +7,8 @@
 //  - vinheta: os cantos escurecem, o olho vai para o centro;
 //  - granulação de filme: um ruído fraco que muda a cada quadro;
 //  - presença do monstro: aberração cromática (o vermelho e o azul se separam para as bordas)
-//    e uma ondulação leve da imagem.
+//    e uma ondulação leve da imagem;
+//  - desfoque: a visão borrada de quem acabou de acordar (média de 12 pontos em volta).
 
 uniform sampler2D cena;
 uniform vec2 resolucao;     // tamanho da imagem da cena
@@ -16,6 +17,7 @@ uniform float tempo;        // segundos, para o ruído e a ondulação mudarem
 uniform float vinheta;      // 0 a 1
 uniform float granulacao;   // 0 a 1
 uniform float aberracao;    // 0 a 1: o quanto o monstro está presente
+uniform float desfoque;     // 0 a 1: o quanto a imagem está borrada (o despertar)
 
 in vec2 uv;
 
@@ -41,6 +43,17 @@ void main(void){
 	// aberração cromática: vermelho e azul lidos um pouco para fora e para dentro, mais nas bordas
 	vec2 desvio = (c - 0.5) * 0.012 * aberracao;
 	vec3 cor = vec3(ler(c + desvio).r, ler(c).g, ler(c - desvio).b);
+
+	// desfoque: a média de 12 pontos num círculo (raio de até 1,5% da tela), mais o centro
+	if (desfoque > 0.01) {
+		vec3 soma = cor;
+		for (int i = 0; i < 12; i++) {
+			float a = float(i) * 0.5236; // 30 graus
+			float r = (i % 2 == 0 ? 1.0 : 0.55) * 0.015 * desfoque;
+			soma += ler(c + vec2(cos(a), sin(a) * resolucao.x / resolucao.y) * r);
+		}
+		cor = soma / 13.0;
+	}
 
 	if (niveis >= 2.0) {
 		ivec2 pixel = ivec2(floor(c * resolucao));

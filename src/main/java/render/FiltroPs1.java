@@ -39,7 +39,7 @@ public class FiltroPs1 {
 	public static final float NIVEIS_COR = 0;
 
 	/** Efeitos da passagem para a tela, de 0 a 1 (0 = desligado). */
-	public float vinheta = 0, granulacao = 0, aberracao = 0;
+	public float vinheta = 0, granulacao = 0, aberracao = 0, desfoque = 0;
 	/** Segundos, para a granulação e a ondulação mudarem com o tempo. */
 	public float tempo = 0;
 
@@ -96,6 +96,7 @@ public class FiltroPs1 {
 		glUniform1f(glGetUniformLocation(p, "vinheta"), vinheta);
 		glUniform1f(glGetUniformLocation(p, "granulacao"), granulacao);
 		glUniform1f(glGetUniformLocation(p, "aberracao"), aberracao);
+		glUniform1f(glGetUniformLocation(p, "desfoque"), desfoque);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, cor);
 

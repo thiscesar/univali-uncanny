@@ -216,6 +216,29 @@ public final class Sintetizador {
 		double frequencia = 40 + 40 * Math.exp(-s * 30);
 		return volume * Math.sin(2 * Math.PI * frequencia * s) * Math.exp(-s * 28) * Math.min(1, s * 400);
 	}
+	// ---------- o despertar ----------
+
+	/**
+	 * O som de acordar (6 s): um zumbido agudo no ouvido que vai sumindo, um ronco grave e abafado
+	 * (o prédio, ouvido de longe) e, quando a cabeça levanta (por volta de 2,3 s), uma respiração funda.
+	 */
+	public static short[] despertar(int taxa) {
+		Random r = new Random(17);
+		double[] s = new double[taxa * 6];
+		double grave = 0, ar = 0;
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			double zumbido = Math.sin(2 * Math.PI * 5200 * t) * 0.14 * Math.max(0, 1 - t / 4.5);
+			grave += 0.01 * ((r.nextDouble() * 2 - 1) - grave);
+			double ronco = grave * 2.5 * Math.max(0, 1 - t / 5.5);
+			// a respiração: ar soprado (ruído filtrado) que cresce e some entre 2,2 e 3,4 s
+			ar += 0.12 * ((r.nextDouble() * 2 - 1) - ar);
+			double respira = t > 2.2 && t < 3.4 ? ar * 0.9 * Math.sin(Math.PI * (t - 2.2) / 1.2) : 0;
+			s[i] = zumbido + ronco + respira;
+		}
+		return normalizar(s, 0.6);
+	}
+
 	// ---------- máquina de escrever ----------
 
 	/**

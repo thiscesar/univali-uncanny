@@ -63,6 +63,9 @@ public class DesenhoPredio {
 	/** A folha de uma porta de sala (dobradiça em x = 0, abre girando em volta dela) e o ângulo de cada porta que abre sozinha. */
 	private final MalhaCaixas folhaPorta;
 	public final float[] anguloPortas;
+	/** O relógio da sala onde o jogador acorda, parado em 23:58: o mostrador e o ponteiro dos segundos (travado). */
+	private final MalhaCaixas relogio, ponteiroSegundos;
+	private final float[] centroRelogio;
 	/** A TV de tubo no balcão do saguão: o gabinete e a tela (chuvisco animado, às vezes o logo). */
 	private final MalhaCaixas tvGabinete, tvTela;
 	/** Onde fica a tela da TV, no modelo: {x, y, z} (a TelaJogo põe ali a luz e o som). */
@@ -199,6 +202,17 @@ public class DesenhoPredio {
 			metalInterno.caixa(x - 0.25f, x + 0.25f, 0.42f, 0.48f, 4.5f, 7.5f, TUDO, TUDO, TUDO);
 			metalInterno.caixa(x - 0.05f, x + 0.05f, 0, 0.42f, 5.8f, 6.2f, TUDO, TUDO, TUDO);
 		}
+		// o relógio: na parede da porta da sala onde o jogador acorda (a da frente do corredor), ao lado
+		// da porta e acima dela, virado para dentro da sala (+z); o jogador acorda olhando para lá
+		AndarUnivali.Sala inicio = p.andar.inicio();
+		float rx = inicio.porta()[0] + 1.4f;
+		if (rx + 0.3f > inicio.xMax()) rx = inicio.porta()[0] - 1.4f;
+		float rz = AndarUnivali.MEIO_CORREDOR + AndarUnivali.ESPESSURA / 2; // a face da parede, do lado da sala
+		centroRelogio = new float[] { rx, 2.75f, rz + 0.045f };
+		float[] canto = { 0, 0, 0.01f, 0.01f }; // o canto transparente: as bordas da caixa somem e ele fica redondo
+		relogio = new MalhaCaixas().caixa(rx - 0.26f, rx + 0.26f, 2.49f, 3.01f, rz, rz + 0.04f, TUDO, canto, canto).enviar();
+		ponteiroSegundos = new MalhaCaixas().caixa(-0.005f, 0.005f, -0.04f, 0.21f, 0, 0.004f, TUDO, TUDO, TUDO).enviar();
+
 		// a TV de tubo no balcão, na ponta direita, com a tela virada para o corredor (-z): quem
 		// vai para a saída a vê de frente. A face de trás da caixa (-z) é lida certo de lá.
 		float[] vazio = { 0, 0, 0.01f, 0.01f };
@@ -552,6 +566,15 @@ public class DesenhoPredio {
 		desenhar(p, murais, "predio: mural", DesenhoPredio::mural, 0.04f, false);
 		desenhar(p, logoSaguao, "predio: letreiro", DesenhoPredio::letreiro, 0.5f, false);
 		desenhar(p, escritaSangue, "predio: escrita de sangue", DesenhoPredio::escritaSangue, 0.04f, false);
+		desenhar(p, relogio, "predio: relogio", DesenhoPredio::relogio, 0.03f, false);
+		// o ponteiro dos segundos, travado: a cada segundo ele avança um tique e volta
+		Matrix4f doPonteiro = new Matrix4f(doPredio);
+		doPonteiro.translate(new Vector3f(centroRelogio[0], centroRelogio[1], centroRelogio[2]));
+		float segundos = 53 + (tempo % 1.0f < 0.12f ? 1 : 0);
+		doPonteiro.rotate((float) Math.toRadians(-segundos * 6), new Vector3f(0, 0, 1)); // horário, visto de +z
+		modelo(p, doPonteiro);
+		desenhar(p, ponteiroSegundos, "predio: ponteiro", () -> liso(new Color(150, 20, 18)), 0.02f, false);
+		modelo(p, doPredio);
 		desenhar(p, tvGabinete, "predio: plastico da tv", () -> liso(new Color(38, 34, 32)), 0f, false);
 		// a tela: um quadro de chuvisco a cada 70 ms; por meio segundo a cada 7 s, o logo atravessa o chuvisco
 		int quadro = (int) (tempo / 0.07f) % 4;
@@ -623,7 +646,7 @@ public class DesenhoPredio {
 
 	public void liberar() {
 		for (MalhaCaixas m : new MalhaCaixas[] { casca, concreto, letreiro, metal, lampadasPoste, acesas, apagadas, piscando,
-				vulto, pintura, piso, forro, saida, escritaSangue, folhaPorta, tvGabinete, tvTela, portaEntrada, portaProfessor, portasTrancadas,
+				vulto, pintura, piso, forro, saida, escritaSangue, folhaPorta, tvGabinete, tvTela, relogio, ponteiroSegundos, portaEntrada, portaProfessor, portasTrancadas,
 				madeira, metalInterno, lousas, monitores, telas, louca, armarios, murais, logoSaguao, cracha, mesa, papeis,
 				luminaria, cadeira, corpoProfessor, cabecaProfessor }) {
 			m.liberar();
@@ -738,6 +761,48 @@ public class DesenhoPredio {
 		g.drawString("UNIVALI", (256 - w) / 2, 31);
 		g.dispose();
 		return img;
+	}
+
+	/**
+	 * O mostrador do relógio de parede (128 x 128, cantos transparentes: fica redondo): aro escuro,
+	 * fundo amarelado, os tiques e os números 12, 3, 6 e 9, os ponteiros parados em 23:58 e uma
+	 * rachadura no vidro. O ponteiro dos segundos é à parte (ele treme).
+	 */
+	public static BufferedImage relogio() {
+		BufferedImage img = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = pincel(img);
+		g.setColor(new Color(38, 36, 40));
+		g.fillOval(1, 1, 126, 126);
+		g.setColor(new Color(212, 204, 182));
+		g.fillOval(9, 9, 110, 110);
+		g.setColor(new Color(30, 28, 30));
+		for (int i = 0; i < 60; i++) { // os tiques: grandes nas horas
+			double a = Math.toRadians(i * 6);
+			float r0 = i % 5 == 0 ? 44 : 49, r1 = 53;
+			g.setStroke(new BasicStroke(i % 5 == 0 ? 3 : 1));
+			g.drawLine(64 + (int) (Math.sin(a) * r0), 64 - (int) (Math.cos(a) * r0), 64 + (int) (Math.sin(a) * r1),
+					64 - (int) (Math.cos(a) * r1));
+		}
+		g.setFont(new Font(Font.SERIF, Font.BOLD, 15));
+		String[] numeros = { "12", "3", "6", "9" };
+		int[][] pos = { { 56, 34 }, { 88, 69 }, { 60, 101 }, { 31, 69 } };
+		for (int i = 0; i < 4; i++) g.drawString(numeros[i], pos[i][0], pos[i][1]);
+		// 23:58: o ponteiro das horas quase no 12, o dos minutos no 58
+		ponteiro(g, (11 + 58 / 60.0) * 30, 28, 5);
+		ponteiro(g, 58 * 6, 42, 3);
+		g.fillOval(60, 60, 8, 8);
+		g.setColor(new Color(240, 240, 235, 170)); // a rachadura no vidro
+		g.setStroke(new BasicStroke(1));
+		g.drawPolyline(new int[] { 22, 40, 47, 63, 70, 92 }, new int[] { 40, 47, 58, 60, 74, 83 }, 6);
+		g.drawLine(47, 58, 44, 72);
+		g.dispose();
+		return img;
+	}
+
+	private static void ponteiro(Graphics2D g, double graus, float comprimento, float largura) {
+		double a = Math.toRadians(graus);
+		g.setStroke(new BasicStroke(largura, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+		g.drawLine(64, 64, 64 + (int) (Math.sin(a) * comprimento), 64 - (int) (Math.cos(a) * comprimento));
 	}
 
 	/**
