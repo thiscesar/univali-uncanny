@@ -230,6 +230,8 @@ public class TelaJogo implements Tela {
 	private SomTocando somZumbido;
 	/** A voz de rádio da TV do saguão, em loop (audio/tv_univali.ogg). */
 	private SomTocando somTv;
+	/** Segundos desde que as provas apareceram no canto (depois da missão do professor); -1 = ainda não. */
+	private float tempoMissao = -1;
 	/** Segundos desde que cada prova foi pega (para o pulso no HUD); negativo = ainda não. */
 	private final java.util.Map<Prova, Float> pulsoProva = new java.util.HashMap<>();
 
@@ -953,6 +955,9 @@ public class TelaJogo implements Tela {
 				tempoFala = 0;
 			}
 		}
+		// as provas no canto só aparecem quando o professor termina de passar a missão
+		if (tempoMissao < 0 && objetivos.falouComProfessor() && falas.isEmpty()) tempoMissao = 0;
+		if (tempoMissao >= 0) tempoMissao += dt;
 		// o Dragon Knight acorda na primeira vez que o jogador põe os pés fora do prédio
 		// com as 3 provas, a Univali deixa de ser segura: ele pode surgir lá dentro, e vem logo na entrada
 		if (partida.todasColetadas() && !voltouComAsProvas && mundo.predio.dentro(jogador.x, jogador.z)) {
@@ -1517,8 +1522,10 @@ public class TelaJogo implements Tela {
 		}
 	}
 
-	/** "M1 M2 M3" no canto superior esquerdo: apagadas até serem pegas; ao pegar, acendem com um pulso. */
+	/** "M1 M2 M3" no canto superior esquerdo, depois da missão do professor: apagadas até serem pegas; ao pegar, acendem com um pulso. */
 	private void desenharHudProvas(Overlay2D o, float escala) {
+		if (tempoMissao < 0) return; // antes da missão, o jogador nem sabe das provas
+		float aparece = Math.min(1, tempoMissao / 0.8f);
 		float x = 22 * escala, y = 18 * escala;
 		for (Prova p : partida.provas()) {
 			Color cor = p.coletada() ? new Color(235, 222, 190) : new Color(110, 104, 98);
@@ -1529,7 +1536,7 @@ public class TelaJogo implements Tela {
 			float lw = img.largura() * escala * pulso, lh = img.altura() * escala * pulso;
 			float base = img.largura() * escala;
 			o.imagem(img.textura(), x + base / 2 - lw / 2, y + img.altura() * escala / 2 - lh / 2, lw, lh,
-					new Color(1f, 1f, 1f, p.coletada() ? 1f : 0.55f));
+					new Color(1f, 1f, 1f, (p.coletada() ? 1f : 0.55f) * aparece));
 			x += base + 14 * escala;
 		}
 	}
