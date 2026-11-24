@@ -18,15 +18,15 @@ stb_vorbis (leitura de OGG) · Sean Barrett · domínio público / MIT · github
 lwjgl_util 2.9.1 (matrizes e vetores) · equipe LWJGL · BSD 3 cláusulas · lwjgl.org
 
 # Modelos
-Dragon Knight (MD2) · Magarnigal, 1998 · ver modelos/dragonknight/leiame_original.txt · magarn.3dpalette.com
-Skin vermelha do Dragon Knight · Deranged · idem · 3dpalette.com/deranged
+Dragon Knight (MD2) · Magarnigal, 1998 · magarn.3dpalette.com
+Skin vermelha do Dragon Knight · Deranged · 3dpalette.com/deranged
 Formato MD2 · Quake II, id Software (marca registrada)
 Árvores 3D e pedras · geradas por código (gerador próprio em estilo PS1)
 Escopeta, prédio da Univali e professor · montados por código
 
 # Texturas
 Chão, grama, terra, pedra e árvores · geradas por código (gerador próprio em estilo PS1)
-Prédio, placas, provas, caixas e silhueta · desenhadas por código (Java2D)
+Prédio, placas, provas, caixas, silhueta e fantasma · desenhados por código (Java2D)
 
 # Imagens
 Logo do Computer on the Beach · evento da Univali (uso acadêmico)
@@ -38,7 +38,8 @@ Música do Dragon Knight (Headbanger Monster) · (autor e licença)
 Passos na grama, correndo na grama, na terra e no piso da Univali · (autor e licença)
 Risada · (autor e licença)
 Risada do professor · (autor e licença)
-Passos na água, voz sussurrada do professor, galho, tiro, monstro, sussurro, sinal e zumbido · sintetizados por código
+Passos na água, máquina de escrever, voz sussurrada do professor, galho, tiro, monstro, sussurro, sinal e zumbido · sintetizados por código
 
 # Fontes
+Courier 10 Pitch (máquina de escrever) · Bitstream · licença livre da Bitstream
 Fontes do sistema (serifada e sem serifa)

@@ -216,6 +216,97 @@ public final class Sintetizador {
 		double frequencia = 40 + 40 * Math.exp(-s * 30);
 		return volume * Math.sin(2 * Math.PI * frequencia * s) * Math.exp(-s * 28) * Math.min(1, s * 400);
 	}
+	// ---------- máquina de escrever ----------
+
+	/**
+	 * Uma tecla da máquina de escrever: o tipo batendo no papel (um estalo seco com um "toc"
+	 * grave do rolo), um tilintar metálico curto e, logo depois, o carro andando um dente (um
+	 * estalinho mais fraco). Cada semente sai um pouco diferente (mais forte, mais agudo).
+	 */
+	public static short[] teclaMaquina(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] s = new double[taxa * 120 / 1000];
+		double forca = 0.75 + r.nextDouble() * 0.25, metal = 2300 + r.nextDouble() * 900;
+		estalo(s, taxa, 0, forca, 900, r);                               // o tipo no papel
+		baque(s, taxa, 150 + r.nextDouble() * 40, 0.45 * forca, 70);    // o rolo de borracha
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			s[i] += Math.sin(2 * Math.PI * metal * t) * 0.12 * Math.exp(-t * 90); // a haste vibrando
+		}
+		estalo(s, taxa, (int) ((0.022 + r.nextDouble() * 0.01) * taxa), 0.35, 1200, r); // o carro anda um dente
+		return normalizar(s, 0.7 * forca);
+	}
+
+	/** A barra de espaço: só o carro andando (mais abafado, sem o tipo batendo). */
+	public static short[] espacoMaquina(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] s = new double[taxa * 90 / 1000];
+		baque(s, taxa, 110, 0.4, 60);
+		estalo(s, taxa, taxa * 8 / 1000, 0.5, 700, r);
+		return normalizar(s, 0.45);
+	}
+
+	/**
+	 * O fim da linha: o sininho ("plim") e o carro voltando, uma catraca de estalos acelerando
+	 * com o chiado do carro deslizando, até a pancada no batente.
+	 */
+	public static short[] retornoMaquina(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] s = new double[taxa * 1100 / 1000];
+		// o sino: parciais de sino (1; 2,76; 5,4) sumindo devagar
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			double sino = Math.sin(2 * Math.PI * 1750 * t) + 0.45 * Math.sin(2 * Math.PI * 1750 * 2.76 * t)
+					+ 0.2 * Math.sin(2 * Math.PI * 1750 * 5.4 * t);
+			s[i] += sino * 0.35 * Math.exp(-t * 4.5);
+		}
+		// o carro: começa 0,15 s depois, 0,35 s de catraca
+		int inicio = taxa * 150 / 1000, duracao = taxa * 350 / 1000;
+		double chiado = 0;
+		for (int i = 0; i < duracao; i++) {
+			double t = (double) i / duracao;
+			chiado += 0.15 * ((r.nextDouble() * 2 - 1) - chiado);
+			s[inicio + i] += chiado * 0.25 * Math.sin(Math.PI * t);
+		}
+		double t = 0;
+		for (int k = 0; k < 11; k++) { // os dentes da catraca, cada vez mais rápidos
+			estalo(s, taxa, inicio + (int) (t * taxa), 0.3, 1000, r);
+			t += 0.045 * (1 - k / 14.0);
+		}
+		int batente = inicio + duracao;
+		estalo(s, taxa, batente, 1.0, 500, r);
+		double[] grave = new double[s.length - batente];
+		baque(grave, taxa, 120, 0.6, 30);
+		for (int i = 0; i < grave.length; i++) s[batente + i] += grave[i];
+		return normalizar(s, 0.75);
+	}
+
+	/** Uma folha de papel saindo da máquina: um farfalhar curto. */
+	public static short[] folhaPapel(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] s = new double[taxa * 450 / 1000];
+		double a = 0, anterior = 0;
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / s.length;
+			double branco = r.nextDouble() * 2 - 1;
+			a += 0.3 * (branco - a);
+			double crepita = r.nextDouble() < 0.02 ? (branco - anterior) * 1.5 : 0; // o papel estalando
+			anterior = branco;
+			s[i] = (a * 0.8 + crepita) * Math.sin(Math.PI * t) * (0.6 + 0.4 * Math.sin(t * 23));
+		}
+		return normalizar(s, 0.5);
+	}
+
+	/** Soma um estalo (ruído agudo curto) em "inicio": "abafa" maior = estalo mais curto. */
+	private static void estalo(double[] s, int taxa, int inicio, double volume, double abafa, Random r) {
+		double anterior = 0;
+		for (int i = 0; inicio + i < s.length && i < taxa / 50; i++) {
+			double branco = r.nextDouble() * 2 - 1;
+			s[inicio + i] += (branco - anterior) * volume * Math.exp(-(double) i / taxa * abafa);
+			anterior = branco;
+		}
+	}
+
 	// ---------- voz ----------
 
 	/** Formantes (F1, F2 em Hz) das vogais, numa voz masculina: o que faz um "a" soar como "a" (também sussurrado). */

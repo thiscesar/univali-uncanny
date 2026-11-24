@@ -9,8 +9,9 @@ import java.util.Map;
 import util.Caminhos;
 
 /**
- * Uma fonte TrueType carregada da pasta fontes/. Se o arquivo não existir, usa uma
- * fonte do sistema no lugar, para o jogo nunca travar por falta de arquivo.
+ * Uma fonte carregada da pasta fontes/: TrueType (.ttf) ou Type 1 (.pfb, o formato da Courier da
+ * máquina de escrever). Se o arquivo não existir, usa uma fonte do sistema no lugar, para o jogo
+ * nunca travar por falta de arquivo.
  */
 public class Fonte {
 
@@ -31,7 +32,8 @@ public class Fonte {
 	public static Fonte carregar(String relativo, String familiaReserva, int estiloReserva) {
 		if (Caminhos.arquivo(relativo).exists()) { // avisa no console se faltar
 			try {
-				Font f = Font.createFont(Font.TRUETYPE_FONT, Caminhos.arquivo(relativo));
+				int formato = relativo.endsWith(".pfb") ? Font.TYPE1_FONT : Font.TRUETYPE_FONT;
+				Font f = Font.createFont(formato, Caminhos.arquivo(relativo));
 				return new Fonte(relativo, f);
 			} catch (FontFormatException | IOException e) {
 				System.out.println("[Fonte] não foi possível ler " + relativo + ": " + e.getMessage());

@@ -1,6 +1,10 @@
 package telas;
 
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER;
 import static org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE;
+import static org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT;
 import static org.lwjgl.opengl.GL11.*;
 
 import java.awt.Color;
@@ -15,6 +19,7 @@ import java.util.concurrent.Future;
 import dados.Constantes;
 import dados.Opcoes;
 import dados.Recursos;
+import entrada.Entrada;
 import entidades.PredioUnivali;
 import mundo.Arvores;
 import mundo.Arvores3D;
@@ -37,6 +42,7 @@ import render.AtmosferaMenu;
 import render.Fonte;
 import render.Overlay2D;
 import render.Texto;
+import render.TextoTextura;
 import terreno.GeradorTerreno;
 import terreno.PerfilTerreno;
 
@@ -54,7 +60,8 @@ import terreno.PerfilTerreno;
  */
 public class TelaCarregando implements Tela {
 
-	private enum Estado { GERANDO, MONTANDO, SAINDO, ERRO }
+	/** PRONTO: o mapa carregou, mas a história ainda está na tela: espera o Enter. */
+	private enum Estado { GERANDO, MONTANDO, PRONTO, SAINDO, ERRO }
 
 	/** O terreno do jogo: 300 x 300 m, 1 m entre pontos, alturas em centímetros. */
 	private static final PerfilTerreno PERFIL = PerfilTerreno.FLORESTA;
@@ -90,6 +97,18 @@ public class TelaCarregando implements Tela {
 	private static final Color COR_DETALHE = new Color(110, 104, 98);
 	private static final Color COR_FRASE = new Color(170, 160, 150);
 	private static final Color COR_ERRO = new Color(220, 45, 40);
+	private static final Color COR_HISTORIA = new Color(212, 202, 186);
+
+	/**
+	 * A historinha (como o jogador foi parar ali) é contada no primeiro carregamento depois de abrir
+	 * o jogo; nos seguintes (tentar de novo, novo mapa), voltam as frases de humor.
+	 */
+	private static boolean historiaContada = false;
+	private Historia historia;
+	/** Os sons da máquina de escrever (arquivos audio/maquina_*.ogg, ou sintetizados). */
+	private audio.Efeito[] teclas;
+	private audio.Efeito espaco, retorno, folha;
+	private static final Color COR_TINTA = new Color(196, 188, 170), COR_TINTA_VERMELHA = new Color(178, 40, 32);
 
 	/** O último mundo carregado (para não gerar de novo a mesma seed). */
 	private static Mundo mundoCarregado;
@@ -155,6 +174,18 @@ public class TelaCarregando implements Tela {
 		gerenciador.definirTitulo("Carregando mapa (seed " + seed + ")");
 		gerenciador.entrada().prenderCursor(false);
 
+		if (!historiaContada) {
+			historia = new Historia();
+			historiaContada = true;
+			teclas = new audio.Efeito[4];
+			for (int i = 0; i < teclas.length; i++) {
+				int n = i + 1;
+				teclas[i] = somOuSintetizado("audio/maquina_tecla_" + n + ".ogg", () -> audio.Sintetizador.teclaMaquina(44100, n));
+			}
+			espaco = somOuSintetizado("audio/maquina_espaco.ogg", () -> audio.Sintetizador.espacoMaquina(44100, 5));
+			retorno = somOuSintetizado("audio/maquina_retorno.ogg", () -> audio.Sintetizador.retornoMaquina(44100, 6));
+			folha = somOuSintetizado("audio/maquina_folha.ogg", () -> audio.Sintetizador.folhaPapel(44100, 7));
+		}
 		densidade = Opcoes.atual().densidadeArvores;
 		reaproveitar = mundoCarregado != null && mundoCarregado.seed == seed && densidadeCarregada == densidade;
 		if (reaproveitar) {
@@ -257,6 +288,20 @@ public class TelaCarregando implements Tela {
 			frase = (frase + 1 + random.nextInt(FRASES.length - 1)) % FRASES.length; // nunca repete a mesma
 		}
 
+		if (historia != null) {
+			tocar(historia.atualizar(dt));
+			Entrada e = gerenciador.entrada();
+			boolean avancar = e.foiPressionada(GLFW_KEY_ENTER) || e.foiPressionada(GLFW_KEY_KP_ENTER)
+					|| e.botaoFoiPressionado(GLFW_MOUSE_BUTTON_LEFT);
+			if (estado == Estado.PRONTO && (e.foiPressionada(GLFW_KEY_SPACE) || (avancar && historia.terminou()))) {
+				estado = Estado.SAINDO; // mapa pronto: Espaço começa a qualquer hora; Enter, depois da última página
+			} else if (avancar) {
+				int antes = historia.pagina();
+				historia.pular(); // termina a página; com ela pronta, passa para a próxima
+				if (historia.pagina() != antes && !historia.terminou()) gerenciador.audio().tocar(folha, 0.6f);
+			}
+		}
+
 		if (estado != Estado.SAINDO && gerenciador.entrada().foiPressionada(GLFW_KEY_ESCAPE)) {
 			cancelarGeracao();
 			gerenciador.trocarPara(new TelaMenu(gerenciador));
@@ -266,6 +311,7 @@ public class TelaCarregando implements Tela {
 		switch (estado) {
 			case GERANDO -> acompanharGeracao();
 			case MONTANDO -> executarProximaEtapa();
+			case PRONTO -> { }
 			case SAINDO -> {
 				fade += dt / DURACAO_FADE;
 				if (fade >= 1) {
@@ -273,6 +319,24 @@ public class TelaCarregando implements Tela {
 				}
 			}
 			case ERRO -> { }
+		}
+	}
+
+	private audio.Efeito somOuSintetizado(String arquivo, java.util.function.Supplier<short[]> substituto) {
+		audio.Audio a = gerenciador.audio();
+		return util.Caminhos.existe(arquivo) ? a.carregarEfeito(arquivo) : a.criarEfeito(arquivo + " (sintetizado)", substituto.get(), 44100);
+	}
+
+	/** Toca os sons da datilografia que aconteceram neste quadro. */
+	private void tocar(List<Historia.Som> sons) {
+		audio.Audio a = gerenciador.audio();
+		for (Historia.Som s : sons) {
+			switch (s) {
+			case TECLA -> a.tocar(teclas[random.nextInt(teclas.length)], 0.5f + random.nextFloat() * 0.15f);
+			case ESPACO -> a.tocar(espaco, 0.45f);
+			case RETORNO -> a.tocar(retorno, 0.5f);
+			case PAGINA -> a.tocar(folha, 0.6f);
+			}
 		}
 	}
 
@@ -309,7 +373,7 @@ public class TelaCarregando implements Tela {
 		}
 		progresso.concluirEtapa();
 		if (progresso.terminou()) {
-			estado = Estado.SAINDO;
+			estado = historia != null ? Estado.PRONTO : Estado.SAINDO; // com a história, espera o Enter
 		}
 	}
 
@@ -440,9 +504,12 @@ public class TelaCarregando implements Tela {
 
 		if (estado == Estado.ERRO) {
 			desenharErro(overlay, w, h, tamanhoTitulo, tamanhoTexto);
+		} else if (historia != null) {
+			desenharHistoria(overlay, w, h);
+			desenharRodapeHistoria(overlay, w, h, tamanhoTexto);
 		} else {
 			desenharTitulo(overlay, w, h, tamanhoTitulo);
-			desenharBarra(overlay, w, h, tamanhoTexto);
+			desenharBarra(overlay, w, h * 0.53f, tamanhoTexto);
 			desenharFrase(overlay, w, h, tamanhoTexto);
 		}
 		Texto.desenhar(overlay, "seed " + seed, w - 24, h - 36, 16, COR_DETALHE, Texto.Alinhamento.DIREITA);
@@ -470,10 +537,9 @@ public class TelaCarregando implements Tela {
 	}
 
 	/** Barra fina e irregular: segmentos com espessura e altura diferentes, como um traço à mão. */
-	private void desenharBarra(Overlay2D overlay, int w, int h, int tamanhoTexto) {
+	private void desenharBarra(Overlay2D overlay, int w, float y0, int tamanhoTexto) {
 		float largura = Math.min(w * 0.5f, 640);
 		float x0 = (w - largura) / 2;
-		float y0 = h * 0.53f;
 		float passo = largura / SEGMENTOS;
 		float feito = progresso.total() * SEGMENTOS;
 
@@ -496,6 +562,112 @@ public class TelaCarregando implements Tela {
 				Texto.Alinhamento.ESQUERDA, false, false);
 		Texto.desenharAlinhado(overlay, Recursos.fonteTexto(), Math.round(progresso.total() * 100) + "%",
 				x0 + largura, y0 + 26, tamanhoTexto - 4, COR_DETALHE, Texto.Alinhamento.DIREITA, false, false);
+	}
+
+	/**
+	 * A página datilografada: uma folha escura sobre o fundo preto e as letras batidas uma a uma,
+	 * cada uma da sua textura (a fonte é monoespaçada: todas ocupam a mesma largura). Como numa
+	 * máquina de verdade, cada letra sai um pouco fora da linha e com a tinta mais forte ou mais
+	 * fraca, e de vez em quando o tipo bate duas vezes. Linhas em maiúsculas saem na parte
+	 * vermelha da fita. Um cursor pisca onde vai a próxima letra.
+	 */
+	private void desenharHistoria(Overlay2D overlay, int w, int h) {
+		String[] linhas = historia.linhas();
+		if (linhas == null) return;
+		Fonte fonte = Recursos.fonteMaquina();
+		int tamanho = Math.max(16, Math.min(30, Math.round(h * 0.031f)));
+		TextoTextura.Imagem m = Recursos.textos().obter("M", fonte, tamanho, COR_TINTA, false, false);
+		if (m == null) return;
+		float avanco = m.largura() - 4, linha = tamanho * 1.55f; // a textura tem 2 px de margem de cada lado
+		// a folha: 46 colunas e 9 linhas, com a textura de papel velho e escuro
+		float fl = avanco * 46, fa = linha * 9.5f, fx = (w - fl) / 2, fy = h * 0.45f - fa / 2;
+		overlay.imagem(Recursos.texturaGerada("folha da maquina", TelaCarregando::papel, false, false).id(), fx, fy, fl, fa,
+				Color.WHITE);
+		float alfa = historia.alfa();
+		float x0 = fx + avanco * 2, y0 = fy + linha * 1.1f;
+		int linhaCursor = -1, colunaCursor = 0;
+		for (int l = 0; l < linhas.length; l++) {
+			int letras = historia.letrasVisiveis(l);
+			if (linhaCursor < 0 && letras < linhas[l].length()) {
+				linhaCursor = l;
+				colunaCursor = letras;
+			}
+			boolean vermelha = !linhas[l].isEmpty() && linhas[l].equals(linhas[l].toUpperCase())
+					&& linhas[l].chars().anyMatch(Character::isLetter);
+			Color tinta = vermelha ? COR_TINTA_VERMELHA : COR_TINTA;
+			for (int c = 0; c < letras; c++) {
+				char ch = linhas[l].charAt(c);
+				if (ch == ' ') continue;
+				TextoTextura.Imagem g = Recursos.textos().obter(String.valueOf(ch), fonte, tamanho, tinta, false, false);
+				if (g == null) continue;
+				// a irregularidade de cada letra é sempre a mesma (sorteada pela posição): não treme
+				long semente = (historia.pagina() * 131L + l) * 977L + c;
+				java.util.Random r = new java.util.Random(semente);
+				float dy = (r.nextFloat() - 0.5f) * tamanho * 0.08f, dx = (r.nextFloat() - 0.5f) * tamanho * 0.04f;
+				float tinta01 = 0.68f + r.nextFloat() * 0.32f;
+				float x = x0 + c * avanco - 2 + dx, y = y0 + l * linha - g.altura() / 2f + dy;
+				overlay.imagem(g.textura(), Math.round(x), Math.round(y), g.largura(), g.altura(),
+						new Color(1f, 1f, 1f, alfa * tinta01));
+				if (r.nextFloat() < 0.08f) { // batida dupla: um fantasma da letra meio pixel ao lado
+					overlay.imagem(g.textura(), Math.round(x) + 1, Math.round(y), g.largura(), g.altura(),
+							new Color(1f, 1f, 1f, alfa * 0.3f));
+				}
+			}
+		}
+		// o cursor: um traço piscando embaixo da próxima letra
+		if (linhaCursor >= 0 && (int) (tempo * 2.5f) % 2 == 0) {
+			float x = x0 + colunaCursor * avanco, y = y0 + linhaCursor * linha + tamanho * 0.45f;
+			overlay.retangulo(x, y, avanco * 0.9f, Math.max(2, tamanho / 12f), new Color(196, 188, 170, Math.round(200 * alfa)));
+		}
+	}
+
+	/** Embaixo da folha: o carregamento (barra fina) e as teclas, na letra da máquina. */
+	private void desenharRodapeHistoria(Overlay2D overlay, int w, int h, int tamanhoTexto) {
+		Fonte fonte = Recursos.fonteMaquina();
+		int pequeno = Math.max(13, tamanhoTexto - 4);
+		float y = h * 0.86f;
+		boolean pronto = estado == Estado.PRONTO || estado == Estado.SAINDO;
+		if (!pronto) {
+			float largura = Math.min(w * 0.3f, 360), x0 = (w - largura) / 2;
+			overlay.retangulo(x0, y - 18, largura, 2, COR_TRILHO);
+			overlay.retangulo(x0, y - 18, largura * progresso.total(), 2, COR_BARRA);
+			Texto.desenharAlinhado(overlay, fonte, "carregando o mapa... " + Math.round(progresso.total() * 100) + "%", w / 2f,
+					y + 6, pequeno, COR_DETALHE, Texto.Alinhamento.CENTRO, false, false);
+		}
+		String teclas = !pronto ? "[ENTER] próxima página"
+				: historia.terminou() ? "[ENTER] começar" : "[ESPAÇO] começar     [ENTER] próxima página";
+		float pulso = pronto ? 0.6f + 0.4f * (float) Math.sin(tempo * 3) : 0.8f;
+		Texto.desenharAlinhado(overlay, fonte, teclas, w / 2f, h - 44, pequeno,
+				new Color(170, 160, 148, Math.round(255 * pulso)), Texto.Alinhamento.CENTRO, false, false);
+	}
+
+	/**
+	 * Uma folha de papel velho, escura (a cena é de noite): fibras, manchas de umidade, a borda
+	 * mais escura e uns vincos. Gerada uma vez, por código.
+	 */
+	private static java.awt.image.BufferedImage papel() {
+		int lw = 512, la = 300;
+		java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(lw, la, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+		Random r = new Random(23);
+		float[][] manchas = new float[7][];
+		for (int i = 0; i < manchas.length; i++) {
+			manchas[i] = new float[] { r.nextFloat() * lw, r.nextFloat() * la, 30 + r.nextFloat() * 90, r.nextFloat() * 0.35f };
+		}
+		for (int y = 0; y < la; y++) {
+			for (int x = 0; x < lw; x++) {
+				double v = 30 + r.nextGaussian() * 2.2 + Math.sin(x * 0.9 + y * 0.07) * 0.6; // fibras
+				for (float[] mc : manchas) {
+					double d = Math.hypot(x - mc[0], y - mc[1]) / mc[2];
+					if (d < 1) v -= (1 - d) * (1 - d) * 18 * mc[3];
+				}
+				double borda = Math.min(Math.min(x, lw - 1 - x) / (double) lw, Math.min(y, la - 1 - y) / (double) la);
+				v *= 0.55 + 0.45 * Math.min(1, borda * 9);
+				if (Math.abs(y - la * 0.34) < 1.2 || Math.abs(x - lw * 0.62) < 1.0) v *= 0.85; // vincos de dobra
+				int c = (int) Math.max(0, Math.min(255, v));
+				img.setRGB(x, y, new Color(Math.min(255, c + 4), c + 1, Math.max(0, c - 3)).getRGB());
+			}
+		}
+		return img;
 	}
 
 	/** Frase de humor trocando a cada poucos segundos, aparecendo e sumindo aos poucos. */

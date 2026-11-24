@@ -2,6 +2,8 @@ Fontes TrueType usadas nos textos.
 
   titulo.ttf   título e telas finais
   texto.ttf    HUD e botões
+  maquina.pfb  texto datilografado da tela de carregamento (Courier 10 Pitch, Bitstream;
+               a licença está em maquina_LICENCA.txt e precisa ir junto com o arquivo)
 
 Use fontes com licença livre (OFL, por exemplo). Sem os arquivos, o jogo usa as
 fontes do sistema.
