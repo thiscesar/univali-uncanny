@@ -39,6 +39,22 @@ public class MalhaCaixas {
 		return this;
 	}
 
+	/**
+	 * Uma placa de uma face só, em pé no plano x = constante, virada para +x (ou -x) e lida certo
+	 * por quem olha desse lado. Para decalques numa parede (com textura recortada): numa caixa, a
+	 * face de trás apareceria espelhada pelos buracos da da frente.
+	 */
+	public MalhaCaixas placaEmX(float x, float y0, float y1, float z0, float z1, boolean paraMaisX, float[] uv) {
+		if (paraMaisX) { // olhando de +x para -x, a esquerda é o +z
+			face(new float[] { x, y0, z1 }, new float[] { x, y0, z0 }, new float[] { x, y1, z0 }, new float[] { x, y1, z1 },
+					new float[] { 1, 0, 0 }, uv);
+		} else {
+			face(new float[] { x, y0, z0 }, new float[] { x, y0, z1 }, new float[] { x, y1, z1 }, new float[] { x, y1, z0 },
+					new float[] { -1, 0, 0 }, uv);
+		}
+		return this;
+	}
+
 	/** Quadrilátero com os cantos inferior esquerdo, inferior direito, superior direito, superior esquerdo. */
 	private void face(float[] ie, float[] id, float[] sd, float[] se, float[] n, float[] uv) {
 		float u0 = uv[0], t0 = uv[1], u1 = uv[2], t1 = uv[3];

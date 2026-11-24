@@ -60,6 +60,8 @@ public class DesenhoPredio {
 	public final float[] brilhoLampadas;
 	private final MalhaCaixas portasTrancadas, madeira, metalInterno, lousas, monitores, telas, louca, armarios, murais;
 	private final MalhaCaixas logoSaguao;
+	/** A frase escrita com sangue na parede do fim do corredor, do lado da sala do professor. */
+	private final MalhaCaixas escritaSangue;
 	private final List<MalhaCaixas> placas = new ArrayList<>();
 	private final List<String> nomesPlacas = new ArrayList<>();
 	private final MalhaCaixas cracha, mesa, papeis, luminaria, cadeira;
@@ -189,6 +191,13 @@ public class DesenhoPredio {
 		}
 		logoSaguao = new MalhaCaixas().caixa(-AndarUnivali.MEIO_SAGUAO + 0.12f, -AndarUnivali.MEIO_SAGUAO + 0.16f, 1.6f, 2.8f,
 				5.5f, 10.5f, TUDO, TUDO, TUDO).enviar();
+		// a escrita de sangue: na parede do fim do corredor do lado da sala do professor (a sala fica
+		// num canto), de frente para quem anda pelo corredor até ela; colada na pintura da parede
+		boolean esquerda = p.andar.professores().xMin() <= AndarUnivali.X0 + 0.01f;
+		float xParede = esquerda ? -L + e + f : L - e - f;
+		escritaSangue = new MalhaCaixas().placaEmX(esquerda ? xParede + 0.01f : xParede - 0.01f, 0.95f, 3.21f,
+				-AndarUnivali.MEIO_CORREDOR + 0.15f, AndarUnivali.MEIO_CORREDOR - 0.15f, esquerda, TUDO).enviar();
+
 		// o corredor: armários na parede dos fundos e murais na da frente, entre as portas
 		armarios = new MalhaCaixas();
 		murais = new MalhaCaixas();
@@ -454,6 +463,7 @@ public class DesenhoPredio {
 		desenhar(p, armarios, "predio: armario", DesenhoPredio::armario, 0f, false);
 		desenhar(p, murais, "predio: mural", DesenhoPredio::mural, 0.04f, false);
 		desenhar(p, logoSaguao, "predio: letreiro", DesenhoPredio::letreiro, 0.5f, false);
+		desenhar(p, escritaSangue, "predio: escrita de sangue", DesenhoPredio::escritaSangue, 0.04f, false);
 		for (int i = 0; i < placas.size(); i++) {
 			String nome = nomesPlacas.get(i);
 			desenhar(p, placas.get(i), "placa da porta: " + nome, () -> placaDaPorta(nome), 0.2f, false);
@@ -519,7 +529,7 @@ public class DesenhoPredio {
 
 	public void liberar() {
 		for (MalhaCaixas m : new MalhaCaixas[] { casca, concreto, letreiro, metal, lampadasPoste, acesas, apagadas, piscando,
-				vulto, pintura, piso, forro, saida, portaEntrada, portaProfessor, portasTrancadas,
+				vulto, pintura, piso, forro, saida, escritaSangue, portaEntrada, portaProfessor, portasTrancadas,
 				madeira, metalInterno, lousas, monitores, telas, louca, armarios, murais, logoSaguao, cracha, mesa, papeis,
 				luminaria, cadeira, corpoProfessor, cabecaProfessor }) {
 			m.liberar();
@@ -634,6 +644,212 @@ public class DesenhoPredio {
 		g.drawString("UNIVALI", (256 - w) / 2, 31);
 		g.dispose();
 		return img;
+	}
+
+	/** A frase da parede, em linhas (caixa alta, como pintada às pressas com a mão). */
+	static final String[] FRASE_SANGUE = { "EU SEI QUE VOCÊ", "REPROVOU EM", "LINGUAGENS FORMAIS", "E AUTÔMATOS" };
+
+	/**
+	 * As letras da frase como traços de pincel (como quem escreve com o dedo): cada letra é uma
+	 * lista de traços, cada traço uma linha de pontos numa caixa de 0 a 1 (y para baixo). Curvas
+	 * viram arcos de elipse. Só as letras que a frase usa; ^ é o acento circunflexo.
+	 */
+	private static final java.util.Map<Character, float[][]> TRACOS = new java.util.HashMap<>();
+	private static final java.util.Map<Character, Float> LARGURAS = new java.util.HashMap<>();
+
+	private static void letra(char c, float largura, float[]... tracos) {
+		TRACOS.put(c, tracos);
+		LARGURAS.put(c, largura);
+	}
+
+	/** Um arco de elipse (centro, raios, de um ângulo a outro, em graus; y para baixo) como linha de pontos. */
+	private static float[] arco(float cx, float cy, float rx, float ry, float de, float ate) {
+		int n = 14;
+		float[] p = new float[(n + 1) * 2];
+		for (int i = 0; i <= n; i++) {
+			double a = Math.toRadians(de + (ate - de) * i / n);
+			p[i * 2] = cx + rx * (float) Math.cos(a);
+			p[i * 2 + 1] = cy - ry * (float) Math.sin(a);
+		}
+		return p;
+	}
+
+	static {
+		letra('A', 0.72f, new float[] { 0, 1, 0.36f, 0 }, new float[] { 0.36f, 0, 0.72f, 1 }, new float[] { 0.12f, 0.62f, 0.62f, 0.6f });
+		letra('C', 0.66f, arco(0.38f, 0.5f, 0.36f, 0.5f, 45, 315));
+		letra('E', 0.6f, new float[] { 0.6f, 0, 0, 0, 0, 1, 0.62f, 1 }, new float[] { 0, 0.5f, 0.5f, 0.48f });
+		letra('F', 0.58f, new float[] { 0.6f, 0, 0, 0, 0, 1 }, new float[] { 0, 0.48f, 0.46f, 0.47f });
+		letra('G', 0.72f, arco(0.38f, 0.5f, 0.36f, 0.5f, 40, 340), new float[] { 0.4f, 0.58f, 0.74f, 0.58f, 0.73f, 1.0f });
+		letra('I', 0.22f, new float[] { 0.1f, 0, 0.11f, 1 });
+		letra('L', 0.56f, new float[] { 0, 0, 0, 1, 0.58f, 1 });
+		letra('M', 0.86f, new float[] { 0, 1, 0.06f, 0, 0.43f, 0.7f, 0.8f, 0, 0.86f, 1 });
+		letra('N', 0.7f, new float[] { 0, 1, 0.02f, 0, 0.66f, 1, 0.68f, 0 });
+		letra('O', 0.74f, arco(0.37f, 0.5f, 0.37f, 0.5f, 100, 470));
+		letra('P', 0.62f, new float[] { 0, 1, 0, 0, 0.4f, 0 }, arco(0.4f, 0.25f, 0.22f, 0.25f, 90, -90), new float[] { 0.4f, 0.5f, 0, 0.5f });
+		letra('Q', 0.76f, arco(0.37f, 0.5f, 0.37f, 0.5f, 100, 470), new float[] { 0.45f, 0.68f, 0.82f, 1.08f });
+		letra('R', 0.66f, new float[] { 0, 1, 0, 0, 0.4f, 0 }, arco(0.4f, 0.25f, 0.22f, 0.25f, 90, -90),
+				new float[] { 0.4f, 0.5f, 0, 0.5f }, new float[] { 0.22f, 0.5f, 0.66f, 1 });
+		letra('S', 0.62f, new float[] { 0.6f, 0.12f, 0.45f, 0, 0.17f, 0, 0.02f, 0.14f, 0.06f, 0.34f, 0.3f, 0.47f, 0.55f, 0.6f,
+				0.64f, 0.8f, 0.55f, 0.96f, 0.26f, 1, 0, 0.88f });
+		letra('T', 0.7f, new float[] { 0, 0, 0.72f, 0.02f }, new float[] { 0.36f, 0, 0.35f, 1 });
+		letra('U', 0.66f, new float[] { 0, 0, 0, 0.68f, 0.1f, 0.92f, 0.33f, 1, 0.55f, 0.92f, 0.65f, 0.68f, 0.66f, 0 });
+		letra('V', 0.7f, new float[] { 0, 0, 0.35f, 1, 0.7f, 0 });
+		letra('^', 0, new float[] { -0.18f, -0.1f, 0, -0.26f, 0.18f, -0.1f });
+	}
+
+	/**
+	 * texturas/escrita_sangue.png, ou a frase pintada com sangue, gerada por código: cada letra
+	 * feita de traços de pincel (ver TRACOS), um pouco torta e de tamanho diferente; cada traço
+	 * pintado por várias cerdas finas que falham no fim (pincel seco) e passam um pouco da ponta;
+	 * respingos nas pontas e escorridos descendo das letras, com uma gota no fim.
+	 */
+	public static BufferedImage escritaSangue() {
+		if (Caminhos.existe("texturas/escrita_sangue.png")) {
+			BufferedImage img = TextureLoader.loadImage(Caminhos.caminho("texturas/escrita_sangue.png"));
+			if (img != null) return img;
+		}
+		int w = 1536, h = 940;
+		BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = img.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		Random r = new Random(66);
+		float espaco = 0.2f, y = 70;
+		for (int l = 0; l < FRASE_SANGUE.length; l++) {
+			String linha = FRASE_SANGUE[l];
+			float largura = 0; // em alturas de letra
+			for (char c : linha.toCharArray()) largura += (c == ' ' ? 0.35f : LARGURAS.get(base(c))) + espaco;
+			float altura = Math.min(225, (w - 120) / largura); // cada linha do tamanho que couber
+			y += altura * (l == 0 ? 0.25f : 0.42f);
+			float x = (w - largura * altura) / 2 + (r.nextFloat() - 0.5f) * 40;
+			for (char c : linha.toCharArray()) {
+				if (c != ' ') {
+					float escala = altura * (0.88f + r.nextFloat() * 0.22f);
+					float dy = (r.nextFloat() - 0.5f) * altura * 0.12f, giro = (r.nextFloat() - 0.5f) * 0.18f;
+					float lx = LARGURAS.get(base(c));
+					java.util.List<float[]> tracos = new java.util.ArrayList<>(java.util.List.of(TRACOS.get(base(c))));
+					if (c == 'Ê' || c == 'Ô') { // o acento, no meio da letra
+						float[] ac = TRACOS.get('^')[0].clone();
+						for (int k = 0; k < ac.length; k += 2) ac[k] += lx / 2;
+						tracos.add(ac);
+					}
+					for (float[] t : tracos) {
+						float[] px = new float[t.length];
+						for (int k = 0; k < t.length; k += 2) { // para pixels, girando a letra em volta do centro
+							float ux = (t[k] - lx / 2) * escala, uy = (t[k + 1] - 0.5f) * escala;
+							px[k] = x + lx * altura / 2 + ux * (float) Math.cos(giro) - uy * (float) Math.sin(giro)
+									+ (r.nextFloat() - 0.5f) * altura * 0.03f;
+							px[k + 1] = y + altura / 2 + dy + ux * (float) Math.sin(giro) + uy * (float) Math.cos(giro)
+									+ (r.nextFloat() - 0.5f) * altura * 0.03f;
+						}
+						pincelada(g, px, altura * (0.1f + r.nextFloat() * 0.035f), r, l == FRASE_SANGUE.length - 1);
+					}
+					x += (lx + espaco) * altura;
+				} else {
+					x += (0.35f + espaco) * altura;
+				}
+			}
+			y += altura * 1.0f;
+		}
+		// respingos soltos pela parede
+		for (int i = 0; i < 220; i++) {
+			float rx = r.nextFloat() * w, ry = r.nextFloat() * h * 0.92f, raio = 1 + (float) Math.pow(r.nextFloat(), 4) * 9;
+			g.setColor(corSangue(r));
+			g.fill(new java.awt.geom.Ellipse2D.Float(rx - raio, ry - raio, raio * 2, raio * 2));
+		}
+		g.dispose();
+		// borda dura (o shader descarta o que tiver alfa abaixo de 0,5): sem franja clara em volta
+		for (int yy = 0; yy < h; yy++) {
+			for (int xx = 0; xx < w; xx++) {
+				int argb = img.getRGB(xx, yy);
+				img.setRGB(xx, yy, (argb >>> 24) >= 110 ? argb | 0xFF000000 : argb & 0x00FFFFFF);
+			}
+		}
+		return img;
+	}
+
+	/** A letra sem acento (o acento é desenhado à parte). */
+	private static char base(char c) {
+		return c == 'Ê' ? 'E' : c == 'Ô' ? 'O' : c;
+	}
+
+	private static Color corSangue(Random r) {
+		return r.nextFloat() < 0.7f ? new Color(150 + r.nextInt(35), 10 + r.nextInt(10), 12 + r.nextInt(8))
+				: new Color(105 + r.nextInt(25), 6, 8);
+	}
+
+	/**
+	 * Uma pincelada ao longo da linha de pontos (em pixels): 7 cerdas lado a lado, cada uma com a
+	 * sua cor e falhando mais perto do fim (o pincel secando); o traço passa um pouco da ponta e
+	 * afina; respingos no começo e no fim; às vezes um escorrido desce de algum ponto do traço.
+	 */
+	private static void pincelada(Graphics2D g, float[] p, float largura, Random r, boolean escorreMais) {
+		// os pontos a cada 3 px, com o traço esticado um pouco nas pontas
+		java.util.List<float[]> pts = new java.util.ArrayList<>();
+		for (int k = 0; k + 3 < p.length; k += 2) {
+			float x0 = p[k], y0 = p[k + 1], x1 = p[k + 2], y1 = p[k + 3];
+			if (k == 0) { // começa um pouco antes
+				x0 += (x0 - x1) * 0.08f * r.nextFloat();
+				y0 += (y0 - y1) * 0.08f * r.nextFloat();
+			}
+			if (k + 4 >= p.length) { // e termina um pouco depois (a "puxada" do pincel)
+				x1 += (x1 - x0) * 0.15f * r.nextFloat();
+				y1 += (y1 - y0) * 0.15f * r.nextFloat();
+			}
+			int passos = Math.max(1, (int) (Math.hypot(x1 - x0, y1 - y0) / 3));
+			for (int i = 0; i < passos; i++) pts.add(new float[] { x0 + (x1 - x0) * i / passos, y0 + (y1 - y0) * i / passos });
+			if (k + 4 >= p.length) pts.add(new float[] { x1, y1 });
+		}
+		int n = pts.size();
+		if (n < 2) return;
+		int cerdas = 7;
+		float fase = r.nextFloat() * 10;
+		for (int b = 0; b < cerdas; b++) {
+			float desloc = (b / (float) (cerdas - 1) - 0.5f) * largura;
+			Color cor = corSangue(r);
+			float seca = 0.4f + r.nextFloat() * 0.6f; // a partir de onde esta cerda começa a falhar
+			for (int i = 1; i < n; i++) {
+				float t = (float) i / n;
+				if (t > seca && r.nextFloat() < (t - seca) * 2.5f) continue; // pincel seco: falha
+				if (r.nextFloat() < 0.03f) continue;
+				float[] a = pts.get(i - 1), c = pts.get(i);
+				float dx = c[0] - a[0], dy = c[1] - a[1], comp = (float) Math.max(1e-3, Math.hypot(dx, dy));
+				float nx = -dy / comp, ny = dx / comp;
+				// a pressão muda ao longo do traço e afina nas pontas
+				float pressao = (0.75f + 0.25f * (float) Math.sin(fase + t * 7)) * (float) Math.min(1, Math.min(t, 1 - t) * 6 + 0.35);
+				float o = desloc * pressao;
+				g.setColor(cor);
+				g.setStroke(new BasicStroke(Math.max(1, largura / cerdas * 1.7f * pressao), BasicStroke.CAP_ROUND,
+						BasicStroke.JOIN_ROUND));
+				g.draw(new java.awt.geom.Line2D.Float(a[0] + nx * o, a[1] + ny * o, c[0] + nx * o, c[1] + ny * o));
+			}
+		}
+		// respingos nas pontas
+		for (float[] ponta : new float[][] { pts.get(0), pts.get(n - 1) }) {
+			int quantos = 3 + r.nextInt(8);
+			for (int k = 0; k < quantos; k++) {
+				double ang = r.nextDouble() * 2 * Math.PI;
+				float dist = largura * (0.6f + r.nextFloat() * 2.5f), raio = 0.8f + r.nextFloat() * largura * 0.18f;
+				g.setColor(corSangue(r));
+				g.fill(new java.awt.geom.Ellipse2D.Float(ponta[0] + (float) Math.cos(ang) * dist - raio,
+						ponta[1] + (float) Math.sin(ang) * dist - raio, raio * 2, raio * 2));
+			}
+		}
+		// escorridos: descem de pontos do traço (mais na última linha), afinando, com a gota na ponta
+		int escorridos = r.nextFloat() < (escorreMais ? 0.8f : 0.5f) ? 1 + r.nextInt(2) : 0;
+		for (int k = 0; k < escorridos; k++) {
+			float[] de = pts.get(r.nextInt(n));
+			float comprimento = largura * (2 + r.nextFloat() * (escorreMais ? 12 : 7)), largo = largura * (0.25f + r.nextFloat() * 0.2f);
+			g.setColor(corSangue(r));
+			java.awt.geom.Path2D gota = new java.awt.geom.Path2D.Float();
+			gota.moveTo(de[0] - largo / 2, de[1]);
+			gota.lineTo(de[0] + largo / 2, de[1]);
+			gota.lineTo(de[0] + largo * 0.2f, de[1] + comprimento);
+			gota.lineTo(de[0] - largo * 0.2f, de[1] + comprimento);
+			gota.closePath();
+			g.fill(gota);
+			g.fill(new java.awt.geom.Ellipse2D.Float(de[0] - largo * 0.4f, de[1] + comprimento - largo * 0.3f, largo * 0.8f,
+					largo * 1.2f));
+		}
 	}
 
 	/** O vulto nas janelas (sprites/professor.png, ou uma figura escura de cabeça e ombros). */
