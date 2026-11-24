@@ -47,4 +47,24 @@ class PartidaTest {
 		assertEquals(1 + Prova.ALTURA - Prova.OSCILACAO, menor, 0.01f); // chão a 1 m
 		assertEquals(1 + Prova.ALTURA + Prova.OSCILACAO, maior, 0.01f);
 	}
+
+	@Test
+	void estatisticasContamTempoTirosEPrecisao() {
+		ConsultaAltura c = chao();
+		Prova m1 = new Prova("M1", 10, 10, c), m2 = new Prova("M2", 50, 50, c);
+		Partida p = new Partida(42, List.of(m1, m2));
+		p.avancar(30);
+		p.avancar(15.5f);
+		p.registrarTiro(8, 6);
+		p.registrarTiro(8, 0);
+		m1.coletar();
+		Partida.Estatisticas e = p.estatisticas(3);
+		assertEquals(42, e.seed());
+		assertEquals(45.5f, e.segundos(), 1e-4f);
+		assertEquals(2, e.tiros());
+		assertEquals(38, e.precisao()); // 6 de 16
+		assertEquals(1, e.provasColetadas());
+		assertEquals(2, e.provasTotal());
+		assertEquals(3, e.aparicoesSobrevividas());
+	}
 }

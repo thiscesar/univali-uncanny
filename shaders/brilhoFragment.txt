@@ -1,12 +1,13 @@
 #version 330 core
 
 // Brilho redondo e suave, somado à cena (glBlendFunc(GL_ONE, GL_ONE)): no escuro, aparece
-// mesmo sem nenhuma luz. A neblina só o enfraquece pela metade da densidade: os olhos
-// atravessam a neblina melhor do que o resto.
+// mesmo sem nenhuma luz. A neblina o enfraquece com menos força que o resto (metade da
+// densidade, ou o fator pedido): os olhos e as janelas atravessam a neblina.
 
 #include "comum.glsl"
 
 uniform vec3 corBrilho;
+uniform float fatorNeblina;  // quanto da neblina o brilho sofre (0 = o padrão, metade)
 
 in float distancia;
 
@@ -19,6 +20,7 @@ void main(void){
 		discard; // fora do círculo
 	}
 	float forca = (1.0 - r2) * (1.0 - r2);
-	float neblina = exp(-pow(densidadeNeblina * 0.5 * distancia, 2.0));
+	float fator = fatorNeblina > 0.0 ? fatorNeblina : 0.5;
+	float neblina = exp(-pow(densidadeNeblina * fator * distancia, 2.0));
 	out_Color = vec4(corBrilho * forca * neblina, 1.0);
 }

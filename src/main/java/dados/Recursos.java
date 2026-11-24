@@ -217,6 +217,17 @@ public final class Recursos {
 		return shaderBrilho;
 	}
 
+	private static Model.VboCube cubo;
+
+	/** O cubo do projeto original (de -1 a 1), criado uma vez e compartilhado (ele não tem como liberar o VBO). */
+	public static Model.VboCube cubo() {
+		if (cubo == null) {
+			cubo = new Model.VboCube();
+			cubo.load();
+		}
+		return cubo;
+	}
+
 	/** O shader das partículas (faíscas, poeira, fumaça, sangue). */
 	public static ShaderParticula shaderParticula() {
 		if (shaderParticula == null) {

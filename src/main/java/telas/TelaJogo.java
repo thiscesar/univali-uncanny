@@ -47,6 +47,7 @@ import render.CameraLivre;
 import render.DesenhoEscopeta;
 import render.DesenhoMonstro;
 import render.DesenhoPlacas;
+import render.DesenhoPredio;
 import render.DesenhoProvas;
 import render.FiltroPs1;
 import render.Lanterna;
@@ -69,6 +70,10 @@ import Model.VboCube;
  * (voa e atravessa o chão, para inspecionar o mapa). V e X forçam vitória e derrota, e T liga
  * um som 3D de teste: são atalhos provisórios até existirem as regras do jogo. Com o F3 ligado,
  * G faz o Dragon Knight surgir e K o mata, P leva até a próxima prova, I salva a imagem do mapa da fase; as setas e Page Up/Down ajustam a posição da arma.
+ *
+ * A Univali: o prédio com janelas acesas, postes iluminando a entrada e o professor numa janela.
+ * Com E na frente da porta: sem as 3 provas, ele diz o que falta; com as 3, a cena final e o APROVADO.
+ * Em volta do prédio, o Dragon Knight não aparece.
  *
  * As provas M1, M2 e M3: folhas brilhando e sussurrando pela floresta; E pega. Cada uma deixa o
  * monstro mais frequente; a terceira faz tocar o sinal de aula, vindo da direção da Univali.
@@ -145,6 +150,11 @@ public class TelaJogo implements Tela {
 	private final Partida partida;
 	private DesenhoProvas desenhoProvas;
 	private DesenhoPlacas desenhoPlacas;
+	private DesenhoPredio desenhoPredio;
+	/** A cena da entrega (segundos desde que começou); -1 = ainda não. */
+	private float tempoEntrega = -1;
+	/** Segunda linha da mensagem (a fala do professor), com o mesmo tempo da primeira. */
+	private String mensagem2 = null;
 	private final java.util.Map<Prova, SomTocando> sussurros = new java.util.HashMap<>();
 	private Efeito somSussurro, somPegarProva, somSinal;
 	/** Segundos desde que cada prova foi pega (para o pulso no HUD); negativo = ainda não. */
@@ -162,6 +172,11 @@ public class TelaJogo implements Tela {
 	private enum Fim { VITORIA, DERROTA }
 	private Fim fim = null;
 	private Recursos.Textura fotoFim = null;
+
+	/** A cena da entrega: o escurecimento e as falas (início e fim de cada uma, em segundos). */
+	private static final float FIM_ENTREGA = 8.2f;
+	private static final String[] FALAS = { "Professor: \"Atrasado de novo?\"", "...", "Professor: \"Tá bom. Vou corrigir.\"" };
+	private static final float[][] TEMPO_FALAS = { { 1.6f, 3.6f }, { 3.8f, 5.0f }, { 5.2f, 7.6f } };
 
 	/** sprites/susto.png, se existir (0 = sem a imagem: o susto é o próprio modelo bem de perto). */
 	private int texturaSusto = 0;
@@ -241,6 +256,8 @@ public class TelaJogo implements Tela {
 		});
 		desenhoProvas = new DesenhoProvas();
 		desenhoPlacas = new DesenhoPlacas();
+		desenhoPredio = new DesenhoPredio(mundo.predio);
+		monstro.zonaSegura = mundo.predio.retangulo(); // perto da Univali, ele não surge
 		somSussurro = efeitoOuSintetizado("audio/sussurro.ogg", () -> Sintetizador.sussurro(44100, 13));
 		somPegarProva = efeitoOuSintetizado("audio/pegar_prova.ogg", () -> Sintetizador.ping(44100, 660, 600, 900));
 		somSinal = efeitoOuSintetizado("audio/sinal_aula.ogg", () -> Sintetizador.sinal(44100));
@@ -253,8 +270,7 @@ public class TelaJogo implements Tela {
 		for (float[] c : mundo.caixas) { // onde o AG da fase pôs as caixas
 			caixas.add(new CaixaMunicao(c[0], mundo.chao.alturaEm(c[0], c[1]), c[1], random.nextFloat() * (float) Math.PI));
 		}
-		cuboCaixa = new VboCube();
-		cuboCaixa.load();
+		cuboCaixa = Recursos.cubo(); // um só para o jogo inteiro: o VboCube do projeto original não tem como ser apagado
 
 		monstro.definirEventos(new DragonKnight.Eventos() {
 			@Override
@@ -300,6 +316,7 @@ public class TelaJogo implements Tela {
 		desenhoEscopeta.liberar();
 		desenhoProvas.liberar();
 		desenhoPlacas.liberar();
+		desenhoPredio.liberar();
 		for (SomTocando s : sussurros.values()) {
 			audio.parar(s);
 		}
@@ -315,9 +332,18 @@ public class TelaJogo implements Tela {
 		if (fim != null) {
 			// o desenhar do quadro anterior já fotografou a tela: agora troca
 			if (fotoFim != null || fim == Fim.VITORIA) {
-				TelaFim.Resumo resumo = new TelaFim.Resumo(mundo.seed, tempo, monstro.aparicoesSobrevividas());
-				gerenciador.trocarPara(fim == Fim.VITORIA ? new TelaVitoria(gerenciador, resumo)
-						: new TelaDerrota(gerenciador, resumo, fotoFim));
+				Partida.Estatisticas estatisticas = partida.estatisticas(monstro.aparicoesSobrevividas());
+				gerenciador.trocarPara(fim == Fim.VITORIA ? new TelaVitoria(gerenciador, estatisticas)
+						: new TelaDerrota(gerenciador, estatisticas, fotoFim));
+			}
+			return;
+		}
+		if (tempoEntrega >= 0) {
+			// a cena final: nada responde; a tela escurece, o professor fala e vem a vitória
+			tempoEntrega += diftime / 1000f;
+			tempo += diftime / 1000f;
+			if (tempoEntrega >= FIM_ENTREGA) {
+				fim = Fim.VITORIA;
 			}
 			return;
 		}
@@ -331,7 +357,7 @@ public class TelaJogo implements Tela {
 			return;
 		}
 		if (entrada.foiPressionada(GLFW_KEY_ESCAPE)) {
-			gerenciador.sobrepor(new TelaPausa(gerenciador));
+			gerenciador.sobrepor(new TelaPausa(gerenciador, mundo.seed));
 			return;
 		}
 		if (entrada.foiPressionada(GLFW_KEY_V)) {
@@ -391,6 +417,7 @@ public class TelaJogo implements Tela {
 		atualizarArma(entrada, diftime / 1000f);
 
 		tempo += diftime / 1000.0f;
+		partida.avancar(diftime / 1000.0f); // o tempo que vale para a nota (a pausa não conta)
 		contarQuadros(diftime);
 
 		Camera c = cameraAtual();
@@ -421,8 +448,22 @@ public class TelaJogo implements Tela {
 				escopeta.adicionarReserva(perto.pegar());
 				gerenciador.audio().tocar(somCartucho, 1f);
 				mostrarMensagem("+" + Regras.CARTUCHOS_POR_CAIXA + " cartuchos");
+			} else if (mundo.predio.naEntrega(jogador.x, jogador.z)) {
+				entregar();
 			}
 		}
+	}
+
+	/** Na porta da Univali: sem as 3 provas, o que falta; com as 3, começa a cena final. */
+	private void entregar() {
+		if (!partida.todasColetadas()) {
+			mostrarMensagem("Faltam: " + String.join(", ", partida.faltando()), 3.5f);
+			mensagem2 = "Professor: \"Sem as provas eu não posso fazer nada.\"";
+			return;
+		}
+		tempoEntrega = 0;
+		lanterna.definirPanico(0);
+		for (SomTocando s : sussurros.values()) gerenciador.audio().parar(s);
 	}
 
 	/**
@@ -456,6 +497,10 @@ public class TelaJogo implements Tela {
 				return;
 			}
 		}
+		// todas pegas: vai para a frente da porta da Univali
+		float[] porta = mundo.predio.porta();
+		jogador.x = porta[0] + mundo.predio.frenteX() * 4;
+		jogador.z = porta[2] + mundo.predio.frenteZ() * 4;
 	}
 
 	private CaixaMunicao caixaAlcancavel() {
@@ -479,6 +524,7 @@ public class TelaJogo implements Tela {
 		boolean atingivel = monstro.estado() == DragonKnight.Estado.SURGINDO
 				|| monstro.estado() == DragonKnight.Estado.ENCARANDO;
 		Tiro.Resultado r = Tiro.disparar(origem, frente, direita, cima, monstro, mundo.colisao, mundo.chao, random);
+		partida.registrarTiro(Regras.BAGOS, r.acertos());
 		if (atingivel) {
 			System.out.println("[Tiro] " + r.acertos() + " de " + Regras.BAGOS + " bagos acertaram o monstro");
 		}
@@ -509,6 +555,8 @@ public class TelaJogo implements Tela {
 		desenhoEscopeta.atualizarPose(escopeta);
 		desenhoEscopeta.atualizar(dt);
 		particulas.atualizar(dt);
+		mundo.predio.SimulaSe(Math.round(dt * 1000));
+		desenhoPredio.atualizar(dt);
 		tempoMensagem = Math.max(0, tempoMensagem - dt);
 		for (Prova p : partida.provas()) {
 			p.SimulaSe(Math.round(dt * 1000));
@@ -555,6 +603,7 @@ public class TelaJogo implements Tela {
 
 	private void mostrarMensagem(String texto, float segundos) {
 		mensagem = texto;
+		mensagem2 = null;
 		tempoMensagem = segundos;
 	}
 
@@ -702,8 +751,10 @@ public class TelaJogo implements Tela {
 		glEnable(GL_DEPTH_TEST);
 
 		guardar(projecao(), bufferProjecao);
-		guardar(visaoComTremor(), bufferVisao);
+		Matrix4f visao = visaoComTremor();
+		guardar(visao, bufferVisao);
 		lanterna.aplicar(ambiente);
+		luzesDosPostes(visao);
 		desenharTerreno();
 		if (mundo.arvores3d != null) {
 			desenharArvores3D();
@@ -716,6 +767,7 @@ public class TelaJogo implements Tela {
 		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, alturaImagem);
 		desenharCaixas();
 		desenhoPlacas.desenhar(mundo.placas, mundo.chao, bufferProjecao, bufferVisao, ambiente);
+		desenhoPredio.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		desenhoProvas.desenhar(partida.provas(), bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		desenhoProvas.desenharFeixes(partida.provas(), camera.x, camera.z, bufferProjecao, bufferVisao, ambiente);
@@ -732,8 +784,11 @@ public class TelaJogo implements Tela {
 		Overlay2D overlay = Recursos.overlay();
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
 		desenharEfeitosMonstro(overlay);
-		if (tempoSusto < 0 && fim == null) {
+		if (tempoSusto < 0 && fim == null && tempoEntrega < 0) {
 			desenharHudArma(overlay);
+		}
+		if (tempoEntrega >= 0) {
+			desenharEntrega(overlay);
 		}
 		if (mostrarDepuracao) {
 			desenharDepuracao(overlay);
@@ -829,6 +884,11 @@ public class TelaJogo implements Tela {
 		}
 
 		desenharHudProvas(o, escala);
+		if (mundo.predio.naEntrega(jogador.x, jogador.z) && partida.provaAlcancavel(jogador.x, jogador.z) == null
+				&& caixaAlcancavel() == null) {
+			Texto.desenhar(o, "E: entregar as provas", cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200),
+					Texto.Alinhamento.CENTRO);
+		}
 		if (partida.provaAlcancavel(jogador.x, jogador.z) != null) {
 			Texto.desenhar(o, "E: pegar a prova", cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200),
 					Texto.Alinhamento.CENTRO);
@@ -840,6 +900,10 @@ public class TelaJogo implements Tela {
 			int alfa = Math.round(255 * Math.min(1, tempoMensagem / 0.5f));
 			Texto.desenhar(o, mensagem, cx, h * 0.68f, Math.round(24 * escala), new Color(235, 215, 190, alfa),
 					Texto.Alinhamento.CENTRO);
+			if (mensagem2 != null) {
+				Texto.desenhar(o, mensagem2, cx, h * 0.68f + 34 * escala, Math.round(20 * escala),
+						new Color(200, 190, 175, alfa), Texto.Alinhamento.CENTRO);
+			}
 		}
 	}
 
@@ -1045,8 +1109,8 @@ public class TelaJogo implements Tela {
 			sb.append("   ").append(p.nome).append(p.coletada() ? " pega"
 					: String.format(" %.0f m", Math.hypot(p.x - c.x, p.z - c.z)));
 		}
-		float[] u = mundo.univali;
-		return sb.append(String.format("   Univali %.0f m   fitness da fase %.3f", Math.hypot(u[0] - c.x, u[1] - c.z),
+		float[] u = mundo.predio.porta();
+		return sb.append(String.format("   Univali %.0f m   fitness da fase %.3f", Math.hypot(u[0] - c.x, u[2] - c.z),
 				mundo.fase.fitness())).toString();
 	}
 
@@ -1061,6 +1125,40 @@ public class TelaJogo implements Tela {
 		};
 		String animacao = monstro.animador() != null ? "   " + monstro.animador().nomeAtual() : "   (substituto)";
 		return base + detalhe + animacao + String.format("   sobrevividas %d", monstro.aparicoesSobrevividas());
+	}
+
+	/**
+	 * As luzes dos dois postes da Univali: a posição das lâmpadas vai para o espaço da câmera
+	 * (a matriz de visão vezes o ponto), porque é nesse espaço que o comum.glsl calcula a luz.
+	 */
+	private void luzesDosPostes(Matrix4f visao) {
+		float[][] postes = mundo.predio.postes();
+		ambiente.numLuzes = postes.length;
+		for (int i = 0; i < postes.length; i++) {
+			org.lwjgl.util.vector.Vector4f p = Matrix4f.transform(visao,
+					new org.lwjgl.util.vector.Vector4f(postes[i][0], mundo.predio.y + 5.0f, postes[i][1], 1), null);
+			ambiente.posLuz[i * 3] = p.x;
+			ambiente.posLuz[i * 3 + 1] = p.y;
+			ambiente.posLuz[i * 3 + 2] = p.z;
+			ambiente.corLuz[i * 3] = 1.3f;
+			ambiente.corLuz[i * 3 + 1] = 1.0f;
+			ambiente.corLuz[i * 3 + 2] = 0.65f;
+			ambiente.alcanceLuz[i] = 16f;
+		}
+	}
+
+	/** A cena final: a tela escurece em 1,5 s e as falas aparecem uma de cada vez. */
+	private void desenharEntrega(Overlay2D o) {
+		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
+		float escuro = Math.min(1, tempoEntrega / 1.5f);
+		o.retangulo(0, 0, w, h, new Color(0, 0, 0, Math.round(escuro * 255)));
+		for (int i = 0; i < FALAS.length; i++) {
+			float ini = TEMPO_FALAS[i][0], fimFala = TEMPO_FALAS[i][1];
+			if (tempoEntrega < ini || tempoEntrega > fimFala) continue;
+			float alfa = Math.min(1, Math.min(tempoEntrega - ini, fimFala - tempoEntrega) / 0.3f);
+			Texto.desenhar(o, FALAS[i], w / 2f, h * 0.47f, Math.max(20, Math.round(h * 0.035f)),
+					new Color(225, 215, 195, Math.round(alfa * 255)), Texto.Alinhamento.CENTRO);
+		}
 	}
 
 	/** As pedras: o shader das árvores 3D, sem o vento. */

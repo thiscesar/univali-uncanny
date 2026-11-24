@@ -38,7 +38,7 @@ public final class GeradorFase {
 		public List<DistribuidorArvores.Clareira> clareiras() {
 			List<DistribuidorArvores.Clareira> c = new ArrayList<>();
 			c.add(new DistribuidorArvores.Clareira(layout.inicio().x(), layout.inicio().z(), 6));
-			c.add(new DistribuidorArvores.Clareira(layout.univali().x(), layout.univali().z(), 25));
+			c.add(new DistribuidorArvores.Clareira(layout.univali().x(), layout.univali().z(), 12)); // a chegada; o prédio pede a sua
 			for (Ponto p : layout.provas()) c.add(new DistribuidorArvores.Clareira(p.x(), p.z(), 4));
 			for (Ponto p : layout.caixas()) c.add(new DistribuidorArvores.Clareira(p.x(), p.z(), 1.5f));
 			for (Placa p : placas) c.add(new DistribuidorArvores.Clareira(p.x(), p.z(), p.evento() ? 3f : 1.5f));

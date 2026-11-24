@@ -86,5 +86,6 @@ public class MalhaCaixas {
 
 	public void liberar() {
 		if (vbo != 0) glDeleteBuffers(vbo);
+		vbo = 0;
 	}
 }

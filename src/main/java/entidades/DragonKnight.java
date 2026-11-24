@@ -74,8 +74,8 @@ public class DragonKnight extends Object3D {
 
 	/** Quantas provas o jogador já tem: as aparições ficam mais frequentes (as provas vêm depois). */
 	public int provasColetadas = 0;
-	/** Centro da zona segura (a Univali), {x, z}; null enquanto o prédio não existe. */
-	public float[] zonaSegura = null;
+	/** As paredes da Univali: ele não surge a menos de 25 m delas (null = sem zona segura). */
+	public GradeColisao.Retangulo zonaSegura = null;
 
 	// o alvo: os olhos do jogador e a direção em que ele olha, no chão
 	private float alvoX, alvoY, alvoZ, frenteX = 0, frenteZ = 1;
@@ -197,10 +197,7 @@ public class DragonKnight extends Object3D {
 		if (!chao.dentroDoMapa(x, z, Regras.MARGEM_BORDA_APARICAO)) return false;
 		if (chao.ehAgua(x, z)) return false;
 		if (chao.anguloEm(x, z) > Jogador.DECLIVE_MAXIMO) return false;
-		if (zonaSegura != null) {
-			float dx = x - zonaSegura[0], dz = z - zonaSegura[1];
-			if (dx * dx + dz * dz < Regras.RAIO_ZONA_SEGURA * Regras.RAIO_ZONA_SEGURA) return false;
-		}
+		if (zonaSegura != null && zonaSegura.distancia(x, z) < Regras.RAIO_ZONA_SEGURA) return false;
 		return colisao.linhaLivre(x, z, alvoX, alvoZ, Regras.FOLGA_LINHA_DE_VISAO);
 	}
 

@@ -36,6 +36,13 @@ public class Ambiente {
 
 	public float intensidadePreenchimento = 0;
 
+	/** Luzes pontuais fixas (postes), até 4: posição em espaço da câmera, cor já com a intensidade, alcance. */
+	public static final int MAX_LUZES = 4;
+	public int numLuzes = 0;
+	public final float[] posLuz = new float[MAX_LUZES * 3];
+	public final float[] corLuz = new float[MAX_LUZES * 3];
+	public final float[] alcanceLuz = new float[MAX_LUZES];
+
 	/** Modo PS1 (vértices tremendo e textura sem correção de perspectiva): 1 ligado, 0 desligado. */
 	public float modoPs1 = 0;
 	/** Resolução em que a cena é desenhada no modo PS1 (a grade em que os vértices caem). */
@@ -62,6 +69,11 @@ public class Ambiente {
 		glUniform1f(glGetUniformLocation(p, "alcanceClarao"), alcanceClarao);
 
 		glUniform1f(glGetUniformLocation(p, "intensidadePreenchimento"), intensidadePreenchimento);
+
+		glUniform1i(glGetUniformLocation(p, "numLuzes"), numLuzes);
+		glUniform3fv(glGetUniformLocation(p, "posLuz"), posLuz);
+		glUniform3fv(glGetUniformLocation(p, "corLuz"), corLuz);
+		glUniform1fv(glGetUniformLocation(p, "alcanceLuz"), alcanceLuz);
 
 		glUniform1f(glGetUniformLocation(p, "modoPs1"), modoPs1);
 		glUniform2f(glGetUniformLocation(p, "resolucaoPs1"), resolucaoPs1[0], resolucaoPs1[1]);

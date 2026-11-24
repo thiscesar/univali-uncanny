@@ -245,6 +245,40 @@ public class Audio {
 		return maisAntiga >= 0 ? maisAntiga : maisAntigaLoop;
 	}
 
+	/** As fontes que estavam tocando quando o jogo pausou (para retomar só elas). */
+	private final java.util.List<Integer> pausadas = new java.util.ArrayList<>();
+
+	/** Quantas fontes estão tocando agora (para conferir que nenhum som ficou para trás). */
+	public int tocando() {
+		if (!disponivel) return 0;
+		int n = 0;
+		for (int f : fontes) {
+			if (alGetSourcei(f, AL_SOURCE_STATE) == AL_PLAYING) n++;
+		}
+		return n;
+	}
+
+	/** Pausa todos os sons que estão tocando (alSourcePause): eles continuam de onde pararam. */
+	public void pausarTudo() {
+		if (!disponivel) return;
+		pausadas.clear();
+		for (int i = 0; i < NUMERO_FONTES; i++) {
+			if (alGetSourcei(fontes[i], AL_SOURCE_STATE) == AL_PLAYING) {
+				alSourcePause(fontes[i]);
+				pausadas.add(i);
+			}
+		}
+	}
+
+	/** Retoma os sons pausados por pausarTudo(). */
+	public void retomarTudo() {
+		if (!disponivel) return;
+		for (int i : pausadas) {
+			if (alGetSourcei(fontes[i], AL_SOURCE_STATE) == AL_PAUSED) alSourcePlay(fontes[i]);
+		}
+		pausadas.clear();
+	}
+
 	/** Para um som (ignora identificadores de sons que já foram substituídos). */
 	public void parar(SomTocando som) {
 		if (valido(som)) {

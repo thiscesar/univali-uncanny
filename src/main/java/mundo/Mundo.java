@@ -45,10 +45,12 @@ public class Mundo {
 	public final Pedras pedras;
 	/** A textura do mapa de detalhes (trilhas e regiões), que o shader do terreno lê. */
 	public final int texturaDetalhes;
+	/** O prédio da Univali, na chegada da trilha. */
+	public final entidades.PredioUnivali predio;
 
 	public Mundo(long seed, PerfilTerreno perfil, Mapa3D terreno, ConsultaAltura chao, GradeColisao colisao,
 			Arvores arvores, Arvores3D arvores3d, PersonagemMd2 monstro, GeradorFase.Fase fase, Pedras pedras,
-			int texturaDetalhes) {
+			int texturaDetalhes, entidades.PredioUnivali predio) {
 		this.seed = seed;
 		this.perfil = perfil;
 		this.terreno = terreno;
@@ -65,6 +67,7 @@ public class Mundo {
 		this.placas = fase.placas();
 		this.pedras = pedras;
 		this.texturaDetalhes = texturaDetalhes;
+		this.predio = predio;
 	}
 
 	private static float[] xz(Ponto p) {

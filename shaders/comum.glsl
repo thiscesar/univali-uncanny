@@ -30,6 +30,13 @@ uniform float alcanceClarao;
 // ---------- luz de preenchimento (só para a arma) ----------
 uniform float intensidadePreenchimento;
 
+// ---------- luzes pontuais fixas (os postes da Univali), espaço da câmera ----------
+const int MAX_LUZES = 4;
+uniform int  numLuzes;               // quantas das 4 estão em uso
+uniform vec3 posLuz[MAX_LUZES];
+uniform vec3 corLuz[MAX_LUZES];      // já multiplicada pela intensidade
+uniform float alcanceLuz[MAX_LUZES];
+
 // Cai com o quadrado da distância relativa e chega a zero exatamente no alcance.
 float atenuacao(float distancia, float alcance){
 	float t = clamp(1.0 - distancia / alcance, 0.0, 1.0);
@@ -45,7 +52,7 @@ float fatorLanterna(vec3 posVista, out vec3 L){
 	return intensidadeLanterna * cone * atenuacao(d, alcanceLanterna);
 }
 
-// Cor final de uma superfície: luz ambiente + lanterna + clarão + preenchimento.
+// Cor final de uma superfície: luz ambiente + lanterna + clarão + luzes pontuais + preenchimento.
 vec3 iluminar(vec3 corBase, vec3 normalVista, vec3 posVista){
 	vec3 n = normalize(normalVista);
 	vec3 luz = luzAmbiente;
@@ -59,6 +66,12 @@ vec3 iluminar(vec3 corBase, vec3 normalVista, vec3 posVista){
 		float d = length(paraClarao);
 		luz += vec3(1.0, 0.75, 0.45) * intensidadeClarao * atenuacao(d, alcanceClarao)
 		     * max(dot(n, paraClarao / max(d, 0.0001)), 0.0);
+	}
+	for(int i = 0; i < MAX_LUZES; i++){
+		if(i >= numLuzes) break;
+		vec3 paraLuz = posLuz[i] - posVista;
+		float d = length(paraLuz);
+		luz += corLuz[i] * atenuacao(d, alcanceLuz[i]) * max(dot(n, paraLuz / max(d, 0.0001)), 0.0);
 	}
 	if(intensidadePreenchimento > 0.0){
 		luz += vec3(1.0, 0.85, 0.7) * intensidadePreenchimento * max(dot(n, normalize(vec3(-0.4, 0.6, 0.7))), 0.0);

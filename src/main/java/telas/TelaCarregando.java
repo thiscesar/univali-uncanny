@@ -14,7 +14,7 @@ import java.util.concurrent.Future;
 
 import dados.Constantes;
 import dados.Recursos;
-import entidades.Jogador;
+import entidades.PredioUnivali;
 import mundo.Arvores;
 import mundo.Arvores3D;
 import mundo.ConsultaAltura;
@@ -64,7 +64,7 @@ public class TelaCarregando implements Tela {
 	private record DadosTerreno(int[][] alturas, ConsultaAltura chao, GradeColisao colisao,
 			List<DistribuidorArvores.Arvore> arvores, List<LeitorObj.ModeloObj> modelosArvores,
 			PersonagemMd2.Dados monstro, GeradorFase.Fase fase, List<DistribuidorPedras.Pedra> pedras,
-			List<LeitorObj.ModeloObj> modelosPedras, byte[] detalhes) {}
+			List<LeitorObj.ModeloObj> modelosPedras, byte[] detalhes, PredioUnivali predio) {}
 
 	/** Quantas etapas rodam na thread separada (as primeiras da lista de progresso). */
 	private static final int ETAPAS_NA_THREAD = 3;
@@ -182,11 +182,20 @@ public class TelaCarregando implements Tela {
 				fracaoNaThread = (float) geracao / GeradorFase.GERACOES;
 			});
 
-			// 3. regiões, pedras e árvores, longe das trilhas e das clareiras da fase
+			// 3. o prédio da Univali, na chegada da trilha, com o chão aplainado embaixo dele
 			etapaNaThread = 2;
 			fracaoNaThread = 0;
+			fase.Ponto univali = fase.layout().univali();
+			List<fase.Ponto> chegada = trilhaQueChega(fase.trilhas(), univali);
+			PredioUnivali rascunho = PredioUnivali.naChegada(univali, chegada, 0, seed);
+			float piso = PredioUnivali.aplainar(alturas, METROS_ENTRE_PONTOS, rascunho.retangulo());
+			PredioUnivali predio = PredioUnivali.naChegada(univali, chegada, piso, seed);
+			chao = new ConsultaAltura(alturas, METROS_ENTRE_PONTOS, METROS_POR_UNIDADE); // o chão já aplainado
+
+			// 4. regiões, pedras e árvores, longe das trilhas, das clareiras da fase e do prédio
 			Regioes regioes = new Regioes(seed);
 			List<DistribuidorArvores.Clareira> clareiras = new java.util.ArrayList<>(fase.clareiras());
+			clareiras.add(new DistribuidorArvores.Clareira(predio.x, predio.z, 28));
 			List<LeitorObj.ModeloObj> modelosPedras = Pedras.arquivosPresentes() ? Pedras.lerModelos() : null;
 			float[] larguras = modelosPedras != null ? Pedras.larguras(modelosPedras) : null;
 			List<DistribuidorPedras.Pedra> pedras = modelosPedras != null
@@ -201,13 +210,19 @@ public class TelaCarregando implements Tela {
 				DistribuidorPedras.registrar(pedras, larguras, colisao);
 			}
 			registrarPlacas(fase.placas(), colisao);
+			GradeColisao.Retangulo paredes = predio.retangulo();
+			colisao.adicionarRetangulo(paredes.xMin(), paredes.zMin(), paredes.xMax(), paredes.zMax());
+			for (float[] poste : predio.postes()) {
+				colisao.adicionar(poste[0], poste[1], 0.15f);
+			}
 			byte[] detalhes = MapaDetalhes.gerar(chao.tamanho(), fase.trilhas(), regioes, seed);
 
 			// os modelos 3D das árvores, se estiverem na pasta (senão, null: árvores planas)
 			List<LeitorObj.ModeloObj> modelos = Arvores3D.arquivosPresentes() ? Arvores3D.lerModelos() : null;
 			// o Dragon Knight (só leitura dos arquivos; null se o MD2 não estiver na pasta)
 			PersonagemMd2.Dados monstro = PersonagemMd2.ler(TelaJogo.PASTA_MONSTRO, TelaJogo.ALTURA_MONSTRO);
-			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, fase, pedras, modelosPedras, detalhes);
+			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, fase, pedras, modelosPedras, detalhes,
+					predio);
 		});
 		estado = Estado.GERANDO;
 	}
@@ -316,6 +331,20 @@ public class TelaCarregando implements Tela {
 		Constantes.mapa = terrenoNovo; // o campo global do projeto original continua apontando para o terreno
 	}
 
+	/** A trilha que termina mais perto da Univali (a que chega ao prédio). */
+	private static List<fase.Ponto> trilhaQueChega(List<List<fase.Ponto>> trilhas, fase.Ponto univali) {
+		List<fase.Ponto> melhor = List.of();
+		float menor = Float.MAX_VALUE;
+		for (List<fase.Ponto> t : trilhas) {
+			float d = t.get(t.size() - 1).distancia(univali);
+			if (d < menor) {
+				menor = d;
+				melhor = t;
+			}
+		}
+		return melhor;
+	}
+
 	/** A thread de geração para quando a tela pede (ESC ou fechar o jogo). */
 	private static void verificarCancelamento() {
 		if (Thread.currentThread().isInterrupted()) {
@@ -375,7 +404,7 @@ public class TelaCarregando implements Tela {
 		}
 		int texturaDetalhes = enviarDetalhes(dados.detalhes());
 		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, arvores3d,
-				monstro, dados.fase(), pedras, texturaDetalhes);
+				monstro, dados.fase(), pedras, texturaDetalhes, dados.predio());
 		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo
 		terrenoNovo = null;
 	}

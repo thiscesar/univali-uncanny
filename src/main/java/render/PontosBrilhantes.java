@@ -55,6 +55,12 @@ public class PontosBrilhantes {
 	/** Desenha os pontos da lista com o diâmetro (metros) e a cor dados. */
 	public void desenhar(float tamanho, float[] cor, FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente,
 			int alturaImagem) {
+		desenhar(tamanho, cor, projecao, visao, ambiente, alturaImagem, 0.5f);
+	}
+
+	/** O mesmo, dizendo quanto da neblina o brilho sofre (0,5 = metade; 0,25 = um quarto: aparece de bem longe). */
+	public void desenhar(float tamanho, float[] cor, FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente,
+			int alturaImagem, float fatorNeblina) {
 		if (quantidade == 0) return;
 		pontos.flip();
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -70,6 +76,7 @@ public class PontosBrilhantes {
 		glUniform1f(glGetUniformLocation(p, "tamanho"), tamanho);
 		glUniform1f(glGetUniformLocation(p, "alturaTela"), alturaImagem);
 		glUniform3f(glGetUniformLocation(p, "corBrilho"), cor[0], cor[1], cor[2]);
+		glUniform1f(glGetUniformLocation(p, "fatorNeblina"), fatorNeblina);
 		ambiente.enviar(shader);
 
 		// somado à cena (GL_ONE, GL_ONE), sem gravar profundidade: troncos na frente ainda escondem

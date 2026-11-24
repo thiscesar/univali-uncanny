@@ -63,4 +63,20 @@ class GradeColisaoTest {
 		assertEquals(1f, GradeColisao.distanciaAoSegmento(5, 1, 0, 0, 10, 0), 1e-5);
 		assertEquals(5f, GradeColisao.distanciaAoSegmento(13, 4, 0, 0, 10, 0), 1e-5, "além da ponta: mede até a ponta");
 	}
+
+	@Test
+	void retanguloBloqueiaEmpurraEFechaALinha() {
+		GradeColisao g = new GradeColisao(100);
+		g.adicionarRetangulo(40, 40, 60, 50);
+		assertTrue(g.colide(50, 45, 0.3f), "dentro");
+		assertTrue(g.colide(60.2f, 45, 0.35f), "encostado na parede");
+		assertFalse(g.colide(61, 45, 0.35f));
+		float[] fora = g.resolver(59.8f, 45, 0.35f); // entrou um pouco pela parede leste
+		assertEquals(60.35f, fora[0], 1e-4f);
+		float[] canto = g.resolver(60.1f, 50.1f, 0.35f); // perto do canto: afasta na diagonal
+		assertFalse(g.colide(canto[0], canto[1], 0.349f));
+		assertFalse(g.linhaLivre(30, 45, 70, 45), "a linha atravessa o prédio");
+		assertTrue(g.linhaLivre(30, 55, 70, 55));
+		assertFalse(g.linhaLivre(30, 51, 70, 51, 1.2f), "passa perto demais com a folga");
+	}
 }

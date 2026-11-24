@@ -124,7 +124,7 @@ class DragonKnightTest {
 		DragonKnight m = monstro(grade);
 		assertFalse(m.lugarServe(60, 50), "tronco no caminho");
 		assertTrue(m.lugarServe(40, 50));
-		m.zonaSegura = new float[] { 35, 50 };
+		m.zonaSegura = new GradeColisao.Retangulo(30, 45, 34, 55);
 		assertFalse(m.lugarServe(40, 50), "perto da Univali");
 		assertFalse(m.lugarServe(5, 50), "na borda");
 	}

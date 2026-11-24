@@ -1,28 +1,31 @@
 package telas;
 
 import java.awt.Color;
-import java.util.List;
 
+import jogo.Nota;
+import jogo.Partida;
 import render.AtmosferaMenu;
 import render.Overlay2D;
 
 /**
  * APROVADO. O fundo é a Univali à noite, como no menu, mas mais pálida e fria: chegou,
- * mas não saiu inteiro. O título é carimbado em branco-osso.
+ * mas não saiu inteiro. O título é carimbado em branco-osso, com a média final (de 6,0 a 10,0,
+ * pelo tempo e pelas aparições sobrevividas) e o comentário do professor para a faixa da nota.
  */
 public class TelaVitoria extends TelaFim {
 
-	private static final List<String> FRASES = List.of(
-			"Aprovado. Por enquanto.",
-			"O semestre que vem te espera.",
-			"Você saiu da floresta. Ela não saiu de você.",
-			"O Dragon Knight vai lembrar do seu rosto.");
 	private static final Color COR_TITULO = new Color(222, 214, 196);
 
 	private final AtmosferaMenu atmosfera = new AtmosferaMenu();
+	private final float nota;
 
-	public TelaVitoria(GerenciadorTelas gerenciador, Resumo resumo) {
-		super(gerenciador, resumo, FRASES);
+	public TelaVitoria(GerenciadorTelas gerenciador, Partida.Estatisticas estatisticas) {
+		this(gerenciador, estatisticas, Nota.calcular(estatisticas.segundos(), estatisticas.aparicoesSobrevividas()));
+	}
+
+	private TelaVitoria(GerenciadorTelas gerenciador, Partida.Estatisticas estatisticas, float nota) {
+		super(gerenciador, estatisticas, Nota.comentario(nota));
+		this.nota = nota;
 	}
 
 	@Override
@@ -33,6 +36,11 @@ public class TelaVitoria extends TelaFim {
 	@Override
 	protected Color corTitulo() {
 		return COR_TITULO;
+	}
+
+	@Override
+	protected String linhaDestaque() {
+		return "Média final: " + Nota.formatar(nota);
 	}
 
 	@Override

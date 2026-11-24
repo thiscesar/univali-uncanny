@@ -4,13 +4,13 @@ import static org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE;
 import static org.lwjgl.opengl.GL11.*;
 
 import java.awt.Color;
-import java.util.List;
 import java.util.Random;
 
 import audio.Audio;
 import audio.Efeito;
 import audio.Sintetizador;
 import dados.Recursos;
+import jogo.Partida;
 import render.AtmosferaMenu;
 import render.Botao;
 import render.GrupoBotoes;
@@ -23,15 +23,12 @@ import render.TextoTextura;
  *  - o título "carimbado": entra enorme e bate no lugar em 0,2 s, com um clarão, uma pancada
  *    e a tela tremendo; depois fica tremendo de leve, como o título do menu;
  *  - uma frase que aparece letra por letra, como digitada;
- *  - o resumo da partida (mapa, tempo, aparições sobrevividas);
+ *  - uma linha de destaque (a média, ou as provas entregues) e as estatísticas da partida;
  *  - os botões Tentar de novo (mesmo mapa), Novo mapa e Menu, que aparecem depois do carimbo;
  *  - granulação e a lâmpada falhando por cima de tudo (os mesmos efeitos do menu).
  * O fundo e o que vem a mais em volta do título ficam com cada tela.
  */
 public abstract class TelaFim implements Tela {
-
-	/** O que aconteceu na partida, para mostrar no fim. */
-	public record Resumo(long seed, float segundos, int aparicoesSobrevividas) {}
 
 	/** Quando o carimbo bate e quando os botões aparecem, em segundos. */
 	protected static final float CARIMBO = 0.2f;
@@ -41,7 +38,7 @@ public abstract class TelaFim implements Tela {
 	private static final Color COR_RESUMO = new Color(150, 140, 130);
 
 	protected final GerenciadorTelas gerenciador;
-	protected final Resumo resumo;
+	protected final Partida.Estatisticas estatisticas;
 	protected final Random random = new Random();
 	private final AtmosferaMenu atmosfera = new AtmosferaMenu();
 	private final String frase;
@@ -55,10 +52,10 @@ public abstract class TelaFim implements Tela {
 	private boolean carimbou = false;
 	private Efeito somCarimbo, somPassar, somClique;
 
-	protected TelaFim(GerenciadorTelas gerenciador, Resumo resumo, List<String> frases) {
+	protected TelaFim(GerenciadorTelas gerenciador, Partida.Estatisticas estatisticas, String frase) {
 		this.gerenciador = gerenciador;
-		this.resumo = resumo;
-		this.frase = frases.get(random.nextInt(frases.size()));
+		this.estatisticas = estatisticas;
+		this.frase = frase;
 	}
 
 	private Botao criarBotao(String texto) {
@@ -73,6 +70,9 @@ public abstract class TelaFim implements Tela {
 	protected abstract String titulo();
 
 	protected abstract Color corTitulo();
+
+	/** A linha grande embaixo da frase ("Média final: 8,7", "Provas entregues: 1 de 3"). */
+	protected abstract String linhaDestaque();
 
 	/** O fundo da tela (já com o overlay iniciado). */
 	protected abstract void desenharFundo(Overlay2D o, int w, int h);
@@ -127,7 +127,7 @@ public abstract class TelaFim implements Tela {
 		}
 		if (acionado == tentarDeNovo) {
 			// a mesma seed: a tela de carregamento reaproveita o mundo, sem rodar o AG de novo
-			gerenciador.trocarPara(new TelaCarregando(gerenciador, resumo.seed()));
+			gerenciador.trocarPara(new TelaCarregando(gerenciador, estatisticas.seed()));
 		} else if (acionado == novoMapa) {
 			gerenciador.trocarPara(new TelaCarregando(gerenciador, random.nextInt(1_000_000)));
 		} else if (acionado == menu) {
@@ -212,13 +212,23 @@ public abstract class TelaFim implements Tela {
 			o.imagemRecorte(img.textura(), Math.round(x), y, img.largura() * mostrado, img.altura(), 0, 0, mostrado, 1,
 					Color.WHITE);
 		}
-		if (tempo > 1.2f) {
-			int minutos = (int) (resumo.segundos() / 60), segundos = (int) (resumo.segundos() % 60);
-			int n = resumo.aparicoesSobrevividas();
-			String linha = String.format("Mapa %d   ·   %d:%02d na floresta   ·   %d %s", resumo.seed(), minutos, segundos,
-					n, n == 1 ? "aparição sobrevivida" : "aparições sobrevividas");
-			Texto.desenharAlinhado(o, Recursos.fonteTexto(), linha, w / 2f, h * 0.58f, Math.max(14, Math.round(h * 0.022f)),
-					COR_RESUMO, Texto.Alinhamento.CENTRO, false, true);
+		if (tempo > 1.0f) {
+			Texto.desenharAlinhado(o, Recursos.fonteTitulo(), linhaDestaque(), w / 2f, h * 0.58f,
+					Math.max(20, Math.round(h * 0.04f)), corTitulo(), Texto.Alinhamento.CENTRO, true, true);
+		}
+		if (tempo > 1.4f) {
+			Partida.Estatisticas e = estatisticas;
+			int minutos = (int) (e.segundos() / 60), segundos = (int) (e.segundos() % 60);
+			int n = e.aparicoesSobrevividas();
+			String linha1 = String.format("Mapa %d   ·   %d:%02d na floresta   ·   %d %s", e.seed(), minutos, segundos, n,
+					n == 1 ? "aparição sobrevivida" : "aparições sobrevividas");
+			String linha2 = String.format("%d %s   ·   %d%% dos bagos acertaram   ·   provas %d de %d", e.tiros(),
+					e.tiros() == 1 ? "tiro" : "tiros", e.precisao(), e.provasColetadas(), e.provasTotal());
+			int tamanho = Math.max(14, Math.round(h * 0.022f));
+			Texto.desenharAlinhado(o, Recursos.fonteTexto(), linha1, w / 2f, h * 0.645f, tamanho, COR_RESUMO,
+					Texto.Alinhamento.CENTRO, false, true);
+			Texto.desenharAlinhado(o, Recursos.fonteTexto(), linha2, w / 2f, h * 0.645f + tamanho * 1.6f, tamanho, COR_RESUMO,
+					Texto.Alinhamento.CENTRO, false, true);
 		}
 	}
 }

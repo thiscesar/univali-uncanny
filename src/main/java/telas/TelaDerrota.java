@@ -9,6 +9,7 @@ import static org.lwjgl.opengl.GL11.glDeleteTextures;
 import audio.Audio;
 import audio.Sintetizador;
 import dados.Recursos;
+import jogo.Partida;
 import render.Escorridos;
 import render.Overlay2D;
 import render.TextoTextura;
@@ -34,8 +35,8 @@ public class TelaDerrota extends TelaFim {
 	private final Recursos.Textura foto;
 	private final List<Escorridos.Escorrido> escorridos;
 
-	public TelaDerrota(GerenciadorTelas gerenciador, Resumo resumo, Recursos.Textura foto) {
-		super(gerenciador, resumo, FRASES);
+	public TelaDerrota(GerenciadorTelas gerenciador, Partida.Estatisticas estatisticas, Recursos.Textura foto) {
+		super(gerenciador, estatisticas, FRASES.get(new java.util.Random().nextInt(FRASES.size())));
 		this.foto = foto;
 		// os escorridos saem das letras da mesma imagem que vai para a tela
 		BufferedImage letras = TextoTextura.gerarImagem(titulo(), Recursos.fonteTitulo().emTamanho(TAMANHO_TITULO),
@@ -51,6 +52,11 @@ public class TelaDerrota extends TelaFim {
 	@Override
 	protected Color corTitulo() {
 		return COR_TITULO;
+	}
+
+	@Override
+	protected String linhaDestaque() {
+		return "Provas encontradas: " + estatisticas.provasColetadas() + " de " + estatisticas.provasTotal();
 	}
 
 	@Override

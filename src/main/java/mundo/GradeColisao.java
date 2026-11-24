@@ -9,13 +9,28 @@ import java.util.List;
  * Testar o jogador contra milhares de troncos a cada quadro seria lento. Com a grade,
  * cada tronco fica na lista da célula de 4 x 4 m onde está, e uma consulta só olha as
  * células em volta do ponto. Cada obstáculo é um círculo no plano XZ.
+ *
+ * Também aceita retângulos alinhados aos eixos (as paredes da Univali). Como são poucos,
+ * ficam numa lista à parte, testada inteira em toda consulta.
  */
 public class GradeColisao {
 
 	/** Um círculo no chão: centro (x, z) e raio, em metros. */
 	public record Circulo(float x, float z, float raio) {}
 
+	/** Um retângulo no chão, alinhado aos eixos, em metros. */
+	public record Retangulo(float xMin, float zMin, float xMax, float zMax) {
+
+		/** Distância do ponto até o retângulo (0 se estiver dentro). */
+		public float distancia(float x, float z) {
+			float dx = Math.max(Math.max(xMin - x, 0), x - xMax);
+			float dz = Math.max(Math.max(zMin - z, 0), z - zMax);
+			return (float) Math.sqrt(dx * dx + dz * dz);
+		}
+	}
+
 	public static final float TAMANHO_CELULA = 4f;
+	private final List<Retangulo> retangulos = new ArrayList<>();
 
 	private final int celulas;
 	private final List<List<Circulo>> grade;
@@ -35,6 +50,11 @@ public class GradeColisao {
 		quantidade++;
 	}
 
+	public void adicionarRetangulo(float xMin, float zMin, float xMax, float zMax) {
+		retangulos.add(new Retangulo(xMin, zMin, xMax, zMax));
+		quantidade++;
+	}
+
 	public int quantidade() {
 		return quantidade;
 	}
@@ -46,6 +66,9 @@ public class GradeColisao {
 			if (dx * dx + dz * dz < soma * soma) {
 				return true;
 			}
+		}
+		for (Retangulo r : retangulos) {
+			if (r.distancia(x, z) < raio || (raio == 0 && r.distancia(x, z) == 0)) return true;
 		}
 		return false;
 	}
@@ -69,6 +92,14 @@ public class GradeColisao {
 					mexeu = true;
 				}
 			}
+			for (Retangulo r : retangulos) {
+				float[] fora = empurrarParaFora(r, x, z, raio);
+				if (fora != null) {
+					x = fora[0];
+					z = fora[1];
+					mexeu = true;
+				}
+			}
 			if (!mexeu) {
 				break;
 			}
@@ -89,6 +120,15 @@ public class GradeColisao {
 	 * obstáculo (o tronco desenhado é mais grosso que o círculo de colisão, e a copa mais ainda).
 	 */
 	public boolean linhaLivre(float x1, float z1, float x2, float z2, float folga) {
+		// os retângulos: o segmento é percorrido a cada 0,5 m (são poucos e grandes)
+		float comprimento = (float) Math.hypot(x2 - x1, z2 - z1);
+		int passos = Math.max(1, (int) Math.ceil(comprimento / 0.5f));
+		for (Retangulo r : retangulos) {
+			for (int k = 0; k <= passos; k++) {
+				float t = (float) k / passos;
+				if (r.distancia(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t) <= folga) return false;
+			}
+		}
 		int i0 = celula(Math.min(x1, x2)) - 1, i1 = celula(Math.max(x1, x2)) + 1;
 		int j0 = celula(Math.min(z1, z2)) - 1, j1 = celula(Math.max(z1, z2)) + 1;
 		for (int j = Math.max(0, j0); j <= Math.min(celulas - 1, j1); j++) {
@@ -101,6 +141,25 @@ public class GradeColisao {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Tira o círculo de dentro do retângulo: se o centro está fora, afasta do ponto mais
+	 * próximo da borda; se está dentro, leva para a borda mais perto. null se não encosta.
+	 */
+	private static float[] empurrarParaFora(Retangulo r, float x, float z, float raio) {
+		float d = r.distancia(x, z);
+		if (d >= raio) return null;
+		if (d > 1e-5f) {
+			float px = Math.max(r.xMin(), Math.min(r.xMax(), x)), pz = Math.max(r.zMin(), Math.min(r.zMax(), z));
+			return new float[] { px + (x - px) / d * raio, pz + (z - pz) / d * raio };
+		}
+		float esquerda = x - r.xMin(), direita = r.xMax() - x, baixo = z - r.zMin(), cima = r.zMax() - z;
+		float menor = Math.min(Math.min(esquerda, direita), Math.min(baixo, cima));
+		if (menor == esquerda) return new float[] { r.xMin() - raio, z };
+		if (menor == direita) return new float[] { r.xMax() + raio, z };
+		if (menor == baixo) return new float[] { x, r.zMin() - raio };
+		return new float[] { x, r.zMax() + raio };
 	}
 
 	/** Distância do ponto (px, pz) ao segmento de A a B: projeta o ponto na reta e limita ao segmento. */
