@@ -23,6 +23,7 @@ Skin vermelha do Dragon Knight · Deranged · 3dpalette.com/deranged
 Formato MD2 · Quake II, id Software (marca registrada)
 Árvores 3D e pedras · geradas por código (gerador próprio em estilo PS1)
 Escopeta, prédio da Univali e professor · montados por código
+Rosto do professor · foto do próprio professor, usada com a autorização dele
 
 # Texturas
 Chão, grama, terra, pedra e árvores · geradas por código (gerador próprio em estilo PS1)

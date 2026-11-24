@@ -279,23 +279,78 @@ public class DesenhoPredio {
 				.caixa(-0.28f, 0.28f, 0.48f, 1.25f, -0.3f, -0.24f, TUDO, TUDO, TUDO)
 				.caixa(-0.04f, 0.04f, 0, 0.42f, -0.04f, 0.04f, TUDO, TUDO, TUDO)
 				.enviar();
-		// o professor, sentado: a textura tem roupa em cima (camisa) e embaixo (calça)
-		float[] camisa = { 0, 0, 1, 0.5f }, calca = { 0, 0.5f, 1, 1 };
+		// o professor, sentado, como na foto dele: polo preta (com a gola vinho por dentro), ombros
+		// largos, barriga, e os braços cruzados na frente do peito (antebraços de fora). A textura
+		// da roupa tem quatro partes: polo, pele, calça e a gola.
+		float[] polo = { 0, 0, 0.5f, 0.5f }, pele = { 0.5f, 0, 1, 0.5f }, calca = { 0, 0.5f, 0.5f, 1 }, gola = { 0.5f, 0.5f, 1, 1 };
 		corpoProfessor = new MalhaCaixas()
-				.caixa(-0.2f, 0.2f, 0.45f, 0.6f, -0.15f, 0.45f, calca, calca, calca)    // coxas
-				.caixa(-0.2f, 0.2f, 0, 0.45f, 0.35f, 0.5f, calca, calca, calca)         // canelas
-				.caixa(-0.22f, 0.22f, 0.6f, 1.25f, -0.13f, 0.13f, camisa, camisa, camisa) // tronco
-				.caixa(-0.32f, -0.22f, 0.9f, 1.22f, -0.06f, 0.08f, camisa, camisa, camisa) // braços
-				.caixa(0.22f, 0.32f, 0.9f, 1.22f, -0.06f, 0.08f, camisa, camisa, camisa)
-				.caixa(-0.3f, -0.18f, 0.82f, 0.92f, 0.0f, 0.62f, camisa, camisa, camisa) // antebraços na mesa
-				.caixa(0.18f, 0.3f, 0.82f, 0.92f, 0.0f, 0.62f, camisa, camisa, camisa)
+				.caixa(-0.21f, 0.21f, 0.45f, 0.6f, -0.15f, 0.45f, calca, calca, calca)     // coxas
+				.caixa(-0.21f, 0.21f, 0, 0.45f, 0.33f, 0.5f, calca, calca, calca)          // canelas
+				.caixa(-0.22f, 0.22f, 0.6f, 0.86f, -0.12f, 0.17f, polo, polo, polo)        // barriga
+				.caixa(-0.23f, 0.23f, 0.86f, 1.12f, -0.13f, 0.15f, polo, polo, polo)       // peito
+				.caixa(-0.26f, 0.26f, 1.08f, 1.24f, -0.12f, 0.11f, polo, polo, polo)       // ombros
+				.caixa(-0.085f, 0.085f, 1.2f, 1.27f, -0.07f, 0.09f, polo, polo, polo)      // a gola da polo
+				.caixa(-0.03f, 0.03f, 1.18f, 1.25f, 0.14f, 0.152f, gola, gola, gola)      // a abertura da polo (vinho)
+				.caixa(-0.33f, -0.24f, 1.0f, 1.22f, -0.08f, 0.09f, polo, polo, polo)       // mangas curtas
+				.caixa(0.24f, 0.33f, 1.0f, 1.22f, -0.08f, 0.09f, polo, polo, polo)
+				.caixa(-0.32f, -0.245f, 0.9f, 1.0f, -0.06f, 0.08f, pele, pele, pele)       // braços
+				.caixa(0.245f, 0.32f, 0.9f, 1.0f, -0.06f, 0.08f, pele, pele, pele)
+				.caixa(-0.31f, -0.23f, 0.88f, 0.96f, 0.0f, 0.19f, pele, pele, pele)         // cotovelos, indo para a frente
+				.caixa(0.23f, 0.31f, 0.95f, 1.03f, 0.02f, 0.21f, pele, pele, pele)
+				.caixa(-0.24f, 0.16f, 0.89f, 0.96f, 0.15f, 0.22f, pele, pele, pele)         // antebraços cruzados, um sobre o outro
+				.caixa(-0.16f, 0.24f, 0.96f, 1.03f, 0.17f, 0.24f, pele, pele, pele)
+				.caixa(-0.22f, -0.15f, 0.97f, 1.04f, 0.13f, 0.2f, pele, pele, pele)         // as mãos, enfiadas nos braços
+				.caixa(0.15f, 0.22f, 0.9f, 0.97f, 0.12f, 0.19f, pele, pele, pele)
 				.enviar();
-		// a cabeça: o rosto na metade esquerda da textura, pele e cabelo na direita
-		float[] rosto = { 0, 0, 0.5f, 1 }, pele = { 0.5f, 0, 1, 1 };
-		cabecaProfessor = new MalhaCaixas()
-				.caixa(-0.05f, 0.05f, 1.25f, 1.32f, -0.05f, 0.05f, pele, pele, pele)  // pescoço
-				.caixa(-0.11f, 0.11f, 1.32f, 1.58f, -0.12f, 0.12f, rosto, pele, pele)
-				.enviar();
+		cabecaProfessor = cabecaFacetada();
+	}
+
+	/**
+	 * A cabeça do professor (no espaço dele, o pescoço em y = 1,3): em vez de um cubo, um prisma de
+	 * 8 lados que afina no queixo. As três faces da frente (o rosto e as bochechas) levam a foto
+	 * do rosto, como os jogos de PlayStation faziam; os lados e a nuca, pele e cabelo; em cima e
+	 * atrás, um volume de cabelo; as orelhas e o pescoço, caixinhas de pele. A textura da cabeça
+	 * tem três partes: o rosto (metade esquerda), o lado e a nuca.
+	 */
+	private static MalhaCaixas cabecaFacetada() {
+		float W = 0.115f, D = 0.13f, c = 0.05f;          // meia largura, meia profundidade e o chanfro
+		float y0 = 1.32f, y1 = 1.43f, y2 = 1.66f;        // queixo, mandíbula e o alto da cabeça
+		// o contorno de cima (de y1 a y2), em volta, começando pela bochecha esquerda (vista de frente)
+		float[][] oct = { { -W, D - c }, { -W + c, D }, { W - c, D }, { W, D - c }, { W, -D + c }, { W - c, -D }, { -W + c, -D },
+				{ -W, -D + c } };
+		// no queixo o contorno afina: mais estreito e um pouco para trás
+		float[][] queixo = new float[8][];
+		for (int i = 0; i < 8; i++) queixo[i] = new float[] { oct[i][0] * 0.72f, oct[i][1] * 0.85f - 0.01f };
+		float diag = c * (float) Math.sqrt(2), frente = 2 * W - 2 * c, total = 2 * diag + frente;
+		// o rosto cobre as faces 0 (bochecha esquerda), 1 (frente) e 2 (bochecha direita): u de 0 a 0,5
+		float[] uRosto = { 0, 0.5f * diag / total, 0.5f * (diag + frente) / total, 0.5f };
+		float[] lado = { 0.5f, 0, 0.75f, 1 }, nuca = { 0.75f, 0, 1, 1 };
+		float tMeio = (y2 - y1) / (y2 - y0);             // onde a mandíbula cai na altura da textura
+		MalhaCaixas m = new MalhaCaixas();
+		for (int i = 0; i < 8; i++) {
+			int j = (i + 1) % 8;
+			float[] a = oct[i], b = oct[j], qa = queixo[i], qb = queixo[j];
+			float[] uvCima, uvBaixo;
+			if (i < 3) { // o rosto
+				uvCima = new float[] { uRosto[i], 0, uRosto[i + 1], tMeio };
+				uvBaixo = new float[] { uRosto[i], tMeio, uRosto[i + 1], 1 };
+			} else {
+				float[] r = i == 3 || i == 7 ? lado : nuca;
+				uvCima = new float[] { r[0], 0, r[2], tMeio };
+				uvBaixo = new float[] { r[0], tMeio, r[2], 1 };
+			}
+			m.quad(new float[] { a[0], y1, a[1] }, new float[] { b[0], y1, b[1] }, new float[] { b[0], y2, b[1] },
+					new float[] { a[0], y2, a[1] }, uvCima);
+			m.quad(new float[] { qa[0], y0, qa[1] }, new float[] { qb[0], y0, qb[1] }, new float[] { b[0], y1, b[1] },
+					new float[] { a[0], y1, a[1] }, uvBaixo);
+		}
+		float[] cabelo = { 0.76f, 0.02f, 0.99f, 0.2f }, peleLado = { 0.55f, 0.7f, 0.7f, 0.8f };
+		m.caixa(-W + 0.004f, W - 0.004f, y2 - 0.012f, y2 + 0.035f, -D + 0.004f, D - 0.014f, cabelo, cabelo, cabelo) // o cabelo em cima
+				.caixa(-W - 0.004f, W + 0.004f, y1 + 0.03f, y2 + 0.012f, -D - 0.014f, -D + 0.045f, cabelo, cabelo, cabelo) // e atrás
+				.caixa(-W - 0.02f, -W + 0.004f, 1.45f, 1.53f, -0.012f, 0.035f, peleLado, peleLado, peleLado) // orelhas
+				.caixa(W - 0.004f, W + 0.02f, 1.45f, 1.53f, -0.012f, 0.035f, peleLado, peleLado, peleLado)
+				.caixa(-0.065f, 0.065f, 1.24f, 1.34f, -0.06f, 0.05f, peleLado, peleLado, peleLado); // pescoço
+		return m.enviar();
 	}
 
 	/** A porta de alguma sala daquele lado do corredor fica a menos de "folga" metros de x? */
@@ -1028,43 +1083,87 @@ public class DesenhoPredio {
 		return img;
 	}
 
-	/** A roupa do professor: camisa clara em cima, calça escura embaixo. */
+	/** A roupa do professor, em quatro partes: polo preta (com textura de malha), pele, calça jeans escura e a gola vinho. */
 	public static BufferedImage roupa() {
-		BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+		BufferedImage img = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
 		Random r = new Random(61);
-		for (int y = 0; y < 16; y++) {
-			for (int x = 0; x < 16; x++) {
-				int v = r.nextInt(10);
-				img.setRGB(x, y, y < 8 ? new Color(170 + v, 185 + v, 205 + v).getRGB() : new Color(45 + v, 45 + v, 52 + v).getRGB());
+		for (int y = 0; y < 32; y++) {
+			for (int x = 0; x < 32; x++) {
+				int v = r.nextInt(8);
+				Color c;
+				if (y < 16 && x < 16) c = new Color(22 + v, 22 + v, 25 + v + ((x + y) % 3 == 0 ? 6 : 0)); // a malha da polo
+				else if (y < 16) c = new Color(178 + v, 140 + v, 118 + v);                               // pele (dos braços da foto)
+				else if (x < 16) c = new Color(38 + v, 42 + v, 58 + v);                                   // jeans escuro
+				else c = new Color(68 + v, 20, 26);                                                       // a gola vinho
+				img.setRGB(x, y, c.getRGB());
 			}
 		}
 		return img;
 	}
 
 	/**
-	 * A cabeça do professor: à esquerda o rosto (cabelo grisalho em cima, óculos, boca séria),
-	 * à direita a pele com o cabelo em cima, para os lados e a nuca.
+	 * A textura da cabeça (256 x 192): à esquerda o rosto (texturas/professor_rosto.png, recortado
+	 * da foto do professor; sem o arquivo, um rosto desenhado), depois o lado (cabelo em cima, pele e
+	 * barba por fazer embaixo) e a nuca (cabelo descendo até o pescoço). As cores do lado e da nuca
+	 * saem do próprio rosto, para emendar.
 	 */
 	public static BufferedImage cabeca() {
-		BufferedImage img = new BufferedImage(64, 32, BufferedImage.TYPE_INT_ARGB);
+		BufferedImage img = new BufferedImage(256, 192, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = pincel(img);
-		Color pele = new Color(205, 165, 135), cabelo = new Color(150, 150, 150);
-		g.setColor(pele);
-		g.fillRect(0, 0, 64, 32);
-		g.setColor(cabelo);
-		g.fillRect(0, 0, 32, 7);
-		g.fillRect(32, 0, 32, 10);
-		g.setColor(new Color(20, 20, 22)); // óculos
-		g.setStroke(new BasicStroke(1.5f));
-		g.drawRect(5, 11, 9, 6);
-		g.drawRect(18, 11, 9, 6);
-		g.drawLine(14, 13, 18, 13);
-		g.fillRect(8, 13, 3, 3); // olhos
-		g.fillRect(21, 13, 3, 3);
-		g.setColor(new Color(120, 60, 50));
-		g.drawLine(11, 25, 21, 25); // boca séria
+		Color pele = new Color(170, 132, 112), cabelo = new Color(30, 26, 24), barba = new Color(110, 100, 96);
+		BufferedImage rosto = null;
+		if (Caminhos.existe("texturas/professor_rosto.png")) rosto = TextureLoader.loadImage(Caminhos.caminho("texturas/professor_rosto.png"));
+		if (rosto != null) {
+			g.drawImage(rosto, 0, 0, 128, 192, null);
+			pele = media(rosto, 0.25f, 0.55f, 0.1f); // a bochecha esquerda
+			barba = media(rosto, 0.5f, 0.92f, 0.06f);
+		} else { // sem a foto: um rosto desenhado
+			g.setColor(pele);
+			g.fillRect(0, 0, 128, 192);
+			g.setColor(cabelo);
+			g.fillRect(0, 0, 128, 45);
+			g.setColor(new Color(20, 20, 22));
+			g.setStroke(new BasicStroke(5));
+			g.drawRect(18, 70, 38, 24);
+			g.drawRect(72, 70, 38, 24);
+			g.fillRect(30, 78, 12, 10);
+			g.fillRect(84, 78, 12, 10);
+			g.setColor(barba);
+			g.fillRect(44, 150, 40, 42);
+		}
+		Random r = new Random(9);
+		for (int x = 128; x < 256; x++) {
+			boolean nuca = x >= 192;
+			int fimCabelo = nuca ? 150 : 70; // o cabelo desce até a nuca; do lado, até a altura das orelhas
+			for (int y = 0; y < 192; y++) {
+				Color c = y < fimCabelo + r.nextInt(8) ? cabelo : !nuca && y > 120 ? barba : pele;
+				int v = r.nextInt(14) - 7;
+				img.setRGB(x, y, new Color(lim(c.getRed() + v), lim(c.getGreen() + v), lim(c.getBlue() + v)).getRGB());
+			}
+		}
 		g.dispose();
 		return img;
+	}
+
+	/** A cor média de um quadradinho da imagem (centro e meio lado em frações da imagem). */
+	private static Color media(BufferedImage img, float cx, float cy, float meio) {
+		int x0 = (int) ((cx - meio) * img.getWidth()), x1 = (int) ((cx + meio) * img.getWidth());
+		int y0 = (int) ((cy - meio) * img.getHeight()), y1 = (int) ((cy + meio) * img.getHeight());
+		long rr = 0, gg = 0, bb = 0, n = 0;
+		for (int y = Math.max(0, y0); y < Math.min(img.getHeight(), y1); y++) {
+			for (int x = Math.max(0, x0); x < Math.min(img.getWidth(), x1); x++) {
+				Color c = new Color(img.getRGB(x, y));
+				rr += c.getRed();
+				gg += c.getGreen();
+				bb += c.getBlue();
+				n++;
+			}
+		}
+		return n == 0 ? Color.GRAY : new Color((int) (rr / n), (int) (gg / n), (int) (bb / n));
+	}
+
+	private static int lim(int v) {
+		return Math.max(0, Math.min(255, v));
 	}
 
 	/** Porta de madeira escura com o visor de vidro e a maçaneta. */

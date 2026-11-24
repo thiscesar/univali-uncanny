@@ -55,6 +55,20 @@ public class MalhaCaixas {
 		return this;
 	}
 
+	/**
+	 * Um quadrilátero qualquer (não precisa ser alinhado aos eixos): os cantos inferior esquerdo,
+	 * inferior direito, superior direito e superior esquerdo, como vistos de fora. A normal sai do
+	 * produto vetorial (para fora, nessa ordem). Para formas que não são caixas, como a cabeça.
+	 */
+	public MalhaCaixas quad(float[] ie, float[] id, float[] sd, float[] se, float[] uv) {
+		float ax = id[0] - ie[0], ay = id[1] - ie[1], az = id[2] - ie[2];
+		float bx = se[0] - ie[0], by = se[1] - ie[1], bz = se[2] - ie[2];
+		float nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+		float t = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+		face(ie, id, sd, se, t > 1e-9f ? new float[] { nx / t, ny / t, nz / t } : new float[] { 0, 1, 0 }, uv);
+		return this;
+	}
+
 	/** Quadrilátero com os cantos inferior esquerdo, inferior direito, superior direito, superior esquerdo. */
 	private void face(float[] ie, float[] id, float[] sd, float[] se, float[] n, float[] uv) {
 		float u0 = uv[0], t0 = uv[1], u1 = uv[2], t1 = uv[3];

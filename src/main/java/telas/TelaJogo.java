@@ -900,7 +900,7 @@ public class TelaJogo implements Tela {
 		Tiro.Resultado r = Tiro.disparar(origem, frente, direita, cima, monstro, mundo.colisao, mundo.chao, random);
 		partida.registrarTiro(Regras.BAGOS, r.acertos());
 		if (atingivel) {
-			System.out.println("[Tiro] " + r.acertos() + " de " + Regras.BAGOS + " bagos acertaram o monstro");
+			System.out.println("[Tiro] " + r.acertos() + " de " + Regras.BAGOS + " chumbos acertaram o monstro");
 		}
 		for (Tiro.Impacto i : r.impactos()) {
 			switch (i.alvo()) {
