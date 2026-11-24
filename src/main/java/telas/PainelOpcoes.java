@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.function.Function;
 
 import audio.Audio;
+import audio.SonsInterface;
 import dados.Opcoes;
 import entrada.Entrada;
 import render.Alternador;
@@ -84,6 +85,8 @@ class PainelOpcoes extends Painel {
 	boolean atualizar(Entrada entrada, int w, int h, long diftime) {
 		layout(w, h);
 		posicionar();
+		int focoAntes = foco;
+		String valoresAntes = valores();
 
 		if (entrada.foiPressionada(GLFW_KEY_ESCAPE)) {
 			restaurarVolumes();
@@ -133,7 +136,16 @@ class PainelOpcoes extends Painel {
 		if (enter && alternador(foco) == null && foco != SOMBRAS) {
 			foco++; // Enter num controle passa para o próximo (num alternador ou seletor, o Enter troca o valor)
 		}
+		if (foco != focoAntes) SonsInterface.passar(audio);
+		if (!valores().equals(valoresAntes)) SonsInterface.ajuste(audio);
 		return false;
+	}
+
+	/** Os valores dos controles num texto só, para saber se algum mudou neste quadro. */
+	private String valores() {
+		return volumeGeral.valor + " " + volumeMusica.valor + " " + volumeEfeitos.valor + " " + sensibilidade.valor
+				+ " " + campoVisao.valor + " " + densidade.valor + " " + inverterY.valor + " " + modoPs1.valor + " "
+				+ sombras.indice;
 	}
 
 	/** Nove linhas de controles: a altura de cada uma diminui para caberem acima dos botões. */

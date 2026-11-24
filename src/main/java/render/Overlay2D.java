@@ -35,7 +35,7 @@ public class Overlay2D {
 	private final ShaderHud shader;
 	private final int vbo;
 
-	private final int locProjecao, locRetangulo, locRecorte, locCor, locUsaTextura, locTex;
+	private final int locProjecao, locRetangulo, locRecorte, locAngulo, locCor, locUsaTextura, locTex;
 	private final FloatBuffer bufferMatriz = BufferUtils.createFloatBuffer(16);
 	private final float[] rgba = new float[4];
 
@@ -49,6 +49,7 @@ public class Overlay2D {
 		locProjecao = glGetUniformLocation(p, "projecao");
 		locRetangulo = glGetUniformLocation(p, "retangulo");
 		locRecorte = glGetUniformLocation(p, "recorte");
+		locAngulo = glGetUniformLocation(p, "angulo");
 		locCor = glGetUniformLocation(p, "cor");
 		locUsaTextura = glGetUniformLocation(p, "usaTextura");
 		locTex = glGetUniformLocation(p, "tex");
@@ -99,7 +100,16 @@ public class Overlay2D {
 	/** Retângulo de cor sólida (a transparência vem do alfa da cor). */
 	public void retangulo(float x, float y, float largura, float altura, Color cor) {
 		glUniform1i(locUsaTextura, 0);
-		desenharQuad(x, y, largura, altura, 0, 0, 1, 1, cor);
+		desenharQuad(x, y, largura, altura, 0, 0, 1, 1, cor, 0);
+	}
+
+	/**
+	 * Retângulo de cor sólida girado em volta do próprio centro (cx, cy).
+	 * Ângulo em radianos; positivo gira no sentido horário (o y da tela cresce para baixo).
+	 */
+	public void retanguloGirado(float cx, float cy, float largura, float altura, float angulo, Color cor) {
+		glUniform1i(locUsaTextura, 0);
+		desenharQuad(cx - largura / 2, cy - altura / 2, largura, altura, 0, 0, 1, 1, cor, angulo);
 	}
 
 	/** Uma textura inteira, multiplicada pela cor (Color.WHITE = como está na imagem). */
@@ -115,7 +125,7 @@ public class Overlay2D {
 			float u0, float v0, float u1, float v1, Color cor) {
 		glBindTexture(GL_TEXTURE_2D, textura);
 		glUniform1i(locUsaTextura, 1);
-		desenharQuad(x, y, largura, altura, u0, v0, u1, v1, cor);
+		desenharQuad(x, y, largura, altura, u0, v0, u1, v1, cor, 0);
 	}
 
 	/** Devolve o OpenGL ao estado em que estava antes do iniciar(). */
@@ -138,11 +148,12 @@ public class Overlay2D {
 	}
 
 	private void desenharQuad(float x, float y, float largura, float altura,
-			float u0, float v0, float u1, float v1, Color cor) {
+			float u0, float v0, float u1, float v1, Color cor, float angulo) {
 		cor.getRGBComponents(rgba);
 		glUniform4f(locCor, rgba[0], rgba[1], rgba[2], rgba[3]);
 		glUniform4f(locRetangulo, x, y, largura, altura);
 		glUniform4f(locRecorte, u0, v0, u1, v1);
+		glUniform1f(locAngulo, angulo);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 	}
 

@@ -43,8 +43,9 @@ Teclas da máquina de escrever · (autor e licença)
 Lâmpada falhando · (autor e licença)
 Porta rangendo · (autor e licença)
 Voz da TV do saguão · (autor e licença)
+Comemoração do APROVADO · (autor e licença)
 Voz do professor · gravada pelos desenvolvedores, com efeito
-Passos na água, sininho e carro da máquina de escrever, galho, tiro, monstro, sussurro, sinal e zumbido · sintetizados por código
+Passos na água, sininho e carro da máquina de escrever, galho, tiro, monstro, sussurro, sinal, zumbido e os sons do menu · sintetizados por código
 
 # Fontes
 Courier 10 Pitch (máquina de escrever) · Bitstream · licença livre da Bitstream

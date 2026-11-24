@@ -8,11 +8,15 @@ in vec2 textuv;   // att 3: coordenada de textura do canto (0..1)
 uniform mat4 projecao;  // ortográfica: pixels (origem no canto superior esquerdo) -> tela
 uniform vec4 retangulo; // x, y, largura, altura em pixels
 uniform vec4 recorte;   // u0, v0, u1, v1: parte da textura usada (spritesheet)
+uniform float angulo;   // giro em radianos em volta do centro do retângulo (0 = reto)
 
 out vec2 uv;
 
 void main(void){
-	vec2 pixel = retangulo.xy + position.xy * retangulo.zw;
+	// o canto, relativo ao centro do retângulo, girado; depois levado ao lugar na tela
+	vec2 local = (position.xy - 0.5) * retangulo.zw;
+	float c = cos(angulo), s = sin(angulo);
+	vec2 pixel = retangulo.xy + 0.5 * retangulo.zw + vec2(local.x * c - local.y * s, local.x * s + local.y * c);
 	gl_Position = vec4(pixel, 0.0, 1.0) * projecao; // vetor-linha à esquerda, como no resto do projeto
 	uv = mix(recorte.xy, recorte.zw, textuv);
 }

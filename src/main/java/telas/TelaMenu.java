@@ -6,7 +6,7 @@ import java.awt.Color;
 import java.util.Random;
 
 import audio.Audio;
-import audio.Efeito;
+import audio.SonsInterface;
 import dados.Opcoes;
 import dados.Recursos;
 import render.AtmosferaMenu;
@@ -57,16 +57,11 @@ public class TelaMenu implements Tela {
 		return b;
 	}
 
-	/** Sons curtos dos botões (arquivos ausentes tocam silêncio). */
-	private Efeito somPassar, somClique;
-
 	@Override
 	public void entrar() {
 		gerenciador.definirTitulo("Menu");
 		gerenciador.entrada().prenderCursor(false);
 		Audio audio = gerenciador.audio();
-		somPassar = audio.carregarEfeito("audio/menu_passar.ogg");
-		somClique = audio.carregarEfeito("audio/menu_clique.ogg");
 		audio.musica().tocar(MUSICA, true);
 		audio.musica().fadeIn(FADE_ENTRADA_MS);
 	}
@@ -90,6 +85,7 @@ public class TelaMenu implements Tela {
 
 		if (painel != null) {
 			if (painel.atualizar(gerenciador.entrada(), w, h, diftime)) {
+				SonsInterface.clique(gerenciador.audio()); // Voltar, Salvar, Cancelar ou ESC
 				painel = null;
 			}
 			return;
@@ -98,10 +94,10 @@ public class TelaMenu implements Tela {
 		posicionarBotoes(w, h);
 		Botao acionado = botoes.atualizar(gerenciador.entrada());
 		if (botoes.focoMudou()) {
-			gerenciador.audio().tocar(somPassar, 0.6f);
+			SonsInterface.passar(gerenciador.audio());
 		}
 		if (acionado != null) {
-			gerenciador.audio().tocar(somClique, 0.9f);
+			SonsInterface.clique(gerenciador.audio());
 		}
 		if (acionado == jogar) {
 			long seed = Opcoes.atual().seedDaPartida(random);

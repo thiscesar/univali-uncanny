@@ -94,11 +94,16 @@ public class AtmosferaMenu {
 
 	/** Por cima de tudo: granulação e a lâmpada falhando. */
 	public void desenharEfeitos(Overlay2D overlay, int w, int h) {
+		desenharEfeitos(overlay, w, h, true);
+	}
+
+	/** O mesmo, podendo deixar de fora a lâmpada falhando (fica só a granulação). */
+	public void desenharEfeitos(Overlay2D overlay, int w, int h, boolean luzFalhando) {
 		Recursos.Textura grao = Recursos.texturaGerada("menu_granulacao", () -> gerarGranulacao(128, 3), true, true);
 		float u = random.nextFloat(), v = random.nextFloat(); // posição nova a cada quadro: o grão "ferve"
 		overlay.imagemRecorte(grao.id(), 0, 0, w, h, u, v, u + w / 128f, v + h / 128f, COR_GRANULACAO);
 
-		float escuro = piscadas.escuridao();
+		float escuro = luzFalhando ? piscadas.escuridao() : 0;
 		if (escuro > 0) {
 			overlay.retangulo(0, 0, w, h, new Color(0, 0, 0, Math.round(escuro * 255)));
 		}

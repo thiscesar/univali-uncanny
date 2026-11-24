@@ -556,6 +556,63 @@ public final class Sintetizador {
 		return normalizar(s, 0.85);
 	}
 
+	/**
+	 * Passar de um botão para outro no menu: um "toc" curto e abafado, como bater de leve numa
+	 * madeira. Uma nota que some rápido, um estalinho de ruído no ataque e um corpo grave. 90 ms.
+	 */
+	public static short[] menuPassar(int taxa) {
+		double[] s = new double[taxa * 90 / 1000];
+		Random r = new Random(21);
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			s[i] = 0.6 * Math.sin(2 * Math.PI * 720 * t) * Math.exp(-t * 60)
+					+ 0.4 * Math.sin(2 * Math.PI * 190 * t) * Math.exp(-t * 40)
+					+ 0.5 * (r.nextDouble() * 2 - 1) * Math.exp(-t * 400);
+		}
+		esmaecerFim(s, taxa, 15);
+		return normalizar(s, 0.5);
+	}
+
+	/**
+	 * Clique num botão: uma batida grave (como uma tranca pesada fechando) e um sino escuro
+	 * por cima, com notas que não combinam entre si (soa metálico e um pouco sinistro). 550 ms.
+	 */
+	public static short[] menuClique(int taxa) {
+		double[] s = new double[taxa * 550 / 1000];
+		Random r = new Random(22);
+		baque(s, taxa, 95, 1.0, 14);
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			double sino = 0.20 * Math.sin(2 * Math.PI * 412 * t)
+					+ 0.13 * Math.sin(2 * Math.PI * 587 * t)
+					+ 0.06 * Math.sin(2 * Math.PI * 1093 * t);
+			s[i] += sino * Math.exp(-t * 7) + 0.7 * (r.nextDouble() * 2 - 1) * Math.exp(-t * 250);
+		}
+		esmaecerFim(s, taxa, 40);
+		return normalizar(s, 0.8);
+	}
+
+	/** Ajustar um controle deslizante das opções: um tique agudo e muito curto. 35 ms. */
+	public static short[] menuAjuste(int taxa) {
+		double[] s = new double[taxa * 35 / 1000];
+		Random r = new Random(23);
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			s[i] = Math.sin(2 * Math.PI * 1250 * t) * Math.exp(-t * 140)
+					+ 0.3 * (r.nextDouble() * 2 - 1) * Math.exp(-t * 500);
+		}
+		esmaecerFim(s, taxa, 8);
+		return normalizar(s, 0.4);
+	}
+
+	/** Leva o fim do som a zero aos poucos, para não terminar com um estalo. */
+	private static void esmaecerFim(double[] s, int taxa, int ms) {
+		int n = Math.min(s.length, taxa * ms / 1000);
+		for (int i = 0; i < n; i++) {
+			s[s.length - 1 - i] *= (double) i / n;
+		}
+	}
+
 	/** Soma um baque grave (senoide que cai de tom) no começo do som. */
 	private static void baque(double[] s, int taxa, double frequencia, double volume, double decaimento) {
 		double fase = 0;

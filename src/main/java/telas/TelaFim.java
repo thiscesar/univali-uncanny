@@ -8,6 +8,7 @@ import java.util.Random;
 
 import audio.Audio;
 import audio.Efeito;
+import audio.SonsInterface;
 import audio.Sintetizador;
 import dados.Recursos;
 import jogo.Partida;
@@ -50,7 +51,7 @@ public abstract class TelaFim implements Tela {
 
 	protected float tempo = 0;
 	private boolean carimbou = false;
-	private Efeito somCarimbo, somPassar, somClique;
+	private Efeito somCarimbo;
 
 	protected TelaFim(GerenciadorTelas gerenciador, Partida.Estatisticas estatisticas, String frase) {
 		this.gerenciador = gerenciador;
@@ -81,6 +82,15 @@ public abstract class TelaFim implements Tela {
 	protected void desenharJuntoDoTitulo(Overlay2D o, float x, float y, float escala) {
 	}
 
+	/** Algo por cima dos textos e embaixo dos botões (o confete). */
+	protected void desenharPorCima(Overlay2D o, int w, int h) {
+	}
+
+	/** Se a lâmpada falhando escurece a tela de vez em quando (o clima de terror). */
+	protected boolean luzFalhando() {
+		return true;
+	}
+
 	/** Um som a mais na entrada (além da pancada do carimbo). */
 	protected void tocarEntrada(Audio audio) {
 	}
@@ -93,8 +103,6 @@ public abstract class TelaFim implements Tela {
 		gerenciador.entrada().prenderCursor(false);
 		Audio audio = gerenciador.audio();
 		somCarimbo = audio.criarEfeito("pancada do carimbo", Sintetizador.pancada(44100), 44100);
-		somPassar = audio.carregarEfeito("audio/menu_passar.ogg");
-		somClique = audio.carregarEfeito("audio/menu_clique.ogg");
 		tocarEntrada(audio);
 	}
 
@@ -120,10 +128,10 @@ public abstract class TelaFim implements Tela {
 		posicionarBotoes(gerenciador.larguraJanela(), gerenciador.alturaJanela());
 		Botao acionado = botoes.atualizar(gerenciador.entrada());
 		if (botoes.focoMudou()) {
-			gerenciador.audio().tocar(somPassar, 0.6f);
+			SonsInterface.passar(gerenciador.audio());
 		}
 		if (acionado != null) {
-			gerenciador.audio().tocar(somClique, 0.9f);
+			SonsInterface.clique(gerenciador.audio());
 		}
 		if (acionado == tentarDeNovo) {
 			// a mesma seed: a tela de carregamento reaproveita o mundo, sem rodar o AG de novo
@@ -169,11 +177,12 @@ public abstract class TelaFim implements Tela {
 		desenharFundo(o, w, h);
 		desenharTitulo(o, w, h, dx, dy);
 		desenharTextos(o, w, h);
+		desenharPorCima(o, w, h);
 		if (tempo >= BOTOES) {
 			posicionarBotoes(w, h);
 			botoes.desenhar(o);
 		}
-		atmosfera.desenharEfeitos(o, w, h);
+		atmosfera.desenharEfeitos(o, w, h, luzFalhando());
 
 		// clarão do carimbo
 		if (carimbou && tempo - CARIMBO < 0.25f) {

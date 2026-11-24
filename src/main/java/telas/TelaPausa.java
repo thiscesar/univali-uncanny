@@ -4,7 +4,7 @@ import static org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE;
 
 import java.awt.Color;
 
-import audio.Efeito;
+import audio.SonsInterface;
 import dados.Recursos;
 import render.Botao;
 import render.GrupoBotoes;
@@ -43,7 +43,6 @@ public class TelaPausa implements Tela {
 	private boolean desistiu = false;
 
 	private Painel painel = null;
-	private Efeito somPassar, somClique;
 
 	public TelaPausa(GerenciadorTelas gerenciador, long seed) {
 		this.gerenciador = gerenciador;
@@ -62,8 +61,6 @@ public class TelaPausa implements Tela {
 		gerenciador.definirTitulo("PAUSADO");
 		gerenciador.entrada().prenderCursor(false);
 		gerenciador.audio().pausarTudo();
-		somPassar = gerenciador.audio().carregarEfeito("audio/menu_passar.ogg");
-		somClique = gerenciador.audio().carregarEfeito("audio/menu_clique.ogg");
 	}
 
 	@Override
@@ -81,6 +78,7 @@ public class TelaPausa implements Tela {
 		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
 		if (painel != null) {
 			if (painel.atualizar(gerenciador.entrada(), w, h, diftime)) {
+				SonsInterface.clique(gerenciador.audio()); // Salvar, Cancelar ou ESC
 				painel = null;
 			}
 			return;
@@ -96,8 +94,8 @@ public class TelaPausa implements Tela {
 		GrupoBotoes grupo = confirmando ? confirmacao : botoes;
 		posicionar(grupo, w, h);
 		Botao acionado = grupo.atualizar(gerenciador.entrada());
-		if (grupo.focoMudou()) gerenciador.audio().tocar(somPassar, 0.6f);
-		if (acionado != null) gerenciador.audio().tocar(somClique, 0.9f);
+		if (grupo.focoMudou()) SonsInterface.passar(gerenciador.audio());
+		if (acionado != null) SonsInterface.clique(gerenciador.audio());
 
 		if (acionado == continuar) {
 			gerenciador.fecharSobreposicao();
