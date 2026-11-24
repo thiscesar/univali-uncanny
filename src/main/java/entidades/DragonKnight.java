@@ -74,6 +74,8 @@ public class DragonKnight extends Object3D {
 
 	/** Quantas provas o jogador já tem: as aparições ficam mais frequentes (as provas vêm depois). */
 	public int provasColetadas = 0;
+	/** A lanterna do jogador está ligada? A luz o atrai: a próxima aparição chega mais cedo. */
+	public boolean lanternaLigada = false;
 	/** Enquanto falso, ele nem conta o tempo (a partida começa dentro da Univali, onde ele não entra). */
 	public boolean ativo = true;
 	/** As paredes da Univali: ele não surge a menos de 25 m delas (null = sem zona segura). */
@@ -126,7 +128,7 @@ public class DragonKnight extends Object3D {
 
 		switch (estado) {
 		case AUSENTE -> {
-			cronometro -= dt;
+			cronometro -= dt * (lanternaLigada ? Regras.LANTERNA_ATRAI : 1);
 			if (cronometro <= 0) {
 				float[] lugar = sortearLugar();
 				if (lugar == null) {

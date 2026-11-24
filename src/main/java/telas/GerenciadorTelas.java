@@ -5,8 +5,13 @@ import static org.lwjgl.glfw.GLFW.glfwSetWindowShouldClose;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowSizeCallback;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowTitle;
 
+import java.awt.Color;
+
 import audio.Audio;
+import dados.Recursos;
 import entrada.Entrada;
+import render.Identidade;
+import render.Overlay2D;
 
 /**
  * Guarda a tela atual e faz as trocas entre telas.
@@ -18,6 +23,9 @@ import entrada.Entrada;
  * Tela sobreposta: uma segunda tela desenhada por cima da atual (a pausa sobre a partida).
  * Enquanto ela existe, só ela é atualizada: a tela de baixo fica congelada, mas continua
  * sendo desenhada.
+ *
+ * Transições: ao trocar de tela, a atual escurece até o preto (congelada) e a nova clareia a
+ * partir dele. A sobreposição (a pausa) abre e fecha sem transição.
  */
 public class GerenciadorTelas {
 
@@ -34,6 +42,13 @@ public class GerenciadorTelas {
 	private Tela proxima;
 	private Tela proximaSobreposta;
 	private boolean fecharSobreposta = false;
+
+	/** Duração do escurecer (antes da troca) e do clarear (depois), em segundos. */
+	static final float ESCURECER = 0.25f, CLAREAR = 0.35f;
+	/** Sem janela (testes), as trocas são imediatas, como antes. */
+	private boolean transicoes;
+	/** Tempo escurecendo e clareando (-1 = não está). */
+	private float saindo = -1, entrando = -1;
 
 	/** Tamanho da área de desenho do OpenGL, em pixels reais (usado no glViewport e na projeção 3D). */
 	private int largura = 1;
@@ -55,7 +70,9 @@ public class GerenciadorTelas {
 		this.janela = janela;
 		this.entrada = entrada;
 		this.audio = audio;
+		this.transicoes = janela != 0;
 		if (janela != 0) {
+			Identidade.aplicar(janela); // ícone da janela e cursor do jogo
 			int[] w = new int[1], h = new int[1];
 			glfwGetWindowSize(janela, w, h);
 			redimensionarJanela(w[0], h[0]);
@@ -68,6 +85,21 @@ public class GerenciadorTelas {
 	/** Agenda a troca da tela atual. Uma sobreposição aberta é fechada junto. */
 	public void trocarPara(Tela nova) {
 		proxima = nova;
+		if (transicoes && atual != null && saindo < 0) {
+			saindo = 0; // escurece primeiro; a troca acontece quando estiver tudo preto
+		}
+	}
+
+	/** Liga ou desliga as transições (os testes usam para conferir o escurecer e o clarear). */
+	void ligarTransicoes(boolean ligar) {
+		transicoes = ligar;
+	}
+
+	/** De 0 a 1: o quanto a tela está coberta de preto pela transição agora. */
+	public float escuridao() {
+		if (saindo >= 0) return Math.min(1, saindo / ESCURECER);
+		if (entrando >= 0) return Math.max(0, 1 - entrando / CLAREAR);
+		return 0;
 	}
 
 	/** Agenda uma tela por cima da atual (a de baixo congela). */
@@ -89,9 +121,11 @@ public class GerenciadorTelas {
 				sobreposta = null;
 			}
 		}
-		if (proxima != null) {
+		if (proxima != null && (saindo < 0 || saindo >= ESCURECER)) {
 			Tela nova = proxima;
 			proxima = null;
+			saindo = -1;
+			entrando = transicoes ? 0 : -1;
 			if (sobreposta != null) {
 				sobreposta.sair();
 				sobreposta = null;
@@ -117,6 +151,14 @@ public class GerenciadorTelas {
 
 	public void atualizar(long diftime) {
 		long dt = Math.min(diftime, DIFTIME_MAXIMO);
+		if (saindo >= 0) {
+			saindo += dt / 1000f; // escurecendo: as telas ficam congeladas até a troca
+			return;
+		}
+		if (entrando >= 0) {
+			entrando += dt / 1000f;
+			if (entrando >= CLAREAR) entrando = -1;
+		}
 		if (sobreposta != null) {
 			sobreposta.atualizar(dt);
 		} else if (atual != null) {
@@ -130,6 +172,13 @@ public class GerenciadorTelas {
 		}
 		if (sobreposta != null) {
 			sobreposta.desenhar();
+		}
+		float preto = escuridao();
+		if (janela != 0 && preto > 0) {
+			Overlay2D o = Recursos.overlay();
+			o.iniciar(larguraJanela, alturaJanela);
+			o.retangulo(0, 0, larguraJanela, alturaJanela, new Color(0f, 0f, 0f, preto));
+			o.finalizar();
 		}
 	}
 

@@ -2,7 +2,7 @@ package shaders;
 
 import util.Caminhos;
 
-/** Shader que amplia a cena pequena do modo PS1 e pode reduzir as cores com pontilhado. */
+/** Shader que leva a cena à tela: amplia a imagem do modo PS1 e aplica vinheta, granulação e aberração. */
 public class ShaderPs1Tela extends ShaderProgram {
 
 	public ShaderPs1Tela() {

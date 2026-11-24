@@ -35,9 +35,12 @@ import entidades.Prova;
 import entidades.Tiro;
 import entidades.Jogador;
 import entrada.Entrada;
+import jogo.MaterialChao;
 import jogo.Objetivos;
 import jogo.Partida;
 import jogo.Regras;
+import jogo.SustosFalsos;
+import jogo.Tutorial;
 import md2.Animador;
 import mundo.ConsultaAltura;
 import mundo.Mundo;
@@ -51,6 +54,7 @@ import render.DesenhoMonstro;
 import render.DesenhoPlacas;
 import render.DesenhoPredio;
 import render.DesenhoProvas;
+import render.DesenhoSilhueta;
 import render.FiltroPs1;
 import render.Lanterna;
 import render.Overlay2D;
@@ -95,7 +99,6 @@ public class TelaJogo implements Tela {
 	static final String PASTA_MONSTRO = "modelos/dragonknight";
 	static final float ALTURA_MONSTRO = 2.2f;
 
-	private static final float CAMPO_DE_VISAO = 70f; // graus, na vertical
 	private static final float PERTO = 0.1f;
 	// a neblina esconde tudo antes de ~50 m; só os feixes das provas (neblina mais fraca) vão além
 	private static final float LONGE = 120f;
@@ -117,6 +120,10 @@ public class TelaJogo implements Tela {
 	/** Modo PS1: a cena é desenhada pequena e ampliada sem suavização (liga e desliga nas Opções). */
 	private final FiltroPs1 filtroPs1 = new FiltroPs1();
 	private boolean ps1;
+	/** Campo de visão vertical, em graus (das Opções). */
+	private float campoVisao;
+	/** De 0 a 1: o quanto o monstro está em cena (separa as cores e ondula a imagem). */
+	private float presencaMonstro = 0;
 
 	/** Câmera livre de depuração (F4), começando onde o jogador estiver. */
 	private CameraLivre cameraLivre = null;
@@ -128,12 +135,22 @@ public class TelaJogo implements Tela {
 
 	// sons
 	private final Random random = new Random();
-	private Efeito[] passos;
+	/** Quatro variações de passo para cada material do chão. */
+	private final java.util.Map<MaterialChao, Efeito[]> passos = new java.util.EnumMap<>(MaterialChao.class);
 	private Efeito respiracao;
 	private Efeito cliqueLanterna;
 	private SomAmbiente somAmbiente;
 	private SomTocando somRespiracao = null;
 	private SomTocando somTeste = null;
+
+	// as dicas do começo e os sustos falsos
+	private final Tutorial tutorial = new Tutorial();
+	private float andado = 0, ultimoX, ultimoZ;
+	private SustosFalsos sustos;
+	private DesenhoSilhueta desenhoSilhueta;
+	/** A silhueta em cena: {x, y, z, guinada, segundos na tela}; null = nenhuma. */
+	private float[] silhueta = null;
+	private Efeito somGalho;
 
 	// o Dragon Knight
 	private final DragonKnight monstro;
@@ -226,10 +243,21 @@ public class TelaJogo implements Tela {
 		Recursos.aplicarModoPs1(ps1);
 
 		Audio audio = gerenciador.audio();
-		passos = new Efeito[4];
-		for (int i = 0; i < passos.length; i++) {
-			passos[i] = audio.carregarEfeito("audio/passo_" + (i + 1) + ".ogg");
+		campoVisao = Opcoes.atual().campoVisao;
+		for (MaterialChao m : MaterialChao.values()) {
+			Efeito[] variacoes = new Efeito[4];
+			for (int i = 0; i < variacoes.length; i++) {
+				long semente = m.ordinal() * 10L + i;
+				variacoes[i] = efeitoOuSintetizado("audio/passo_" + m.name().toLowerCase() + "_" + (i + 1) + ".ogg",
+						() -> sintetizarPasso(m, semente));
+			}
+			passos.put(m, variacoes);
 		}
+		somGalho = efeitoOuSintetizado("audio/galho_quebrando.ogg", () -> Sintetizador.galho(44100, 3));
+		sustos = new SustosFalsos(mundo.seed + 5);
+		desenhoSilhueta = new DesenhoSilhueta();
+		ultimoX = jogador.x;
+		ultimoZ = jogador.z;
 		respiracao = audio.carregarEfeito("audio/respiracao.ogg");
 		cliqueLanterna = audio.carregarEfeito("audio/lanterna_clique.ogg");
 		somAmbiente = new SomAmbiente(audio);
@@ -316,6 +344,15 @@ public class TelaJogo implements Tela {
 		});
 	}
 
+	private static short[] sintetizarPasso(MaterialChao m, long semente) {
+		return switch (m) {
+		case GRAMA -> Sintetizador.passoFolhas(44100, semente);
+		case TERRA -> Sintetizador.passoTerra(44100, semente);
+		case AGUA -> Sintetizador.passoAgua(44100, semente);
+		case PISO -> Sintetizador.passoPiso(44100, semente);
+		};
+	}
+
 	/** O som do arquivo; sem o arquivo, um substituto gerado por código (para o monstro não ficar mudo). */
 	private Efeito efeitoOuSintetizado(String arquivo, java.util.function.Supplier<short[]> substituto) {
 		Audio audio = gerenciador.audio();
@@ -340,6 +377,7 @@ public class TelaJogo implements Tela {
 		desenhoProvas.liberar();
 		desenhoPlacas.liberar();
 		desenhoPredio.liberar();
+		desenhoSilhueta.liberar();
 		for (SomTocando s : sussurros.values()) {
 			audio.parar(s);
 		}
@@ -402,6 +440,7 @@ public class TelaJogo implements Tela {
 			alternarSomTeste();
 		}
 		if (entrada.foiPressionada(GLFW_KEY_F)) {
+			tutorial.registrar(Tutorial.Acao.LANTERNA);
 			lanterna.alternar();
 			gerenciador.audio().tocar(cliqueLanterna, 0.8f);
 		}
@@ -464,6 +503,7 @@ public class TelaJogo implements Tela {
 			escopeta.recarregar();
 		}
 		if (entrada.foiPressionada(GLFW_KEY_E)) {
+			tutorial.registrar(Tutorial.Acao.USOU);
 			Prova prova = partida.provaAlcancavel(jogador.x, jogador.z);
 			CaixaMunicao perto = caixaAlcancavel();
 			if (prova != null) {
@@ -615,6 +655,7 @@ public class TelaJogo implements Tela {
 	 * deixa o seu efeito onde parou. A chama, o clarão, o tremor e a fumaça saem da arma.
 	 */
 	private void atirar() {
+		tutorial.registrar(Tutorial.Acao.ATIROU);
 		Camera c = jogador.camera();
 		float[] origem = { c.x, c.y, c.z };
 		float[] frente = { c.frente.x, c.frente.y, c.frente.z };
@@ -668,7 +709,13 @@ public class TelaJogo implements Tela {
 		// o Dragon Knight acorda na primeira vez que o jogador põe os pés fora do prédio
 		if (!monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z)) {
 			monstro.ativo = true;
+			tutorial.registrar(Tutorial.Acao.SAIU);
 		}
+		andado += (float) Math.hypot(jogador.x - ultimoX, jogador.z - ultimoZ);
+		ultimoX = jogador.x;
+		ultimoZ = jogador.z;
+		if (andado > 2) tutorial.registrar(Tutorial.Acao.ANDOU);
+		tutorial.atualizar(dt);
 		tempoMensagem = Math.max(0, tempoMensagem - dt);
 		for (Prova p : partida.provas()) {
 			p.SimulaSe(Math.round(dt * 1000));
@@ -720,10 +767,54 @@ public class TelaJogo implements Tela {
 	}
 
 	/** O monstro, o batimento, a lanterna em pânico e, no fim do ataque, o susto. */
+	/**
+	 * Os sustos falsos, só na floresta e com o monstro fora de cena. A silhueta aparece ao lado
+	 * do que o jogador olha (fora do facho da lanterna) e some se a luz a pegar, se ele chegar
+	 * perto, se o monstro aparecer ou depois de um tempo. O galho quebra logo atrás dele.
+	 */
+	private void atualizarSustosFalsos(float dt) {
+		boolean naFloresta = monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z) && tempoEntrega < 0;
+		boolean monstroEmCena = monstro.estado() != DragonKnight.Estado.AUSENTE;
+		Camera c = jogador.camera();
+		if (silhueta != null) {
+			silhueta[4] += dt;
+			float d = (float) Math.hypot(silhueta[0] - c.x, silhueta[2] - c.z);
+			if (monstroEmCena || !naFloresta || d < SustosFalsos.SILHUETA_SOME_PERTO
+					|| silhueta[4] > SustosFalsos.SILHUETA_DURACAO
+					|| SustosFalsos.iluminado(lanterna.ligada(), c.x, c.z, c.frente.x, c.frente.z, silhueta[0], silhueta[2])) {
+				silhueta = null;
+			}
+			return;
+		}
+		SustosFalsos.Tipo tipo = sustos.atualizar(dt, naFloresta, monstroEmCena);
+		Random r = sustos.random();
+		float olhando = (float) Math.atan2(c.frente.x, c.frente.z);
+		if (tipo == SustosFalsos.Tipo.SILHUETA) {
+			for (int tentativa = 0; tentativa < 20 && silhueta == null; tentativa++) {
+				// na borda do facho da lanterna, para um dos lados: vista de relance, meio iluminada
+				float desvio = SustosFalsos.BORDA_MINIMA + r.nextFloat() * (SustosFalsos.BORDA_MAXIMA - SustosFalsos.BORDA_MINIMA);
+				float angulo = olhando + (r.nextBoolean() ? 1 : -1) * (float) Math.toRadians(desvio);
+				float d = SustosFalsos.SILHUETA_PERTO + r.nextFloat() * (SustosFalsos.SILHUETA_LONGE - SustosFalsos.SILHUETA_PERTO);
+				float x = c.x + (float) Math.sin(angulo) * d, z = c.z + (float) Math.cos(angulo) * d;
+				if (!mundo.chao.dentroDoMapa(x, z, 25) || mundo.chao.alturaEm(x, z) < 0.3f || mundo.colisao.colide(x, z, 0.5f)
+						|| !mundo.colisao.linhaLivre(c.x, c.z, x, z) || mundo.predio.dentro(x, z)) {
+					continue;
+				}
+				silhueta = new float[] { x, mundo.chao.alturaEm(x, z), z, (float) Math.atan2(c.x - x, c.z - z), 0 };
+			}
+		} else if (tipo == SustosFalsos.Tipo.GALHO) {
+			float angulo = olhando + (float) Math.PI + (r.nextFloat() - 0.5f) * 1.0f; // atrás, até 30 graus para o lado
+			float d = 4 + r.nextFloat() * 3;
+			float x = c.x + (float) Math.sin(angulo) * d, z = c.z + (float) Math.cos(angulo) * d;
+			gerenciador.audio().tocar3D(somGalho, x, mundo.chao.alturaEm(x, z) + 0.3f, z, 1f, false, 3f);
+		}
+	}
+
 	private void atualizarMonstro(long diftime) {
 		float dt = diftime / 1000f;
 		Camera olhos = jogador.camera(); // ele mira o jogador, mesmo com a câmera livre ligada
 		monstro.definirAlvo(olhos.x, olhos.y, olhos.z, olhos.frente.x, olhos.frente.z);
+		monstro.lanternaLigada = lanterna.ligada(); // a luz o atrai mais cedo
 		monstro.SimulaSe(diftime);
 		tremor = Math.max(0, tremor - dt * 2.5f);
 
@@ -731,6 +822,14 @@ public class TelaJogo implements Tela {
 		boolean ameacando = estado == DragonKnight.Estado.SURGINDO || estado == DragonKnight.Estado.ENCARANDO;
 		float progresso = progressoContagem();
 		lanterna.definirPanico(ameacando ? 0.3f + 0.7f * progresso : 0);
+		float presenca = switch (estado) {
+		case SURGINDO -> 0.6f;
+		case ENCARANDO -> 0.45f + 0.55f * progresso;
+		case ATACANDO -> 1f;
+		default -> 0f;
+		};
+		presencaMonstro += (presenca - presencaMonstro) * Math.min(1, dt * 4);
+		atualizarSustosFalsos(dt);
 		if (ameacando) {
 			// batimento acelerando: de 0,8 s entre batidas até 0,3 s no fim da contagem
 			proximaBatida -= dt;
@@ -787,18 +886,27 @@ public class TelaJogo implements Tela {
 		boolean correr = entrada.estaPressionada(GLFW_KEY_LEFT_SHIFT) || entrada.estaPressionada(GLFW_KEY_RIGHT_SHIFT);
 		jogador.comandar(frente, lado, correr);
 
-		// mouse: o y da tela cresce para baixo, por isso o sinal invertido na arfagem
+		// mouse: o y da tela cresce para baixo, por isso o sinal invertido na arfagem (a não ser
+		// que o jogador peça o eixo invertido nas opções)
 		float sensibilidade = CameraLivre.SENSIBILIDADE_MOUSE * Opcoes.atual().sensibilidade;
-		jogador.girar(entrada.deltaMouse().x * sensibilidade, -entrada.deltaMouse().y * sensibilidade);
+		float sinalY = Opcoes.atual().inverterY ? 1 : -1;
+		jogador.girar(entrada.deltaMouse().x * sensibilidade, sinalY * entrada.deltaMouse().y * sensibilidade);
 	}
 
-	/** Passos a cada passo dado, com volume variando um pouco; respiração em loop com estamina baixa. */
+	/**
+	 * Passos a cada passo dado, com o som do chão (folhas, terra, água ou o piso da Univali) e
+	 * volume variando um pouco; respiração em loop com estamina baixa.
+	 */
 	private void tocarSonsDoJogador() {
 		Audio audio = gerenciador.audio();
-		for (int i = 0; i < jogador.passosNoQuadro(); i++) {
-			Efeito passo = passos[random.nextInt(passos.length)];
-			float volume = (jogador.correndo() ? 0.75f : 0.5f) * (0.85f + random.nextFloat() * 0.3f);
-			audio.tocar(passo, volume);
+		if (jogador.passosNoQuadro() > 0) {
+			MaterialChao material = MaterialChao.em(mundo.chao, jogador.x, jogador.z,
+					mundo.predio.dentro(jogador.x, jogador.z), naTrilha(jogador.x, jogador.z));
+			Efeito[] variacoes = passos.get(material);
+			for (int i = 0; i < jogador.passosNoQuadro(); i++) {
+				float volume = (jogador.correndo() ? 0.75f : 0.5f) * (0.85f + random.nextFloat() * 0.3f);
+				audio.tocar(variacoes[random.nextInt(variacoes.length)], volume);
+			}
 		}
 		if (jogador.ofegante() && !audio.estaTocando(somRespiracao)) {
 			somRespiracao = audio.tocar(respiracao, 0.7f);
@@ -807,6 +915,18 @@ public class TelaJogo implements Tela {
 			audio.parar(somRespiracao); // só para quando já recuperou bem (não fica liga-desliga)
 			somRespiracao = null;
 		}
+	}
+
+	/** O ponto está numa trilha? (Os pontos delas ficam a cada ~1 m: basta estar perto de um.) */
+	private boolean naTrilha(float x, float z) {
+		float alcance = mundo.fase.trilhas().isEmpty() ? 0 : 1.3f;
+		for (List<fase.Ponto> t : mundo.fase.trilhas()) {
+			for (fase.Ponto p : t) {
+				float dx = p.x() - x, dz = p.z() - z;
+				if (dx * dx + dz * dz < alcance * alcance) return true;
+			}
+		}
+		return false;
 	}
 
 	private void alternarCameraLivre() {
@@ -850,8 +970,9 @@ public class TelaJogo implements Tela {
 
 	@Override
 	public void desenhar() {
+		// a cena vai para uma imagem à parte: pequena no modo PS1, do tamanho da janela fora dele
+		filtroPs1.comecar(gerenciador.largura(), gerenciador.altura(), ps1);
 		if (ps1) {
-			filtroPs1.comecar(gerenciador.largura(), gerenciador.altura());
 			ambiente.resolucaoPs1[0] = filtroPs1.largura();
 			ambiente.resolucaoPs1[1] = filtroPs1.altura();
 		}
@@ -874,8 +995,11 @@ public class TelaJogo implements Tela {
 			desenharArvores();
 		}
 		desenharPedras();
+		if (silhueta != null) {
+			desenhoSilhueta.desenhar(silhueta[0], silhueta[1], silhueta[2], silhueta[3], bufferProjecao, bufferVisao, ambiente);
+		}
 		Camera camera = cameraAtual();
-		int alturaImagem = ps1 ? filtroPs1.altura() : gerenciador.altura();
+		int alturaImagem = filtroPs1.altura();
 		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, alturaImagem);
 		desenharCaixas();
 		desenhoPlacas.desenhar(mundo.placas, mundo.chao, bufferProjecao, bufferVisao, ambiente);
@@ -886,9 +1010,12 @@ public class TelaJogo implements Tela {
 		if (tempoSusto < 0) { // no susto, só a cara dele
 			desenhoEscopeta.desenhar(escopeta, ambiente, gerenciador.proporcao(), alturaImagem);
 		}
-		if (ps1) {
-			filtroPs1.terminar(gerenciador.largura(), gerenciador.altura()); // amplia sem suavização
-		}
+		// a passagem para a tela: amplia (modo PS1), escurece os cantos, granula e, com o monstro, distorce
+		filtroPs1.vinheta = 1;
+		filtroPs1.granulacao = 1;
+		filtroPs1.aberracao = presencaMonstro;
+		filtroPs1.tempo = tempo;
+		filtroPs1.terminar(gerenciador.largura(), gerenciador.altura());
 		if (fim == Fim.DERROTA && fotoFim == null) {
 			fotoFim = fotografar(); // antes do HUD: só a cena
 		}
@@ -1021,6 +1148,11 @@ public class TelaJogo implements Tela {
 			Texto.desenhar(o, "E: pegar cartuchos", cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200),
 					Texto.Alinhamento.CENTRO);
 		}
+		String dica = tutorial.texto();
+		if (dica != null) { // as dicas do começo, esmaecidas, embaixo
+			Texto.desenhar(o, dica, cx, h * 0.88f, Math.round(18 * escala),
+					new Color(215, 205, 185, Math.round(175 * tutorial.alfa())), Texto.Alinhamento.CENTRO);
+		}
 		if (mensagem != null && tempoMensagem > 0) {
 			int alfa = Math.round(255 * Math.min(1, tempoMensagem / 0.5f));
 			Texto.desenhar(o, mensagem, cx, h * 0.68f, Math.round(24 * escala), new Color(235, 215, 190, alfa),
@@ -1145,7 +1277,7 @@ public class TelaJogo implements Tela {
 	 * frustum vem do campo de visão, e a largura é a altura vezes a proporção.
 	 */
 	private Matrix4f projecao() {
-		float topo = PERTO * (float) Math.tan(Math.toRadians(CAMPO_DE_VISAO / 2));
+		float topo = PERTO * (float) Math.tan(Math.toRadians(campoVisao / 2));
 		float direita = topo * gerenciador.proporcao();
 		return Utils3D.setFrustum(-direita, direita, -topo, topo, PERTO, LONGE);
 	}

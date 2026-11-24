@@ -1,12 +1,21 @@
 #version 330 core
 
-// Modo PS1: amplia a imagem pequena sem suavizar (cada pixel vira um bloco). Opcionalmente reduz
-// as cores a poucos níveis por canal, com pontilhado ordenado (Bayer 4 x 4), como o PlayStation
-// fazia para esconder as faixas de cor (niveis < 2 desliga).
+// A cena 3D, que foi desenhada numa imagem à parte, passa por aqui antes de ir para a tela:
+//  - modo PS1: a imagem é pequena e é ampliada sem suavizar (cada pixel vira um bloco).
+//    Opcionalmente reduz as cores com pontilhado ordenado (Bayer 4 x 4), como o PlayStation
+//    fazia (niveis < 2 desliga);
+//  - vinheta: os cantos escurecem, o olho vai para o centro;
+//  - granulação de filme: um ruído fraco que muda a cada quadro;
+//  - presença do monstro: aberração cromática (o vermelho e o azul se separam para as bordas)
+//    e uma ondulação leve da imagem.
 
 uniform sampler2D cena;
-uniform vec2 resolucao;  // tamanho da imagem pequena
-uniform float niveis;    // níveis por canal (32 = 5 bits, como no console; 0 = sem redução)
+uniform vec2 resolucao;     // tamanho da imagem da cena
+uniform float niveis;       // níveis por canal (32 = 5 bits, como no console; 0 = sem redução)
+uniform float tempo;        // segundos, para o ruído e a ondulação mudarem
+uniform float vinheta;      // 0 a 1
+uniform float granulacao;   // 0 a 1
+uniform float aberracao;    // 0 a 1: o quanto o monstro está presente
 
 in vec2 uv;
 
@@ -14,14 +23,38 @@ out vec4 out_Color;
 
 const int BAYER[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
 
+float hash(vec2 p){
+	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// lê a cena sem suavização, no pixel que contém a coordenada
+vec3 ler(vec2 c){
+	ivec2 p = ivec2(clamp(floor(c * resolucao), vec2(0.0), resolucao - 1.0));
+	return texelFetch(cena, p, 0).rgb;
+}
+
 void main(void){
-	ivec2 pixel = ivec2(floor(uv * resolucao));          // o pixel da imagem pequena
-	vec3 c = texelFetch(cena, pixel, 0).rgb;              // lido sem suavização
-	if (niveis < 2.0) {
-		out_Color = vec4(c, 1.0);
-		return;
+	vec2 c = uv;
+	// ondulação: as linhas da imagem se deslocam um pouco para os lados
+	c.x += sin(c.y * 24.0 + tempo * 6.0) * 0.0035 * aberracao;
+
+	// aberração cromática: vermelho e azul lidos um pouco para fora e para dentro, mais nas bordas
+	vec2 desvio = (c - 0.5) * 0.012 * aberracao;
+	vec3 cor = vec3(ler(c + desvio).r, ler(c).g, ler(c - desvio).b);
+
+	if (niveis >= 2.0) {
+		ivec2 pixel = ivec2(floor(c * resolucao));
+		float limiar = (float(BAYER[(pixel.y % 4) * 4 + (pixel.x % 4)]) + 0.5) / 16.0;
+		cor = floor(cor * (niveis - 1.0) + limiar) / (niveis - 1.0);
 	}
-	float limiar = (float(BAYER[(pixel.y % 4) * 4 + (pixel.x % 4)]) + 0.5) / 16.0;
-	vec3 q = floor(c * (niveis - 1.0) + limiar) / (niveis - 1.0);
-	out_Color = vec4(q, 1.0);
+
+	// vinheta: d vai de 0 no centro a 1 nos cantos
+	float d = length(uv - 0.5) * 1.414;
+	cor *= 1.0 - vinheta * 0.6 * smoothstep(0.35, 1.05, d);
+
+	// granulação: um valor por pixel da janela, sorteado de novo a cada quadro
+	float ruido = hash(gl_FragCoord.xy + fract(tempo * 7.31) * 517.0) - 0.5;
+	cor += ruido * 0.045 * granulacao;
+
+	out_Color = vec4(cor, 1.0);
 }

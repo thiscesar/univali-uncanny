@@ -7,9 +7,11 @@ Conversões úteis:
   MP3 para OGG:     ffmpeg -i musica.mp3 -c:a libvorbis -q:a 5 musica_menu.ogg
   Estéreo para mono: ffmpeg -i grito.wav -ac 1 monstro_grito.ogg
 
-Arquivos esperados: musica_menu.ogg, menu_passar.ogg, menu_clique.ogg, ambiente_floresta.ogg, passo_1..4.ogg,
+Arquivos esperados: musica_menu.ogg, menu_passar.ogg, menu_clique.ogg, ambiente_floresta.ogg,
+passo_grama_1..4.ogg, passo_terra_1..4.ogg, passo_agua_1..4.ogg, passo_piso_1..4.ogg,
 respiracao.ogg, lanterna_clique.ogg, galho_quebrando.ogg, coruja.ogg, escopeta_tiro.ogg, escopeta_telha.ogg, escopeta_cartucho.ogg,
 escopeta_vazia.ogg, monstro_grito.ogg, monstro_morte.ogg, batimento.ogg,
 sussurro.ogg, pegar_prova.ogg, sinal_aula.ogg, susto.ogg.
 
-Se um arquivo não existir, o jogo toca silêncio no lugar.
+Se um arquivo não existir, o jogo toca silêncio no lugar (passos, galho, arma, monstro,
+provas e sinal têm um substituto sintetizado por código).

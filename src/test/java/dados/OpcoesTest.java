@@ -23,6 +23,9 @@ class OpcoesTest {
 		o.volumeMusica = 0.1f;
 		o.sensibilidade = 2.5f;
 		o.seed = "4242";
+		o.campoVisao = 85;
+		o.densidadeArvores = 0.6f;
+		o.inverterY = true;
 		o.salvar(arquivo);
 
 		Opcoes lidas = Opcoes.carregar(arquivo);
@@ -30,6 +33,9 @@ class OpcoesTest {
 		assertEquals(0.1f, lidas.volumeMusica, 1e-6);
 		assertEquals(2.5f, lidas.sensibilidade, 1e-6);
 		assertEquals("4242", lidas.seed);
+		assertEquals(85f, lidas.campoVisao, 1e-6);
+		assertEquals(0.6f, lidas.densidadeArvores, 1e-6);
+		assertTrue(lidas.inverterY);
 	}
 
 	@Test
@@ -42,11 +48,12 @@ class OpcoesTest {
 	@Test
 	void valoresInvalidosSaoCorrigidos() throws IOException {
 		File arquivo = new File(pasta, "config.properties");
-		Files.writeString(arquivo.toPath(), "volume.geral=7\nvolume.musica=abc\nmapa.seed=12x\n");
+		Files.writeString(arquivo.toPath(), "volume.geral=7\nvolume.musica=abc\nmapa.seed=12x\nvideo.campoVisao=500\n");
 		Opcoes o = Opcoes.carregar(arquivo);
 		assertEquals(1f, o.volumeGeral, 1e-6, "limitado ao máximo");
 		assertEquals(0.7f, o.volumeMusica, 1e-6, "inválido volta ao padrão");
 		assertEquals("", o.seed);
+		assertEquals(Opcoes.CAMPO_VISAO_MAXIMO, o.campoVisao, 1e-6);
 	}
 
 	@Test

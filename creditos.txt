@@ -7,20 +7,32 @@ Disciplina de Computação Gráfica, Univali
 
 # Base
 Projeto de OpenGL do professor da disciplina
-LWJGL 3, licença BSD
+
+# Bibliotecas
+LWJGL 3.3.3 · equipe LWJGL · BSD 3 cláusulas · lwjgl.org
+GLFW (janela e entrada) · Marcus Geelnard e Camilla Löwy · zlib · glfw.org
+OpenAL Soft (som 3D) · Chris Robinson · LGPL · openal-soft.org
+stb_vorbis (leitura de OGG) · Sean Barrett · domínio público / MIT · github.com/nothings/stb
+lwjgl_util 2.9.1 (matrizes e vetores) · equipe LWJGL · BSD 3 cláusulas · lwjgl.org
 
 # Modelos
-Árvores 3D e pedras: geradas por código (gerador próprio em estilo PS1)
-Dragon Knight: modelo de Magarnigal (1998)
-Skin vermelha do Dragon Knight: Deranged
-Formato MD2: Quake II, id Software
+Dragon Knight (MD2) · Magarnigal, 1998 · ver modelos/dragonknight/leiame_original.txt · magarn.3dpalette.com
+Skin vermelha do Dragon Knight · Deranged · idem · 3dpalette.com/deranged
+Formato MD2 · Quake II, id Software (marca registrada)
+Árvores 3D e pedras · geradas por código (gerador próprio em estilo PS1)
+Escopeta, prédio da Univali e professor · montados por código
 
 # Texturas
-Chão, grama, terra, pedra e árvores: geradas por código (gerador próprio em estilo PS1)
+Chão, grama, terra, pedra e árvores · geradas por código (gerador próprio em estilo PS1)
+Prédio, placas, provas, caixas e silhueta · desenhadas por código (Java2D)
 
 # Imagens
-Logo do Computer on the Beach: evento da Univali
-Foto do campus da Univali: (autor e licença)
+Logo do Computer on the Beach · evento da Univali (uso acadêmico)
+Foto do campus da Univali (fundo do menu) · (autor e licença)
+
+# Sons
+Música do menu · (autor e licença)
+Passos, galho, tiro, monstro, sussurro, sinal e zumbido · sintetizados por código
 
 # Fontes
-Fontes do sistema (provisórias)
+Fontes do sistema (serifada e sem serifa)

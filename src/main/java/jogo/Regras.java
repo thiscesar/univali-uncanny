@@ -30,6 +30,8 @@ public final class Regras {
 	public static final float RAIO_ZONA_SEGURA = 25f;
 	/** Depois de cada prova coletada, a próxima aparição vem em no máximo isto (a floresta reage). */
 	public static final float APARICAO_DEPOIS_DA_PROVA = 15f;
+	/** Com a lanterna ligada, o tempo até a próxima aparição corre essa vez mais rápido (a luz atrai). */
+	public static final float LANTERNA_ATRAI = 1.3f;
 	/** Margem da borda do mapa onde ele não surge (a muralha de árvores). */
 	public static final float MARGEM_BORDA_APARICAO = 20f;
 

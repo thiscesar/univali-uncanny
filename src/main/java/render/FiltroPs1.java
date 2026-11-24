@@ -23,6 +23,10 @@ import shaders.ShaderPs1Tela;
  *
  * Uso: comecar() antes de desenhar a cena e terminar() depois. O HUD vem depois, na
  * resolução da janela, para continuar legível.
+ *
+ * O mesmo caminho serve de pós-processamento: com o modo PS1 desligado, a imagem tem o tamanho
+ * da janela. Nos dois casos, o shader pode escurecer os cantos (vinheta), pôr granulação de
+ * filme e, com o monstro por perto, separar as cores e ondular a imagem (os campos abaixo).
  */
 public class FiltroPs1 {
 
@@ -33,6 +37,11 @@ public class FiltroPs1 {
 	 * TV de tubo o pontilhado se borrava e no monitor vira uma grade. 0 desliga a redução.
 	 */
 	public static final float NIVEIS_COR = 0;
+
+	/** Efeitos da passagem para a tela, de 0 a 1 (0 = desligado). */
+	public float vinheta = 0, granulacao = 0, aberracao = 0;
+	/** Segundos, para a granulação e a ondulação mudarem com o tempo. */
+	public float tempo = 0;
 
 	private int fbo, cor, profundidade;
 	private int largura, altura;
@@ -57,7 +66,12 @@ public class FiltroPs1 {
 
 	/** Passa a desenhar na imagem pequena. larguraTela e alturaTela: o tamanho real da janela. */
 	public void comecar(int larguraTela, int alturaTela) {
-		int[] t = tamanhoBaixo(larguraTela, alturaTela);
+		comecar(larguraTela, alturaTela, true);
+	}
+
+	/** Passa a desenhar na imagem da cena: pequena (modo PS1) ou do tamanho da janela. */
+	public void comecar(int larguraTela, int alturaTela, boolean baixaResolucao) {
+		int[] t = baixaResolucao ? tamanhoBaixo(larguraTela, alturaTela) : new int[] { larguraTela, alturaTela };
 		if (fbo == 0 || t[0] != largura || t[1] != altura) {
 			criar(t[0], t[1]); // primeira vez, ou a janela mudou de tamanho
 		}
@@ -78,6 +92,10 @@ public class FiltroPs1 {
 		glUniform1i(glGetUniformLocation(p, "cena"), 0);
 		glUniform2f(glGetUniformLocation(p, "resolucao"), largura, altura);
 		glUniform1f(glGetUniformLocation(p, "niveis"), NIVEIS_COR);
+		glUniform1f(glGetUniformLocation(p, "tempo"), tempo);
+		glUniform1f(glGetUniformLocation(p, "vinheta"), vinheta);
+		glUniform1f(glGetUniformLocation(p, "granulacao"), granulacao);
+		glUniform1f(glGetUniformLocation(p, "aberracao"), aberracao);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, cor);
 

@@ -217,4 +217,130 @@ public final class Sintetizador {
 		double frequencia = 40 + 40 * Math.exp(-s * 30);
 		return volume * Math.sin(2 * Math.PI * frequencia * s) * Math.exp(-s * 28) * Math.min(1, s * 400);
 	}
+	// ---------- passos e galho ----------
+
+	/** Passo em folhas secas e grama: vários estalinhos agudos espalhados em 0,1 s e um baque abafado. */
+	public static short[] passoFolhas(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] s = new double[taxa * 180 / 1000];
+		for (int k = 0; k < 9; k++) {
+			int inicio = (int) (r.nextDouble() * taxa * 0.11);
+			double volume = 0.3 + r.nextDouble() * 0.5, anterior = 0;
+			for (int i = 0; inicio + i < s.length && i < taxa / 40; i++) {
+				double branco = r.nextDouble() * 2 - 1;
+				s[inicio + i] += (branco - anterior) * volume * Math.exp(-i / (double) taxa * 350);
+				anterior = branco;
+			}
+		}
+		baque(s, taxa, 80, 0.35, 45);
+		return normalizar(s, 0.7);
+	}
+
+	/** Passo em terra e lama: ruído grave (filtrado) e um baque curto. */
+	public static short[] passoTerra(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] s = new double[taxa * 140 / 1000];
+		double grave = 0;
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			grave += 0.08 * ((r.nextDouble() * 2 - 1) - grave); // filtro passa-baixa de um polo
+			s[i] = grave * 3 * Math.exp(-t * 32);
+		}
+		baque(s, taxa, 70, 0.6, 38);
+		return normalizar(s, 0.75);
+	}
+
+	/** Passo na água rasa: um chape (ruído médio que cresce e some) e bolhas que sobem de tom. */
+	public static short[] passoAgua(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] s = new double[taxa * 320 / 1000];
+		double a = 0, b = 0;
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			double branco = r.nextDouble() * 2 - 1;
+			a += 0.35 * (branco - a);
+			b += 0.04 * (branco - b);
+			double envelope = Math.min(1, t / 0.012) * Math.exp(-t * 11);
+			s[i] = (a - b) * 1.6 * envelope; // a diferença de dois passa-baixas: só os médios
+		}
+		for (int k = 0; k < 4; k++) { // bolhas: senoides curtas subindo de tom
+			int inicio = (int) ((0.03 + r.nextDouble() * 0.15) * taxa);
+			double f0 = 350 + r.nextDouble() * 300, fase = 0;
+			for (int i = 0; inicio + i < s.length && i < taxa * 35 / 1000; i++) {
+				double t = (double) i / taxa;
+				fase += 2 * Math.PI * f0 * (1 + t * 25) / taxa;
+				s[inicio + i] += Math.sin(fase) * 0.25 * Math.sin(Math.PI * t / 0.035);
+			}
+		}
+		return normalizar(s, 0.7);
+	}
+
+	/** Passo no piso da Univali: o salto batendo (estalo agudo com um "tom" de 1,4 kHz) e o eco do corredor. */
+	public static short[] passoPiso(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] seco = new double[taxa * 90 / 1000];
+		double anterior = 0, tom = 1300 + r.nextDouble() * 250;
+		for (int i = 0; i < seco.length; i++) {
+			double t = (double) i / taxa;
+			double branco = r.nextDouble() * 2 - 1;
+			seco[i] = (branco - anterior) * 0.6 * Math.exp(-t * 260) + Math.sin(2 * Math.PI * tom * t) * 0.25 * Math.exp(-t * 70);
+			anterior = branco;
+		}
+		baque(seco, taxa, 110, 0.4, 55);
+		double[] s = new double[taxa * 330 / 1000];
+		int[] atrasos = { 0, taxa * 75 / 1000, taxa * 160 / 1000 };
+		double[] volumes = { 1, 0.28, 0.1 };
+		for (int e = 0; e < atrasos.length; e++) {
+			for (int i = 0; i < seco.length && atrasos[e] + i < s.length; i++) s[atrasos[e] + i] += seco[i] * volumes[e];
+		}
+		return normalizar(s, 0.65);
+	}
+
+	/**
+	 * Um galho quebrando: um estalo forte (ruído com ataque seco), depois dois a quatro estalos
+	 * menores (as fibras se partindo) e um farfalhar de folhas.
+	 */
+	public static short[] galho(int taxa, long semente) {
+		Random r = new Random(semente);
+		double[] s = new double[taxa * 450 / 1000];
+		int estalos = 3 + r.nextInt(3);
+		int inicio = 0;
+		for (int k = 0; k < estalos; k++) {
+			double volume = k == 0 ? 1 : 0.25 + r.nextDouble() * 0.35, anterior = 0;
+			double decaimento = k == 0 ? 70 : 140;
+			for (int i = 0; inicio + i < s.length && i < taxa / 12; i++) {
+				double t = (double) i / taxa;
+				double branco = r.nextDouble() * 2 - 1;
+				s[inicio + i] += (branco * 0.6 + (branco - anterior) * 0.6) * volume * Math.exp(-t * decaimento);
+				anterior = branco;
+			}
+			inicio += (int) ((0.03 + r.nextDouble() * 0.06) * taxa);
+		}
+		double farfalhar = 0;
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			farfalhar += 0.5 * ((r.nextDouble() * 2 - 1) - farfalhar);
+			s[i] += farfalhar * 0.12 * Math.sin(Math.PI * Math.min(1, t / 0.45));
+		}
+		return normalizar(s, 0.85);
+	}
+
+	/** Soma um baque grave (senoide que cai de tom) no começo do som. */
+	private static void baque(double[] s, int taxa, double frequencia, double volume, double decaimento) {
+		double fase = 0;
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			fase += 2 * Math.PI * frequencia * (1 - 0.4 * Math.min(1, t * 10)) / taxa;
+			s[i] += Math.sin(fase) * volume * Math.exp(-t * decaimento);
+		}
+	}
+
+	/** Ajusta o pico para "pico" (de 0 a 1) e converte para 16 bits. */
+	private static short[] normalizar(double[] s, double pico) {
+		double maior = 1e-9;
+		for (double v : s) maior = Math.max(maior, Math.abs(v));
+		short[] pcm = new short[s.length];
+		for (int i = 0; i < s.length; i++) pcm[i] = (short) Math.round(s[i] / maior * pico * 32000);
+		return pcm;
+	}
 }

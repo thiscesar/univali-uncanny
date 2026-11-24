@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import dados.Constantes;
+import dados.Opcoes;
 import dados.Recursos;
 import entidades.PredioUnivali;
 import mundo.Arvores;
@@ -92,6 +93,10 @@ public class TelaCarregando implements Tela {
 
 	/** O último mundo carregado (para não gerar de novo a mesma seed). */
 	private static Mundo mundoCarregado;
+	/** A densidade de árvores com que ele foi gerado (mudou nas opções = gera de novo). */
+	private static float densidadeCarregada;
+	/** A densidade desta geração (lida das opções ao entrar, para a thread não ler a opção mudando). */
+	private float densidade;
 
 	private final GerenciadorTelas gerenciador;
 	private final long seed;
@@ -150,7 +155,8 @@ public class TelaCarregando implements Tela {
 		gerenciador.definirTitulo("Carregando mapa (seed " + seed + ")");
 		gerenciador.entrada().prenderCursor(false);
 
-		reaproveitar = mundoCarregado != null && mundoCarregado.seed == seed;
+		densidade = Opcoes.atual().densidadeArvores;
+		reaproveitar = mundoCarregado != null && mundoCarregado.seed == seed && densidadeCarregada == densidade;
 		if (reaproveitar) {
 			// a mesma seed já está carregada: pula a geração
 			for (int i = 0; i < ETAPAS_NA_THREAD; i++) {
@@ -202,7 +208,7 @@ public class TelaCarregando implements Tela {
 			if (larguras != null) {
 				clareiras.addAll(DistribuidorPedras.clareiras(pedras, larguras));
 			}
-			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed, clareiras, regioes);
+			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed, clareiras, regioes, densidade);
 			GradeColisao colisao = new GradeColisao(chao.tamanho());
 			DistribuidorArvores.registrarTroncos(arvores, colisao);
 			if (larguras != null) {
@@ -390,6 +396,7 @@ public class TelaCarregando implements Tela {
 			pedras.load();
 		}
 		int texturaDetalhes = enviarDetalhes(dados.detalhes());
+		densidadeCarregada = densidade;
 		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, arvores3d,
 				monstro, dados.fase(), pedras, texturaDetalhes, dados.predio());
 		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo

@@ -114,4 +114,32 @@ class GerenciadorTelasTest {
 		g.redimensionar(1500, 0); // janela minimizada
 		assertEquals(1500f, g.proporcao(), 1e-6);
 	}
+
+	@Test
+	void comTransicaoATelaEscureceCongeladaAntesDaTrocaEDepoisClareia() {
+		TelaTeste a = new TelaTeste("a", registro);
+		TelaTeste b = new TelaTeste("b", registro);
+		g.trocarPara(a);
+		g.aplicarTrocas();
+		g.ligarTransicoes(true);
+		g.trocarPara(b);
+		registro.clear();
+		g.atualizar(100);
+		g.aplicarTrocas();
+		assertSame(a, g.atual(), "ainda escurecendo");
+		assertEquals(List.of(), registro, "congelada: a tela não é atualizada");
+		assertEquals(100f / 1000 / GerenciadorTelas.ESCURECER, g.escuridao(), 1e-4);
+		g.atualizar(100);
+		g.atualizar(100);
+		g.aplicarTrocas();
+		assertSame(b, g.atual());
+		assertEquals(1f, g.escuridao(), 1e-6, "a nova começa no preto");
+		g.atualizar(100);
+		assertEquals(1 - 0.1f / GerenciadorTelas.CLAREAR, g.escuridao(), 1e-4);
+		g.atualizar(100);
+		g.atualizar(100);
+		g.atualizar(100);
+		assertEquals(0f, g.escuridao(), 1e-6);
+		assertEquals("b.atualizar", registro.get(registro.size() - 1), "clareando, a nova já responde");
+	}
 }

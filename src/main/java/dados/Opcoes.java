@@ -12,7 +12,7 @@ import java.util.Random;
 import util.Caminhos;
 
 /**
- * As opções do jogador (volumes, sensibilidade do mouse, seed do mapa), salvas no arquivo
+ * As opções do jogador (volumes, mouse, vídeo, seed do mapa), salvas no arquivo
  * config.properties, para continuarem valendo depois de fechar e abrir o jogo.
  */
 public class Opcoes {
@@ -29,9 +29,17 @@ public class Opcoes {
 	public String seed = "";
 	/** Visual de PlayStation: baixa resolução, texturas sem suavização, vértices tremendo. */
 	public boolean modoPs1 = true;
+	/** Campo de visão vertical, em graus. */
+	public float campoVisao = 70f;
+	/** Multiplica a chance de cada árvore existir (a muralha da borda não muda). */
+	public float densidadeArvores = 1.0f;
+	/** Mouse para cima olha para baixo (como num avião). */
+	public boolean inverterY = false;
 
 	public static final float SENSIBILIDADE_MINIMA = 0.25f;
 	public static final float SENSIBILIDADE_MAXIMA = 3.0f;
+	public static final float CAMPO_VISAO_MINIMO = 55f, CAMPO_VISAO_MAXIMO = 95f;
+	public static final float DENSIDADE_MINIMA = 0.5f, DENSIDADE_MAXIMA = 1.5f;
 
 	private static Opcoes atual;
 
@@ -68,6 +76,9 @@ public class Opcoes {
 		String seed = p.getProperty("mapa.seed", "").trim();
 		o.seed = seed.matches("\\d{0,18}") ? seed : "";
 		o.modoPs1 = !"false".equals(p.getProperty("video.ps1", "true").trim());
+		o.campoVisao = lerNumero(p, "video.campoVisao", o.campoVisao, CAMPO_VISAO_MINIMO, CAMPO_VISAO_MAXIMO);
+		o.densidadeArvores = lerNumero(p, "video.densidadeArvores", o.densidadeArvores, DENSIDADE_MINIMA, DENSIDADE_MAXIMA);
+		o.inverterY = "true".equals(p.getProperty("mouse.inverterY", "false").trim());
 		return o;
 	}
 
@@ -83,6 +94,9 @@ public class Opcoes {
 		p.setProperty("mouse.sensibilidade", String.valueOf(sensibilidade));
 		p.setProperty("mapa.seed", seed);
 		p.setProperty("video.ps1", String.valueOf(modoPs1));
+		p.setProperty("video.campoVisao", String.valueOf(campoVisao));
+		p.setProperty("video.densidadeArvores", String.valueOf(densidadeArvores));
+		p.setProperty("mouse.inverterY", String.valueOf(inverterY));
 		try (Writer w = Files.newBufferedWriter(arquivo.toPath(), StandardCharsets.UTF_8)) {
 			p.store(w, "Univali Uncanny - opcoes do jogador");
 		} catch (IOException e) {
@@ -103,6 +117,9 @@ public class Opcoes {
 		sensibilidade = o.sensibilidade;
 		seed = o.seed;
 		modoPs1 = o.modoPs1;
+		campoVisao = o.campoVisao;
+		densidadeArvores = o.densidadeArvores;
+		inverterY = o.inverterY;
 	}
 
 	/** A seed da próxima partida: a digitada nas opções ou uma nova, sorteada. */

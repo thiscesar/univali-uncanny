@@ -57,6 +57,15 @@ public final class DistribuidorArvores {
 	 * densidade e quais árvores são mais comuns.
 	 */
 	public static List<Arvore> distribuir(ConsultaAltura chao, long seed, List<Clareira> clareiras, Regioes regioes) {
+		return distribuir(chao, seed, clareiras, regioes, 1f);
+	}
+
+	/**
+	 * O mesmo, com a densidade escolhida nas opções (0,5 a 1,5): multiplica a chance de cada
+	 * árvore no interior; a muralha da borda continua cheia (é ela que esconde o fim do mapa).
+	 */
+	public static List<Arvore> distribuir(ConsultaAltura chao, long seed, List<Clareira> clareiras, Regioes regioes,
+			float densidadeOpcao) {
 		Random random = new Random(seed * 31 + 7);
 		RuidoFractal ruido = new RuidoFractal(seed + 99);
 		float tamanho = chao.tamanho();
@@ -67,7 +76,9 @@ public final class DistribuidorArvores {
 			// o sorteio da densidade vem antes dos filtros, para a sequência de números
 			// aleatórios não depender deles (mesma seed, mesmo resultado)
 			Regioes.Tipo regiao = regioes != null ? regioes.em(x, z) : null;
-			boolean fica = random.nextFloat() < densidade(x, z, tamanho, ruido) * fatorDensidade(regiao, x, z, tamanho);
+			float distanciaBorda = Math.min(Math.min(x, z), Math.min(tamanho - x, tamanho - z));
+			float opcao = distanciaBorda < FAIXA_MURALHA ? 1 : densidadeOpcao;
+			boolean fica = random.nextFloat() < densidade(x, z, tamanho, ruido) * fatorDensidade(regiao, x, z, tamanho) * opcao;
 			if (!fica || dentroDeClareira(x, z, clareiras)) continue;
 			if (chao.alturaEm(x, z) < ALTURA_MINIMA_CHAO) continue;  // água e margem
 			if (chao.anguloEm(x, z) > DECLIVE_MAXIMO) continue;

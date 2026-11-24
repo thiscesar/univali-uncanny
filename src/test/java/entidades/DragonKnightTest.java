@@ -46,6 +46,14 @@ class DragonKnightTest {
 	}
 
 	@Test
+	void comALanternaLigadaACarenciaAcabaMaisCedo() {
+		DragonKnight m = monstro(new GradeColisao(101));
+		m.lanternaLigada = true;
+		avancar(m, Regras.CARENCIA / Regras.LANTERNA_ATRAI + 0.1f);
+		assertEquals(DragonKnight.Estado.SURGINDO, m.estado(), "a luz atrai");
+	}
+
+	@Test
 	void surgeVirandoParaOJogador() {
 		DragonKnight m = monstro(new GradeColisao(101));
 		m.forcarAparicao();

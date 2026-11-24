@@ -33,6 +33,21 @@ class DistribuidorArvoresTest {
 	}
 
 	@Test
+	void densidadeDasOpcoesMudaOInteriorENaoAMuralha() {
+		List<Arvore> poucas = DistribuidorArvores.distribuir(chao, 42, List.of(INICIO), null, 0.5f);
+		List<Arvore> muitas = DistribuidorArvores.distribuir(chao, 42, List.of(INICIO), null, 1.5f);
+		assertTrue(interior(poucas) < interior(arvores) && interior(arvores) < interior(muitas));
+		// a chance na muralha não muda (só a sequência de sorteios, que anda diferente no interior)
+		long muralha = arvores.size() - interior(arvores), muralhaPoucas = poucas.size() - interior(poucas);
+		assertEquals(muralha, muralhaPoucas, muralha * 0.02, "a muralha fica praticamente igual");
+	}
+
+	private static long interior(List<Arvore> lista) {
+		return lista.stream().filter(a -> Math.min(Math.min(a.x(), a.z()), Math.min(300 - a.x(), 300 - a.z()))
+				>= DistribuidorArvores.FAIXA_MURALHA).count();
+	}
+
+	@Test
 	void quantidadeDentroDaMeta() {
 		assertTrue(arvores.size() >= 3000 && arvores.size() <= 6000, "árvores: " + arvores.size());
 	}
