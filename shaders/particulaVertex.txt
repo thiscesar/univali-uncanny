@@ -1,0 +1,25 @@
+#version 330 core
+
+// Partículas (faíscas, poeira, sangue, fumaça): cada vértice é um ponto (GL_POINTS) com cor e
+// tamanho próprios, que encolhe com a distância como um objeto 3D.
+
+#include "ps1Vertice.glsl"
+
+in vec3 position;   // att 0: centro da partícula, no mundo
+in vec4 cor;        // att 1: cor e transparência
+in float tamanho;   // att 4: diâmetro em metros
+
+uniform mat4 view;
+uniform mat4 projection;
+uniform float alturaTela;  // altura, em pixels, da imagem onde a cena é desenhada
+
+out vec4 corParticula;
+out float distancia;
+
+void main(void){
+	vec4 pv = vec4(position, 1.0) * view;
+	gl_Position = tremerPs1(pv * projection);
+	distancia = length(pv.xyz);
+	gl_PointSize = max(tamanho * projection[1][1] * alturaTela * 0.5 / max(gl_Position.w, 0.05), 1.0);
+	corParticula = cor;
+}

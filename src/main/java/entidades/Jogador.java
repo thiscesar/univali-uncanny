@@ -220,6 +220,11 @@ public class Jogador extends Object3D {
 		return camera;
 	}
 
+	/** A fase do passo (avança pi a cada passo): a arma balança no mesmo ritmo da cabeça. */
+	public float fasePasso() {
+		return fasePasso;
+	}
+
 	/** Estamina de 0 (vazia) a 1 (cheia). */
 	public float estamina() {
 		return estamina;

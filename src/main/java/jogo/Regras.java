@@ -46,6 +46,25 @@ public final class Regras {
 	/** Duração do susto em tela cheia antes da derrota, em segundos. */
 	public static final float DURACAO_SUSTO = 0.8f;
 
+	// ---------- escopeta ----------
+
+	/** Bagos por tiro, dano de cada um e o espalhamento (ângulo entre o centro e a borda do cone). */
+	public static final int BAGOS = 8;
+	public static final float DANO_BAGO = 1.5f;
+	public static final float ESPALHAMENTO_GRAUS = 6f;
+	/** Até onde um bago vai, em metros. */
+	public static final float ALCANCE_TIRO = 40f;
+	/** Cartuchos: quantos cabem no cano, quantos de reserva no começo e quantos uma caixa dá. */
+	public static final int CAPACIDADE_CANO = 2;
+	public static final int RESERVA_INICIAL = 8;
+	public static final int CARTUCHOS_POR_CAIXA = 6;
+	/** Caixas de munição no mapa e a distância para pegar uma (tecla E). */
+	public static final int CAIXAS_MUNICAO = 3;
+	public static final float DISTANCIA_PEGAR = 1.5f;
+	/** Tempos da arma, em segundos: o tiro com a telha, e cada cartucho na recarga. */
+	public static final float DURACAO_TIRO = 0.3f;
+	public static final float DURACAO_CARTUCHO = 0.5f;
+
 	/** Intervalo até a próxima aparição: o da tabela, conforme as provas, com ±20% de sorte. */
 	public static float intervaloAparicao(int provasColetadas, float sorteio01) {
 		int i = Math.max(0, Math.min(INTERVALOS.length - 1, provasColetadas));

@@ -20,6 +20,7 @@ import shaders.ShaderProgram;
 import shaders.ShaderArvore;
 import shaders.ShaderArvore3D;
 import shaders.ShaderBrilho;
+import shaders.ShaderParticula;
 import shaders.ShaderMd2;
 import shaders.ShaderPs1Tela;
 import shaders.ShaderObjeto;
@@ -59,6 +60,7 @@ public final class Recursos {
 	private static ShaderArvore shaderArvore;
 	private static ShaderArvore3D shaderArvore3D;
 	private static ShaderBrilho shaderBrilho;
+	private static ShaderParticula shaderParticula;
 	private static ShaderMd2 shaderMd2;
 	private static ShaderPs1Tela shaderPs1Tela;
 
@@ -213,6 +215,14 @@ public final class Recursos {
 		return shaderBrilho;
 	}
 
+	/** O shader das partículas (faíscas, poeira, fumaça, sangue). */
+	public static ShaderParticula shaderParticula() {
+		if (shaderParticula == null) {
+			shaderParticula = registrar(new ShaderParticula());
+		}
+		return shaderParticula;
+	}
+
 	/** O shader das árvores 3D. */
 	public static ShaderArvore3D shaderArvore3D() {
 		if (shaderArvore3D == null) {
@@ -324,6 +334,7 @@ public final class Recursos {
 		shaderArvore = null;
 		shaderArvore3D = null;
 		shaderBrilho = null;
+		shaderParticula = null;
 		shaderMd2 = null;
 		shaderPs1Tela = null;
 		if (overlay != null) {

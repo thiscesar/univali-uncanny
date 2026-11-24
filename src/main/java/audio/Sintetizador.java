@@ -87,6 +87,58 @@ public final class Sintetizador {
 		return pcm;
 	}
 
+	/**
+	 * Um tiro de escopeta: um estouro de ruído que some muito rápido, um "bum" grave por baixo
+	 * e uma cauda de ruído abafado (o eco na floresta) que dura quase um segundo.
+	 */
+	public static short[] tiro(int taxa) {
+		int total = taxa * 1100 / 1000;
+		short[] pcm = new short[total];
+		Random ruido = new Random(21);
+		double abafado = 0;
+		for (int i = 0; i < total; i++) {
+			double t = (double) i / taxa;
+			double branco = ruido.nextDouble() * 2 - 1;
+			abafado += (branco - abafado) * 0.08; // ruído filtrado: grave, sem chiado
+			double estouro = branco * Math.exp(-t * 45);
+			double bum = Math.sin(2 * Math.PI * (55 + 60 * Math.exp(-t * 18)) * t) * Math.exp(-t * 9);
+			double eco = abafado * 3.5 * Math.exp(-t * 4.5) * Math.min(1, t * 60);
+			double onda = estouro * 0.9 + bum * 0.8 + eco * 0.6;
+			pcm[i] = (short) Math.round(Math.max(-1, Math.min(1, onda)) * 31000);
+		}
+		return pcm;
+	}
+
+	/**
+	 * Estalos metálicos curtos (ruído agudo com um "plim" de 2 kHz), nos instantes dados em
+	 * milissegundos e com o volume de cada um: o engatilhar (dois estalos), o cartucho entrando
+	 * e o clique seco da arma vazia.
+	 */
+	public static short[] estalos(int taxa, int[] instantesMs, double[] volumes) {
+		int ultimo = 0;
+		for (int ms : instantesMs) ultimo = Math.max(ultimo, ms);
+		int total = taxa * (ultimo + 120) / 1000;
+		double[] soma = new double[total];
+		Random ruido = new Random(31);
+		for (int k = 0; k < instantesMs.length; k++) {
+			int inicio = taxa * instantesMs[k] / 1000;
+			double anterior = 0;
+			for (int i = 0; inicio + i < total && i < taxa / 10; i++) {
+				double t = (double) i / taxa;
+				double branco = ruido.nextDouble() * 2 - 1;
+				double agudo = branco - anterior; // a diferença entre amostras realça o agudo
+				anterior = branco;
+				double plim = Math.sin(2 * Math.PI * 2100 * t) * 0.5;
+				soma[inicio + i] += (agudo * 0.7 + plim) * Math.exp(-t * 90) * volumes[k];
+			}
+		}
+		short[] pcm = new short[total];
+		for (int i = 0; i < total; i++) {
+			pcm[i] = (short) Math.round(Math.max(-1, Math.min(1, soma[i])) * 28000);
+		}
+		return pcm;
+	}
+
 	/** Um baque grave: senoide que cai de 80 para 40 Hz e some em ~0,12 s. */
 	private static double baque(double t, double inicio, double volume) {
 		double s = t - inicio;

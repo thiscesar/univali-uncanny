@@ -1,0 +1,29 @@
+#version 330 core
+
+// Partículas redondas e suaves. Duas maneiras de misturar com a cena:
+//  aditiva = 1: a cor é SOMADA (faíscas, chama): brilha no escuro;
+//  aditiva = 0: a cor COBRE a cena pela transparência (poeira, fumaça, sangue escuro).
+
+#include "comum.glsl"
+
+uniform float aditiva;
+
+in vec4 corParticula;
+in float distancia;
+
+out vec4 out_Color;
+
+void main(void){
+	vec2 d = gl_PointCoord * 2.0 - 1.0;
+	float r2 = dot(d, d);
+	if(r2 > 1.0){
+		discard;
+	}
+	float forca = 1.0 - r2;
+	if(aditiva > 0.5){
+		float neblina = exp(-pow(densidadeNeblina * 0.5 * distancia, 2.0)); // brilho fura a neblina
+		out_Color = vec4(corParticula.rgb * corParticula.a * forca * neblina, 1.0);
+	}else{
+		out_Color = vec4(aplicarNeblina(corParticula.rgb, distancia, 0.0), corParticula.a * forca);
+	}
+}

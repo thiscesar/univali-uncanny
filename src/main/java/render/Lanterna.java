@@ -47,6 +47,16 @@ public class Lanterna {
 		this.panico = Math.max(0, Math.min(1, panico));
 	}
 
+	/**
+	 * Prende a lanterna na arma: a posição e a direção vêm da ponta da escopeta, em espaço da
+	 * câmera, a cada quadro (já com o recuo e o balanço dela). Chamar depois do atualizar().
+	 */
+	public void montarNaArma(float[] posicaoVista, float[] direcaoVista) {
+		System.arraycopy(posicaoVista, 0, this.posicaoVista, 0, 3);
+		float[] d = normalizar(direcaoVista);
+		System.arraycopy(d, 0, this.direcaoVista, 0, 3);
+	}
+
 	/** Atualiza a direção (com atraso) e o tremor. dt em segundos. */
 	public void atualizar(Camera camera, float dt) {
 		tempo += dt;

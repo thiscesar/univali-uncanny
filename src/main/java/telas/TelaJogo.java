@@ -9,6 +9,8 @@ import static org.lwjgl.opengl.GL20.glGetUniformLocation;
 import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
 import static org.lwjgl.opengl.GL20.glUniformMatrix4fv;
+import static org.lwjgl.opengl.GL20.glDisableVertexAttribArray;
+import static org.lwjgl.opengl.GL20.glVertexAttrib3f;
 
 import java.awt.Color;
 import java.nio.FloatBuffer;
@@ -25,7 +27,10 @@ import audio.SomAmbiente;
 import audio.SomTocando;
 import dados.Opcoes;
 import dados.Recursos;
+import entidades.CaixaMunicao;
 import entidades.DragonKnight;
+import entidades.Escopeta;
+import entidades.Tiro;
 import entidades.Jogador;
 import entrada.Entrada;
 import jogo.Regras;
@@ -37,17 +42,21 @@ import mundo.TexturasFloresta;
 import render.Ambiente;
 import render.Camera;
 import render.CameraLivre;
+import render.DesenhoEscopeta;
 import render.DesenhoMonstro;
 import render.FiltroPs1;
 import render.Lanterna;
 import render.Overlay2D;
+import render.Particulas;
 import render.Texto;
 import render.TextoTextura;
 import shaders.ShaderArvore;
 import shaders.ShaderArvore3D;
+import shaders.ShaderObjeto;
 import shaders.ShaderTerrenoFloresta;
 import util.Caminhos;
 import util.Utils3D;
+import Model.VboCube;
 
 /**
  * A partida: o jogador andando pela floresta à noite, em primeira pessoa, com a lanterna.
@@ -55,7 +64,10 @@ import util.Utils3D;
  * F liga e desliga a lanterna. ESC abre a pausa por cima. F3 mostra o painel de depuração; F4 troca para a câmera livre
  * (voa e atravessa o chão, para inspecionar o mapa). V e X forçam vitória e derrota, e T liga
  * um som 3D de teste: são atalhos provisórios até existirem as regras do jogo. Com o F3 ligado,
- * G faz o Dragon Knight surgir e K o mata.
+ * G faz o Dragon Knight surgir e K o mata; as setas e Page Up/Down ajustam a posição da arma.
+ *
+ * A escopeta: clique esquerdo atira, R recarrega, E pega uma caixa de cartuchos. A lógica fica
+ * em entidades.Escopeta (e os bagos em entidades.Tiro), o desenho em render.DesenhoEscopeta.
  *
  * O Dragon Knight: a lógica fica em entidades.DragonKnight e o desenho em render.DesenhoMonstro.
  * Aqui ficam o que ele causa no jogador: o grito 3D, a contagem na tela, o batimento, a vinheta
@@ -111,6 +123,19 @@ public class TelaJogo implements Tela {
 	private final DragonKnight monstro;
 	private DesenhoMonstro desenhoMonstro;
 	private Efeito somGrito, somMorte, somBatida, somSusto;
+
+	// a escopeta, os efeitos dela e as caixas de munição
+	private final Escopeta escopeta = new Escopeta();
+	private DesenhoEscopeta desenhoEscopeta;
+	private final Particulas particulas = new Particulas();
+	private java.util.List<CaixaMunicao> caixas;
+	private VboCube cuboCaixa;
+	private Efeito somTiro, somTelha, somCartucho, somVazia;
+	/** Segundos de fumaça que ainda saem do cano. */
+	private float fumacaRestante = 0;
+	/** Mensagem curta no meio da tela ("+6 cartuchos", "Sem munição!") e por quanto tempo. */
+	private String mensagem = null;
+	private float tempoMensagem = 0;
 	private float proximaBatida = 0;
 	/** Tremor da câmera, de 0 a 1 (diminui sozinho). */
 	private float tremor = 0;
@@ -166,6 +191,35 @@ public class TelaJogo implements Tela {
 		if (Caminhos.existe("sprites/susto.png")) {
 			texturaSusto = Recursos.textura("sprites/susto.png");
 		}
+		desenhoEscopeta = new DesenhoEscopeta();
+		somTiro = efeitoOuSintetizado("audio/escopeta_tiro.ogg", () -> Sintetizador.tiro(44100));
+		somTelha = efeitoOuSintetizado("audio/escopeta_telha.ogg",
+				() -> Sintetizador.estalos(44100, new int[] { 0, 150 }, new double[] { 0.8, 1.0 }));
+		somCartucho = efeitoOuSintetizado("audio/escopeta_cartucho.ogg",
+				() -> Sintetizador.estalos(44100, new int[] { 0, 60 }, new double[] { 0.5, 0.8 }));
+		somVazia = efeitoOuSintetizado("audio/escopeta_vazia.ogg",
+				() -> Sintetizador.estalos(44100, new int[] { 0 }, new double[] { 0.6 }));
+		escopeta.definirEventos(new Escopeta.Eventos() {
+			@Override
+			public void engatilhou() {
+				gerenciador.audio().tocar(somTelha, 0.8f);
+			}
+
+			@Override
+			public void cartuchoInserido() {
+				gerenciador.audio().tocar(somCartucho, 0.8f);
+			}
+
+			@Override
+			public void cliqueSeco() {
+				gerenciador.audio().tocar(somVazia, 0.9f);
+				mostrarMensagem(escopeta.reserva() == 0 ? "Sem munição!" : "Vazia! R para recarregar");
+			}
+		});
+		caixas = CaixaMunicao.sortear(mundo.chao, mundo.colisao, mundo.inicio, Regras.CAIXAS_MUNICAO, random);
+		cuboCaixa = new VboCube();
+		cuboCaixa.load();
+
 		monstro.definirEventos(new DragonKnight.Eventos() {
 			@Override
 			public void surgiu(DragonKnight m) {
@@ -207,6 +261,8 @@ public class TelaJogo implements Tela {
 		somAmbiente.parar();
 		filtroPs1.liberar();
 		desenhoMonstro.liberar();
+		desenhoEscopeta.liberar();
+		particulas.liberar();
 	}
 
 	// ---------- atualização ----------
@@ -263,6 +319,9 @@ public class TelaJogo implements Tela {
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_K)) {
 			monstro.matar();
 		}
+		if (mostrarDepuracao) {
+			ajustarPoseDaArma(entrada);
+		}
 
 		if (cameraLivre != null) {
 			cameraLivre.atualizar(entrada, diftime);
@@ -274,19 +333,132 @@ public class TelaJogo implements Tela {
 			}
 			jogador.SimulaSe(diftime);
 			tocarSonsDoJogador();
+			if (monstro.estado() != DragonKnight.Estado.ATACANDO) {
+				comandarArma(entrada);
+			}
 		}
 		atualizarMonstro(diftime);
+		atualizarArma(entrada, diftime / 1000f);
 
 		tempo += diftime / 1000.0f;
 		contarQuadros(diftime);
 
 		Camera c = cameraAtual();
 		lanterna.atualizar(c, diftime / 1000f);
+		// a lanterna está presa embaixo do cano: a luz sai de lá e acompanha o balanço e o recuo
+		lanterna.montarNaArma(desenhoEscopeta.lente(), desenhoEscopeta.direcaoDoCano());
 		somAmbiente.atualizar(diftime / 1000f, c.x, c.y, c.z);
 
 		// o ouvinte acompanha a câmera: é assim que o OpenAL sabe de que lado vem cada som
 		gerenciador.audio().atualizarOuvinte(c.x, c.y, c.z,
 				c.frente.x, c.frente.y, c.frente.z, c.cima.x, c.cima.y, c.cima.z);
+	}
+
+	/** Clique esquerdo atira, R recarrega, E pega a caixa de munição que estiver perto. */
+	private void comandarArma(Entrada entrada) {
+		if (entrada.botaoFoiPressionado(GLFW_MOUSE_BUTTON_LEFT) && escopeta.gatilho()) {
+			atirar();
+		}
+		if (entrada.foiPressionada(GLFW_KEY_R)) {
+			escopeta.recarregar();
+		}
+		if (entrada.foiPressionada(GLFW_KEY_E)) {
+			CaixaMunicao perto = caixaAlcancavel();
+			if (perto != null) {
+				escopeta.adicionarReserva(perto.pegar());
+				gerenciador.audio().tocar(somCartucho, 1f);
+				mostrarMensagem("+" + Regras.CARTUCHOS_POR_CAIXA + " cartuchos");
+			}
+		}
+	}
+
+	private CaixaMunicao caixaAlcancavel() {
+		for (CaixaMunicao c : caixas) {
+			if (c.alcancavel(jogador.x, jogador.z)) return c;
+		}
+		return null;
+	}
+
+	/**
+	 * O tiro saiu: os 8 bagos partem do centro da câmera (para a mira ser fiel), e cada um
+	 * deixa o seu efeito onde parou. A chama, o clarão, o tremor e a fumaça saem da arma.
+	 */
+	private void atirar() {
+		Camera c = jogador.camera();
+		float[] origem = { c.x, c.y, c.z };
+		float[] frente = { c.frente.x, c.frente.y, c.frente.z };
+		float[] direita = { c.direita.x, c.direita.y, c.direita.z };
+		float[] cima = { c.cima.x, c.cima.y, c.cima.z };
+		Tiro.Resultado r = Tiro.disparar(origem, frente, direita, cima, monstro, mundo.colisao, mundo.chao, random);
+		if (monstro.visivel()) {
+			System.out.println("[Tiro] " + r.acertos() + " de " + Regras.BAGOS + " bagos acertaram o monstro");
+		}
+		for (Tiro.Impacto i : r.impactos()) {
+			switch (i.alvo()) {
+			case MONSTRO -> particulas.sangue(i.x(), i.y(), i.z(), 5);
+			case TRONCO -> {
+				particulas.faiscas(i.x(), i.y(), i.z(), 3);
+				particulas.poeira(i.x(), i.y(), i.z(), 3);
+			}
+			case CHAO -> {
+				particulas.poeira(i.x(), i.y(), i.z(), 4);
+				particulas.faiscas(i.x(), i.y(), i.z(), 1);
+			}
+			}
+		}
+		gerenciador.audio().tocar(somTiro, 1f);
+		desenhoEscopeta.disparar();
+		tremor = Math.max(tremor, 0.45f);
+		fumacaRestante = 1f;
+	}
+
+	/** A pose da arma, a chama, a fumaça subindo do cano, o clarão e as partículas. */
+	private void atualizarArma(Entrada entrada, float dt) {
+		boolean podeMexer = cameraLivre == null;
+		escopeta.atualizar(dt, podeMexer ? entrada.deltaMouse().x : 0, podeMexer ? entrada.deltaMouse().y : 0,
+				jogador.fasePasso(), jogador.velocidade(), jogador.correndo());
+		desenhoEscopeta.atualizarPose(escopeta);
+		desenhoEscopeta.atualizar(dt);
+		particulas.atualizar(dt);
+		tempoMensagem = Math.max(0, tempoMensagem - dt);
+
+		// o clarão: uma luz forte na boca do cano por ~80 ms, que ilumina a arma e as árvores
+		float t = escopeta.tempoDesdeOTiro();
+		ambiente.intensidadeClarao = t < 0.08f ? 4f * (1 - t / 0.08f) : 0;
+		float[] boca = desenhoEscopeta.boca();
+		System.arraycopy(boca, 0, ambiente.posClarao, 0, 3);
+
+		// a fumaça nasce na boca do cano, levada ao mundo pela base da câmera, e fica para trás
+		if (fumacaRestante > 0) {
+			fumacaRestante -= dt;
+			Camera c = jogador.camera();
+			float x = c.x + c.direita.x * boca[0] + c.cima.x * boca[1] - c.frente.x * boca[2];
+			float y = c.y + c.direita.y * boca[0] + c.cima.y * boca[1] - c.frente.y * boca[2];
+			float z = c.z + c.direita.z * boca[0] + c.cima.z * boca[1] - c.frente.z * boca[2];
+			if (random.nextFloat() < 0.5f) particulas.fumaca(x, y, z, 1);
+		}
+	}
+
+	/** Com o F3: setas movem a arma em x e y, Page Up/Down em z; o console mostra os valores. */
+	private void ajustarPoseDaArma(Entrada entrada) {
+		float passo = 0.005f;
+		float[] d = desenhoEscopeta.descanso;
+		boolean mudou = true;
+		if (entrada.foiPressionadaOuRepetida(GLFW_KEY_LEFT)) d[0] -= passo;
+		else if (entrada.foiPressionadaOuRepetida(GLFW_KEY_RIGHT)) d[0] += passo;
+		else if (entrada.foiPressionadaOuRepetida(GLFW_KEY_UP)) d[1] += passo;
+		else if (entrada.foiPressionadaOuRepetida(GLFW_KEY_DOWN)) d[1] -= passo;
+		else if (entrada.foiPressionadaOuRepetida(GLFW_KEY_PAGE_UP)) d[2] -= passo;
+		else if (entrada.foiPressionadaOuRepetida(GLFW_KEY_PAGE_DOWN)) d[2] += passo;
+		else mudou = false;
+		if (mudou) {
+			System.out.println("[Arma] " + desenhoEscopeta.poseComoTexto());
+		}
+	}
+
+	private void mostrarMensagem(String texto) {
+		mensagem = texto;
+		tempoMensagem = 2f;
 	}
 
 	/** O monstro, o batimento, a lanterna em pânico e, no fim do ataque, o susto. */
@@ -442,8 +614,13 @@ public class TelaJogo implements Tela {
 			desenharArvores();
 		}
 		Camera camera = cameraAtual();
-		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z,
-				ps1 ? filtroPs1.altura() : gerenciador.altura());
+		int alturaImagem = ps1 ? filtroPs1.altura() : gerenciador.altura();
+		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, alturaImagem);
+		desenharCaixas();
+		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
+		if (tempoSusto < 0) { // no susto, só a cara dele
+			desenhoEscopeta.desenhar(escopeta, ambiente, gerenciador.proporcao(), alturaImagem);
+		}
 		if (ps1) {
 			filtroPs1.terminar(gerenciador.largura(), gerenciador.altura()); // amplia sem suavização
 		}
@@ -454,6 +631,9 @@ public class TelaJogo implements Tela {
 		Overlay2D overlay = Recursos.overlay();
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
 		desenharEfeitosMonstro(overlay);
+		if (tempoSusto < 0 && fim == null) {
+			desenharHudArma(overlay);
+		}
 		if (mostrarDepuracao) {
 			desenharDepuracao(overlay);
 		} else if (tempo < 8) {
@@ -461,6 +641,101 @@ public class TelaJogo implements Tela {
 					Texto.Alinhamento.ESQUERDA);
 		}
 		overlay.finalizar();
+	}
+
+	/** As caixas de munição: o cubo do projeto original achatado, com a textura da caixa e um brilho leve. */
+	private void desenharCaixas() {
+		ShaderObjeto shader = Recursos.shaderObjeto();
+		shader.start();
+		int p = shader.programID;
+		glUniformMatrix4fv(glGetUniformLocation(p, "projection"), false, bufferProjecao);
+		glUniformMatrix4fv(glGetUniformLocation(p, "view"), false, bufferVisao);
+		glUniform1f(glGetUniformLocation(p, "emissividade"), 0.12f); // para ser achada com a lanterna
+		glUniform1i(glGetUniformLocation(p, "tex"), 0);
+		glUniform1i(glGetUniformLocation(p, "usaNormalMap"), 0);
+		ambiente.enviar(shader);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texturaCaixa());
+		FloatBuffer modelo = BufferUtils.createFloatBuffer(16);
+		for (CaixaMunicao c : caixas) {
+			if (c.pega()) continue;
+			Matrix4f m = new Matrix4f();
+			m.translate(new Vector3f(c.x, c.y + 0.15f, c.z));
+			m.rotate(c.giro, new Vector3f(0, 1, 0));
+			m.scale(new Vector3f(0.25f, 0.15f, 0.18f)); // o cubo vai de -1 a 1: caixa de 50 x 30 x 36 cm
+			modelo.clear();
+			m.storeTranspose(modelo);
+			modelo.flip();
+			glUniformMatrix4fv(glGetUniformLocation(p, "model"), false, modelo);
+			// o cubo não tem normal: com o atributo 2 desligado e zerado, o shader usa a normal da face
+			glDisableVertexAttribArray(2);
+			glVertexAttrib3f(2, 0, 0, 0);
+			cuboCaixa.draw();
+		}
+		glDisableVertexAttribArray(1);
+		shader.stop();
+	}
+
+	/** texturas/caixa_municao.png, ou uma caixa verde-oliva com "CARTUCHOS" escrito, gerada por código. */
+	private static int texturaCaixa() {
+		if (Caminhos.existe("texturas/caixa_municao.png")) {
+			return Recursos.textura("texturas/caixa_municao.png");
+		}
+		return Recursos.texturaGerada("caixa de munição", () -> {
+			java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(64, 64,
+					java.awt.image.BufferedImage.TYPE_INT_ARGB);
+			java.awt.Graphics2D g = img.createGraphics();
+			g.setColor(new Color(62, 70, 38));
+			g.fillRect(0, 0, 64, 64);
+			g.setColor(new Color(40, 46, 24));
+			g.drawRect(1, 1, 61, 61);
+			g.setColor(new Color(170, 40, 30));
+			g.fillRect(6, 22, 52, 20);
+			g.setColor(new Color(235, 220, 190));
+			g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, 9));
+			g.drawString("CARTUCHOS", 8, 35);
+			g.dispose();
+			return img;
+		}, false, true).id();
+	}
+
+	/** Mira no centro, munição no canto inferior direito, mensagens e o aviso de "E" perto de uma caixa. */
+	private void desenharHudArma(Overlay2D o) {
+		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
+		float cx = w / 2f, cy = h / 2f;
+		Color mira = new Color(230, 225, 215, 150);
+		o.retangulo(cx - 9, cy - 1, 6, 2, mira);
+		o.retangulo(cx + 3, cy - 1, 6, 2, mira);
+		o.retangulo(cx - 1, cy - 9, 2, 6, mira);
+		o.retangulo(cx - 1, cy + 3, 2, 6, mira);
+
+		// os cartuchos no cano (vermelho com a base de latão) e a reserva
+		float escala = Math.max(1f, h / 800f);
+		float largura = 12 * escala, altura = 30 * escala;
+		float x = w - 40 * escala - (largura + 6 * escala) * Regras.CAPACIDADE_CANO - 60 * escala;
+		float y = h - 30 * escala - altura;
+		for (int i = 0; i < Regras.CAPACIDADE_CANO; i++) {
+			boolean cheio = i < escopeta.cano();
+			float xi = x + i * (largura + 6 * escala);
+			o.retangulo(xi, y, largura, altura * 0.72f, cheio ? new Color(150, 22, 18) : new Color(60, 55, 50, 120));
+			o.retangulo(xi, y + altura * 0.72f, largura, altura * 0.28f, cheio ? new Color(190, 150, 60) : new Color(60, 55, 50, 120));
+		}
+		Texto.desenhar(o, "+" + escopeta.reserva(), x + Regras.CAPACIDADE_CANO * (largura + 6 * escala) + 8 * escala,
+				y + altura / 2 - 12 * escala, Math.round(22 * escala), new Color(215, 205, 190), Texto.Alinhamento.ESQUERDA);
+		if (escopeta.estado() == Escopeta.Estado.RECARREGANDO) {
+			Texto.desenhar(o, "recarregando...", w - 40 * escala, y - 26 * escala, Math.round(16 * escala),
+					new Color(170, 160, 150), Texto.Alinhamento.DIREITA);
+		}
+
+		if (caixaAlcancavel() != null) {
+			Texto.desenhar(o, "E: pegar cartuchos", cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200),
+					Texto.Alinhamento.CENTRO);
+		}
+		if (mensagem != null && tempoMensagem > 0) {
+			int alfa = Math.round(255 * Math.min(1, tempoMensagem / 0.5f));
+			Texto.desenhar(o, mensagem, cx, h * 0.68f, Math.round(24 * escala), new Color(235, 215, 190, alfa),
+					Texto.Alinhamento.CENTRO);
+		}
 	}
 
 	/**
@@ -665,7 +940,11 @@ public class TelaJogo implements Tela {
 				(cameraLivre != null ? "câmera livre (F4 volta ao jogador)" : "F4: câmera livre")
 						+ (ps1 ? String.format("   modo PS1 %dx%d", filtroPs1.largura(), filtroPs1.altura()) : ""),
 				textoMonstro(),
+				String.format("arma %s   cano %d   reserva %d   partículas %d   caixas %d", escopeta.estado().name().toLowerCase(),
+						escopeta.cano(), escopeta.reserva(), particulas.quantidade(),
+						caixas.stream().filter(cx -> !cx.pega()).count()),
 				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata",
+				"clique atira   R recarrega   E pega caixa   setas e PgUp/PgDn: posição da arma",
 		};
 		int tamanho = 16;
 		float linha = tamanho * 1.45f;

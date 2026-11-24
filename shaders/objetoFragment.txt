@@ -5,6 +5,8 @@
 #include "comum.glsl"
 
 uniform sampler2D tex;
+uniform sampler2D texNormal;
+uniform int usaNormalMap;      // 1 = usa o texNormal para o relevo fino (riscos do metal, veios da madeira)
 uniform float emissividade;   // 0 = só reflete luz; 1 = brilha sozinho (e sofre menos neblina)
 
 in vec2 uv;
@@ -30,6 +32,9 @@ void main(void){
 		}
 	}
 
+	if(usaNormalMap == 1){
+		n = perturbarNormal(n, posVista, uv, texture(texNormal, modoPs1 > 0.5 ? uvAfim : uv).rgb);
+	}
 	vec3 cor = iluminar(c.rgb, n, posVista) + c.rgb * emissividade;
 	out_Color = vec4(aplicarNeblina(cor, length(posVista), emissividade), 1.0);
 }
