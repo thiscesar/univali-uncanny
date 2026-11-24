@@ -23,7 +23,10 @@ import mundo.GradeColisao;
 import mundo.DistribuidorPedras;
 import mundo.LeitorObj;
 import mundo.Pedras;
-import mundo.SorteioLugares;
+import mundo.MapaDetalhes;
+import mundo.Regioes;
+import fase.GeradorFase;
+import fase.Placa;
 import mundo.Mundo;
 import mundo.TexturasFloresta;
 import md2.PersonagemMd2;
@@ -60,13 +63,9 @@ public class TelaCarregando implements Tela {
 	/** O que a thread de geração entrega: só dados, nada de OpenGL. */
 	private record DadosTerreno(int[][] alturas, ConsultaAltura chao, GradeColisao colisao,
 			List<DistribuidorArvores.Arvore> arvores, List<LeitorObj.ModeloObj> modelosArvores,
-			PersonagemMd2.Dados monstro, float[] inicio, List<float[]> provas, float[] univali,
-			List<SorteioLugares.Placa> placas, List<DistribuidorPedras.Pedra> pedras, List<LeitorObj.ModeloObj> modelosPedras) {}
+			PersonagemMd2.Dados monstro, GeradorFase.Fase fase, List<DistribuidorPedras.Pedra> pedras,
+			List<LeitorObj.ModeloObj> modelosPedras, byte[] detalhes) {}
 
-	/** Raio, em metros, da clareira sem árvores em volta de cada prova. */
-	private static final float CLAREIRA_PROVA = 4f;
-	/** Raio, em metros, da clareira sem árvores em volta do início do jogador. */
-	private static final float CLAREIRA_INICIO = 6f;
 	/** Quantas etapas rodam na thread separada (as primeiras da lista de progresso). */
 	private static final int ETAPAS_NA_THREAD = 3;
 	private static final float DURACAO_FADE = 0.6f;     // segundos
@@ -99,8 +98,8 @@ public class TelaCarregando implements Tela {
 	private final AtmosferaMenu atmosfera = new AtmosferaMenu(); // granulação e lâmpada falhando
 
 	private final ProgressoEtapas progresso = new ProgressoEtapas()
-			.adicionar("gerando o relevo", 0.66f)        // thread separada
-			.adicionar("planejando a fase", 0.02f)       // thread separada (ainda não existe)
+			.adicionar("gerando o relevo", 0.58f)        // thread separada (AG do terreno)
+			.adicionar("planejando a fase", 0.10f)       // thread separada (AG da fase, com A*)
 			.adicionar("espalhando as árvores", 0.04f)   // thread separada
 			.adicionar("montando a malha", 0.10f)        // thread principal (OpenGL)
 			.adicionar("plantando as árvores e o monstro", 0.06f) // thread principal (OpenGL)
@@ -115,7 +114,9 @@ public class TelaCarregando implements Tela {
 	private ExecutorService executor;
 	private Future<DadosTerreno> tarefa;
 	/** Fração do AG já feita, escrita pela thread do AG e lida pela principal. */
-	private volatile float fracaoRelevo = 0;
+	private volatile float fracaoNaThread = 0;
+	/** Qual etapa a thread está fazendo (0 relevo, 1 fase, 2 árvores). */
+	private volatile int etapaNaThread = 0;
 	private DadosTerreno dados;
 	private Mapa3D terrenoNovo;
 	private boolean reaproveitar;
@@ -166,56 +167,47 @@ public class TelaCarregando implements Tela {
 		});
 		tarefa = executor.submit(() -> {
 			// tudo aqui roda na thread separada: só dados, nada de OpenGL
+			// 1. o relevo (o primeiro AG)
 			int[][] alturas = GeradorTerreno.gerar(PERFIL, seed, (geracao, terreno, fitness) -> {
-				if (Thread.currentThread().isInterrupted()) {
-					throw new CancellationException("geração cancelada");
-				}
-				fracaoRelevo = (float) geracao / GeradorTerreno.GERACOES;
+				verificarCancelamento();
+				fracaoNaThread = (float) geracao / GeradorTerreno.GERACOES;
 			});
 			ConsultaAltura chao = new ConsultaAltura(alturas, METROS_ENTRE_PONTOS, METROS_POR_UNIDADE);
 
-			// início do jogador: o centro, ou o ponto bom mais próximo (até o AG da fase decidir)
-			GradeColisao colisao = new GradeColisao(chao.tamanho());
-			float centro = chao.tamanho() / 2;
-			float[] inicio = Jogador.pontoDeInicio(chao, colisao, centro, centro);
+			// 2. a fase (o segundo AG, com o A*): início, provas, caixas, Univali, trilhas e placas
+			etapaNaThread = 1;
+			fracaoNaThread = 0;
+			GeradorFase.Fase fase = GeradorFase.gerar(chao, seed, (geracao, layout, fitness) -> {
+				verificarCancelamento();
+				fracaoNaThread = (float) geracao / GeradorFase.GERACOES;
+			});
 
-			// a Univali e as provas (antes das árvores: cada prova pede uma clareira)
-			Random sorteio = new Random(seed * 17 + 3);
-			float[] univali = SorteioLugares.univali(chao, inicio, sorteio);
-			List<float[]> provas = SorteioLugares.provas(chao, inicio, univali, 3, sorteio);
-			List<SorteioLugares.Placa> placas = SorteioLugares.placas(chao, inicio, provas, sorteio);
-			List<DistribuidorArvores.Clareira> clareiras = new java.util.ArrayList<>();
-			clareiras.add(new DistribuidorArvores.Clareira(inicio[0], inicio[1], CLAREIRA_INICIO));
-			for (float[] p : provas) {
-				clareiras.add(new DistribuidorArvores.Clareira(p[0], p[1], CLAREIRA_PROVA));
-			}
-			for (SorteioLugares.Placa p : placas) {
-				clareiras.add(new DistribuidorArvores.Clareira(p.x(), p.z(), p.evento() ? 3f : 1.5f));
-			}
-
-			// pedras (se os modelos estiverem na pasta), também antes das árvores
+			// 3. regiões, pedras e árvores, longe das trilhas e das clareiras da fase
+			etapaNaThread = 2;
+			fracaoNaThread = 0;
+			Regioes regioes = new Regioes(seed);
+			List<DistribuidorArvores.Clareira> clareiras = new java.util.ArrayList<>(fase.clareiras());
 			List<LeitorObj.ModeloObj> modelosPedras = Pedras.arquivosPresentes() ? Pedras.lerModelos() : null;
 			float[] larguras = modelosPedras != null ? Pedras.larguras(modelosPedras) : null;
 			List<DistribuidorPedras.Pedra> pedras = modelosPedras != null
-					? DistribuidorPedras.distribuir(chao, larguras, clareiras, seed) : List.of();
+					? DistribuidorPedras.distribuir(chao, larguras, clareiras, seed, regioes) : List.of();
 			if (larguras != null) {
 				clareiras.addAll(DistribuidorPedras.clareiras(pedras, larguras));
 			}
-
-			// árvores, com as clareiras, e os troncos na grade de colisão
-			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed, clareiras);
+			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed, clareiras, regioes);
+			GradeColisao colisao = new GradeColisao(chao.tamanho());
 			DistribuidorArvores.registrarTroncos(arvores, colisao);
 			if (larguras != null) {
 				DistribuidorPedras.registrar(pedras, larguras, colisao);
 			}
-			registrarPlacas(placas, colisao);
+			registrarPlacas(fase.placas(), colisao);
+			byte[] detalhes = MapaDetalhes.gerar(chao.tamanho(), fase.trilhas(), regioes, seed);
 
 			// os modelos 3D das árvores, se estiverem na pasta (senão, null: árvores planas)
 			List<LeitorObj.ModeloObj> modelos = Arvores3D.arquivosPresentes() ? Arvores3D.lerModelos() : null;
 			// o Dragon Knight (só leitura dos arquivos; null se o MD2 não estiver na pasta)
 			PersonagemMd2.Dados monstro = PersonagemMd2.ler(TelaJogo.PASTA_MONSTRO, TelaJogo.ALTURA_MONSTRO);
-			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, inicio, provas, univali, placas, pedras,
-					modelosPedras);
+			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, fase, pedras, modelosPedras, detalhes);
 		});
 		estado = Estado.GERANDO;
 	}
@@ -263,13 +255,16 @@ public class TelaCarregando implements Tela {
 	}
 
 	private void acompanharGeracao() {
-		progresso.definirFracao(fracaoRelevo);
+		while (progresso.indiceAtual() < etapaNaThread) {
+			progresso.concluirEtapa();
+		}
+		progresso.definirFracao(fracaoNaThread);
 		if (!tarefa.isDone()) {
 			return;
 		}
 		try {
 			dados = tarefa.get();
-			for (int i = 0; i < ETAPAS_NA_THREAD; i++) {
+			while (progresso.indiceAtual() < ETAPAS_NA_THREAD) {
 				progresso.concluirEtapa(); // relevo, fase e árvores
 			}
 			estado = Estado.MONTANDO;
@@ -321,9 +316,16 @@ public class TelaCarregando implements Tela {
 		Constantes.mapa = terrenoNovo; // o campo global do projeto original continua apontando para o terreno
 	}
 
+	/** A thread de geração para quando a tela pede (ESC ou fechar o jogo). */
+	private static void verificarCancelamento() {
+		if (Thread.currentThread().isInterrupted()) {
+			throw new CancellationException("geração cancelada");
+		}
+	}
+
 	/** Os postes das placas na grade de colisão: dois na do evento, um na de trilha. */
-	private static void registrarPlacas(List<SorteioLugares.Placa> placas, GradeColisao colisao) {
-		for (SorteioLugares.Placa p : placas) {
+	private static void registrarPlacas(List<Placa> placas, GradeColisao colisao) {
+		for (Placa p : placas) {
 			if (p.evento()) {
 				// os postes ficam em x = ±1,1 m no modelo; girados: (cos g, -sen g) por metro de x
 				float c = (float) Math.cos(p.giro()), s = (float) Math.sin(p.giro());
@@ -333,6 +335,22 @@ public class TelaCarregando implements Tela {
 				colisao.adicionar(p.x(), p.z(), 0.12f);
 			}
 		}
+	}
+
+	/** O mapa de detalhes (trilhas e regiões) vira uma textura RGB com filtro linear. */
+	private static int enviarDetalhes(byte[] rgb) {
+		java.nio.ByteBuffer b = org.lwjgl.BufferUtils.createByteBuffer(rgb.length);
+		b.put(rgb).flip();
+		int id = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, id);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // linhas de 512 x 3 bytes: sem preenchimento
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, MapaDetalhes.LADO, MapaDetalhes.LADO, 0, GL_RGB, GL_UNSIGNED_BYTE, b);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		return id;
 	}
 
 	private void montarArvores() {
@@ -355,8 +373,9 @@ public class TelaCarregando implements Tela {
 			pedras = new Pedras(dados.pedras(), dados.modelosPedras());
 			pedras.load();
 		}
+		int texturaDetalhes = enviarDetalhes(dados.detalhes());
 		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, arvores3d,
-				monstro, dados.inicio(), dados.provas(), dados.univali(), dados.placas(), pedras);
+				monstro, dados.fase(), pedras, texturaDetalhes);
 		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo
 		terrenoNovo = null;
 	}

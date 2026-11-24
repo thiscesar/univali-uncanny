@@ -4,7 +4,8 @@
 // altura e pela inclinação de cada ponto:
 //   folhas secas no chão plano, manchas de grama escura (mais comuns nas partes altas),
 //   terra exposta nos declives médios, pedra nos declives fortes, lama na beira dos
-//   lagos e água, que reflete o céu, a lua e a lanterna.
+//   lagos e água, que reflete o céu, a lua e a lanterna. Por cima, o mapa de detalhes (feito
+//   no Java) pinta as trilhas de terra batida e muda o chão na mata morta e no pedregal.
 // A luz e a neblina vêm do comum.glsl, iguais às dos outros objetos.
 
 #include "comum.glsl"
@@ -16,6 +17,8 @@ uniform sampler2D texPedra;
 uniform sampler2D texAgua;
 uniform float tempo;       // segundos, para a água se mexer
 uniform mat4 view;         // para levar a normal da água ao espaço da câmera
+uniform sampler2D texDetalhes; // r = trilha, g = mata morta, b = pedregal (o mapa inteiro visto de cima)
+uniform float tamanhoMapa;     // metros: a coordenada do mapa de detalhes é a posição dividida por isto
 
 in vec3 normalMundo;
 in vec3 normalVista;
@@ -72,6 +75,16 @@ void main(void){
 	cor = mix(cor, terra, pesoTerra);
 	float pesoPedra = smoothstep(0.16, 0.26, inclinacao);
 	cor = mix(cor, pedra, pesoPedra);
+
+	// as regiões e as trilhas (o mapa de detalhes é lido com filtro linear: as bordas saem suaves)
+	vec3 mapa = texture(texDetalhes, coordTerreno / tamanhoMapa).rgb;
+	// mata morta: chão seco e acinzentado, sem grama
+	vec3 seco = mix(chao, vec3(luminancia(chao)), 0.55) * 0.9;
+	cor = mix(cor, seco, mapa.g * 0.75);
+	// pedregal: pedra aflorando em manchas
+	cor = mix(cor, pedra * 0.85, mapa.b * 0.6 * smoothstep(0.35, 0.65, ruido(coordTerreno * 0.18)));
+	// trilha: terra batida, um pouco mais clara e lisa que o resto
+	cor = mix(cor, terra * 1.5 + vec3(0.05, 0.04, 0.025), mapa.r * 0.9 * smoothstep(0.0, 0.25, h));
 
 	// lama: faixa escura e úmida na beira dos lagos (até ~0,6 m acima da água)
 	float pesoLama = 1.0 - smoothstep(0.05, 0.6 + ruido(coordTerreno * 0.3) * 0.3, h);

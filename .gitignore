@@ -18,3 +18,4 @@ config.properties
 
 # Ambientes Python (ferramentas de geração de texturas)
 venv/
+fase_*.png

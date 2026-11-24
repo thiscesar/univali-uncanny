@@ -29,6 +29,12 @@ public final class DistribuidorPedras {
 	 */
 	public static List<Pedra> distribuir(ConsultaAltura chao, float[] larguraModelo, List<DistribuidorArvores.Clareira> clareiras,
 			long seed) {
+		return distribuir(chao, larguraModelo, clareiras, seed, null);
+	}
+
+	/** O mesmo, com as regiões: no pedregal, as pedras grandes e as soltas são bem mais comuns. */
+	public static List<Pedra> distribuir(ConsultaAltura chao, float[] larguraModelo, List<DistribuidorArvores.Clareira> clareiras,
+			long seed, Regioes regioes) {
 		Random random = new Random(seed * 13 + 5);
 		List<Pedra> pedras = new ArrayList<>();
 		float t = chao.tamanho();
@@ -40,7 +46,9 @@ public final class DistribuidorPedras {
 			float escala = 2.2f + random.nextFloat() * 2.4f;
 			float raio = larguraModelo[modelo] * escala / 2;
 			if (chao.ehAgua(x, z) || livre(x, z, raio + 2, clareiras) == false) continue;
-			if (pertoDeOutra(pedras, x, z, 25)) continue;
+			boolean pedregal = regioes != null && regioes.em(x, z) == Regioes.Tipo.PEDREGAL;
+			if (regioes != null && !pedregal && random.nextFloat() < 0.75f) continue; // fora do pedregal, poucas
+			if (pertoDeOutra(pedras, x, z, pedregal ? 9 : 25)) continue;
 			pedras.add(nova(chao, x, z, escala, modelo, random, true));
 		}
 
@@ -59,6 +67,7 @@ public final class DistribuidorPedras {
 		for (int tentativa = 0; tentativa < 5000 && pedras.size() < antes + SOLTAS; tentativa++) {
 			float x = 15 + random.nextFloat() * (t - 30), z = 15 + random.nextFloat() * (t - 30);
 			if (chao.alturaEm(x, z) < 0.05f || !livre(x, z, 1, clareiras) || pertoDeOutra(pedras, x, z, 3)) continue;
+			if (regioes != null && regioes.em(x, z) != Regioes.Tipo.PEDREGAL && random.nextFloat() < 0.5f) continue;
 			pedras.add(nova(chao, x, z, 0.35f + random.nextFloat() * 0.6f, random.nextInt(larguraModelo.length), random,
 					false));
 		}

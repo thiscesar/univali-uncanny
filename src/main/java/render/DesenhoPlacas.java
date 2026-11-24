@@ -21,7 +21,7 @@ import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
 
 import dados.Recursos;
-import mundo.SorteioLugares;
+import fase.Placa;
 import shaders.ShaderObjeto;
 import util.Caminhos;
 import util.TextureLoader;
@@ -58,7 +58,7 @@ public class DesenhoPlacas {
 				.enviar();
 	}
 
-	public void desenhar(List<SorteioLugares.Placa> placas, mundo.ConsultaAltura chao, FloatBuffer projecao,
+	public void desenhar(List<Placa> placas, mundo.ConsultaAltura chao, FloatBuffer projecao,
 			FloatBuffer visao, Ambiente ambiente) {
 		ShaderObjeto shader = Recursos.shaderObjeto();
 		shader.start();
@@ -69,7 +69,7 @@ public class DesenhoPlacas {
 		glUniform1i(glGetUniformLocation(p, "usaNormalMap"), 0);
 		ambiente.enviar(shader);
 		glActiveTexture(GL_TEXTURE0);
-		for (SorteioLugares.Placa placa : placas) {
+		for (Placa placa : placas) {
 			Matrix4f m = new Matrix4f();
 			m.translate(new Vector3f(placa.x(), chao.alturaEm(placa.x(), placa.z()) - 0.1f, placa.z()));
 			m.rotate(placa.giro(), new Vector3f(0, 1, 0));

@@ -49,6 +49,14 @@ public final class DistribuidorArvores {
 	private DistribuidorArvores() {}
 
 	public static List<Arvore> distribuir(ConsultaAltura chao, long seed, List<Clareira> clareiras) {
+		return distribuir(chao, seed, clareiras, null);
+	}
+
+	/**
+	 * O mesmo, com as regiões da floresta (ou null, para uma floresta só): cada região muda a
+	 * densidade e quais árvores são mais comuns.
+	 */
+	public static List<Arvore> distribuir(ConsultaAltura chao, long seed, List<Clareira> clareiras, Regioes regioes) {
 		Random random = new Random(seed * 31 + 7);
 		RuidoFractal ruido = new RuidoFractal(seed + 99);
 		float tamanho = chao.tamanho();
@@ -58,12 +66,13 @@ public final class DistribuidorArvores {
 			float x = p[0], z = p[1];
 			// o sorteio da densidade vem antes dos filtros, para a sequência de números
 			// aleatórios não depender deles (mesma seed, mesmo resultado)
-			boolean fica = random.nextFloat() < densidade(x, z, tamanho, ruido);
+			Regioes.Tipo regiao = regioes != null ? regioes.em(x, z) : null;
+			boolean fica = random.nextFloat() < densidade(x, z, tamanho, ruido) * fatorDensidade(regiao, x, z, tamanho);
 			if (!fica || dentroDeClareira(x, z, clareiras)) continue;
 			if (chao.alturaEm(x, z) < ALTURA_MINIMA_CHAO) continue;  // água e margem
 			if (chao.anguloEm(x, z) > DECLIVE_MAXIMO) continue;
 
-			int textura = sortearTextura(random);
+			int textura = regiao != null ? sortearTextura(regiao, random) : sortearTextura(random);
 			float altura = ALTURA_MINIMA[textura] + random.nextFloat() * (ALTURA_MAXIMA[textura] - ALTURA_MINIMA[textura]);
 			float largura = altura * PROPORCAO[textura] * (0.9f + random.nextFloat() * 0.2f);
 			float rotacao = random.nextFloat() * (float) Math.PI;
@@ -99,6 +108,35 @@ public final class DistribuidorArvores {
 		if (r < 0.72f) return 1;
 		if (r < 0.86f) return 2;
 		return 3;
+	}
+
+	/** A região muda a densidade no interior; na muralha da borda, nada muda (ela esconde o fim do mapa). */
+	private static float fatorDensidade(Regioes.Tipo regiao, float x, float z, float tamanho) {
+		if (regiao == null) return 1;
+		float distanciaBorda = Math.min(Math.min(x, z), Math.min(tamanho - x, tamanho - z));
+		if (distanciaBorda < FAIXA_MURALHA) return 1;
+		return switch (regiao) {
+		case PINHEIRAL -> 1.15f;
+		case BOSQUE -> 0.85f;
+		case MATA_MORTA -> 0.55f;
+		case PEDREGAL -> 0.3f;
+		};
+	}
+
+	/** Árvores de cada região: 0 pinheiro, 1 abeto, 2 seca, 3 copa redonda. */
+	private static int sortearTextura(Regioes.Tipo regiao, Random random) {
+		float[] chances = switch (regiao) {
+		case PINHEIRAL -> new float[] { 0.55f, 0.40f, 0.04f, 0.01f };
+		case MATA_MORTA -> new float[] { 0.12f, 0.06f, 0.75f, 0.07f };
+		case BOSQUE -> new float[] { 0.18f, 0.12f, 0.05f, 0.65f };
+		case PEDREGAL -> new float[] { 0.35f, 0.30f, 0.25f, 0.10f };
+		};
+		float r = random.nextFloat(), soma = 0;
+		for (int i = 0; i < chances.length; i++) {
+			soma += chances[i];
+			if (r < soma) return i;
+		}
+		return 0;
 	}
 
 	private static boolean dentroDeClareira(float x, float z, List<Clareira> clareiras) {

@@ -68,7 +68,7 @@ import Model.VboCube;
  * F liga e desliga a lanterna. ESC abre a pausa por cima. F3 mostra o painel de depuração; F4 troca para a câmera livre
  * (voa e atravessa o chão, para inspecionar o mapa). V e X forçam vitória e derrota, e T liga
  * um som 3D de teste: são atalhos provisórios até existirem as regras do jogo. Com o F3 ligado,
- * G faz o Dragon Knight surgir e K o mata, P leva até a próxima prova; as setas e Page Up/Down ajustam a posição da arma.
+ * G faz o Dragon Knight surgir e K o mata, P leva até a próxima prova, I salva a imagem do mapa da fase; as setas e Page Up/Down ajustam a posição da arma.
  *
  * As provas M1, M2 e M3: folhas brilhando e sussurrando pela floresta; E pega. Cada uma deixa o
  * monstro mais frequente; a terceira faz tocar o sinal de aula, vindo da direção da Univali.
@@ -249,7 +249,10 @@ public class TelaJogo implements Tela {
 			sussurros.put(p, gerenciador.audio().tocar3D(somSussurro, p.x, p.y, p.z, 0.9f, true, 3f));
 		}
 
-		caixas = CaixaMunicao.sortear(mundo.chao, mundo.colisao, mundo.inicio, Regras.CAIXAS_MUNICAO, random);
+		caixas = new java.util.ArrayList<>();
+		for (float[] c : mundo.caixas) { // onde o AG da fase pôs as caixas
+			caixas.add(new CaixaMunicao(c[0], mundo.chao.alturaEm(c[0], c[1]), c[1], random.nextFloat() * (float) Math.PI));
+		}
 		cuboCaixa = new VboCube();
 		cuboCaixa.load();
 
@@ -363,6 +366,11 @@ public class TelaJogo implements Tela {
 		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_P)) {
 			irParaAProximaProva();
+		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_I)) {
+			String arquivo = "fase_" + mundo.seed + ".png";
+			fase.ImagemFase.salvar(mundo, arquivo);
+			mostrarMensagem("Mapa salvo em " + arquivo);
 		}
 
 		if (cameraLivre != null) {
@@ -975,6 +983,13 @@ public class TelaJogo implements Tela {
 			glBindTexture(GL_TEXTURE_2D, texturasTerreno[i]);
 			glUniform1i(glGetUniformLocation(prog, TexturasFloresta.UNIFORMS[i]), i);
 		}
+		// o mapa de detalhes (trilhas e regiões) na unidade seguinte; a coordenada do terreno no
+		// shader é a da grade (1 ponto por metro), então o mapa vai de 0 ao tamanho em metros
+		int unidade = texturasTerreno.length;
+		glActiveTexture(GL_TEXTURE0 + unidade);
+		glBindTexture(GL_TEXTURE_2D, mundo.texturaDetalhes);
+		glUniform1i(glGetUniformLocation(prog, "texDetalhes"), unidade);
+		glUniform1f(glGetUniformLocation(prog, "tamanhoMapa"), mundo.tamanho());
 
 		mundo.terreno.DesenhaSe(shader);
 
@@ -1031,7 +1046,8 @@ public class TelaJogo implements Tela {
 					: String.format(" %.0f m", Math.hypot(p.x - c.x, p.z - c.z)));
 		}
 		float[] u = mundo.univali;
-		return sb.append(String.format("   Univali %.0f m", Math.hypot(u[0] - c.x, u[1] - c.z))).toString();
+		return sb.append(String.format("   Univali %.0f m   fitness da fase %.3f", Math.hypot(u[0] - c.x, u[1] - c.z),
+				mundo.fase.fitness())).toString();
 	}
 
 	/** A linha do monstro no painel F3. */
@@ -1092,7 +1108,7 @@ public class TelaJogo implements Tela {
 						escopeta.cano(), escopeta.reserva(), particulas.quantidade(),
 						caixas.stream().filter(cx -> !cx.pega()).count()),
 				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata",
-				"clique atira   R recarrega   E pega   P vai até a próxima prova   setas e PgUp/PgDn: posição da arma",
+				"clique atira   R recarrega   E pega   P vai até a próxima prova   I salva o mapa da fase   setas e PgUp/PgDn: arma",
 		};
 		int tamanho = 16;
 		float linha = tamanho * 1.45f;

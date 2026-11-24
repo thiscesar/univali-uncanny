@@ -1,13 +1,18 @@
 package mundo;
 
+import java.util.List;
+
+import fase.GeradorFase;
+import fase.Placa;
+import fase.Ponto;
 import md2.PersonagemMd2;
 import obj.Mapa3D;
 import terreno.PerfilTerreno;
 
 /**
  * Tudo o que forma o lugar da partida: o terreno (malha do OpenGL), as perguntas sobre
- * o chão, as árvores, a grade de colisão com os troncos, o modelo do monstro, o ponto de início do
- * jogador e os lugares das provas e da Univali.
+ * o chão, as árvores, as pedras, a grade de colisão, o modelo do monstro e a fase (início, provas,
+ * caixas, Univali, trilhas e placas, decididos pelo AG da fase).
  * É o que a tela de carregamento entrega pronto para a tela de jogo.
  */
 public class Mundo {
@@ -24,20 +29,26 @@ public class Mundo {
 	public final Arvores3D arvores3d;
 	/** O Dragon Knight já na placa de vídeo (null sem o MD2: o jogo desenha o substituto). */
 	public final PersonagemMd2 monstro;
+	/** A fase decidida pelo AG da fase: início, Univali, provas, caixas, trilhas, placas e o fitness. */
+	public final GeradorFase.Fase fase;
 	/** Onde o jogador começa (x, z), já com a clareira em volta. */
 	public final float[] inicio;
 	/** Onde ficam as provas M1, M2 e M3 (x, z), cada uma numa clareira. */
-	public final java.util.List<float[]> provas;
+	public final List<float[]> provas;
+	/** Onde ficam as caixas de munição (x, z). */
+	public final List<float[]> caixas;
 	/** Onde fica a Univali (x, z). */
 	public final float[] univali;
 	/** As placas do evento e as de trilha. */
-	public final java.util.List<SorteioLugares.Placa> placas;
+	public final List<Placa> placas;
 	/** As pedras já na placa de vídeo (null sem os modelos). */
 	public final Pedras pedras;
+	/** A textura do mapa de detalhes (trilhas e regiões), que o shader do terreno lê. */
+	public final int texturaDetalhes;
 
 	public Mundo(long seed, PerfilTerreno perfil, Mapa3D terreno, ConsultaAltura chao, GradeColisao colisao,
-			Arvores arvores, Arvores3D arvores3d, PersonagemMd2 monstro, float[] inicio, java.util.List<float[]> provas,
-			float[] univali, java.util.List<SorteioLugares.Placa> placas, Pedras pedras) {
+			Arvores arvores, Arvores3D arvores3d, PersonagemMd2 monstro, GeradorFase.Fase fase, Pedras pedras,
+			int texturaDetalhes) {
 		this.seed = seed;
 		this.perfil = perfil;
 		this.terreno = terreno;
@@ -46,11 +57,18 @@ public class Mundo {
 		this.arvores = arvores;
 		this.arvores3d = arvores3d;
 		this.monstro = monstro;
-		this.inicio = inicio;
-		this.provas = provas;
-		this.univali = univali;
-		this.placas = placas;
+		this.fase = fase;
+		this.inicio = xz(fase.layout().inicio());
+		this.provas = fase.layout().provas().stream().map(Mundo::xz).toList();
+		this.caixas = fase.layout().caixas().stream().map(Mundo::xz).toList();
+		this.univali = xz(fase.layout().univali());
+		this.placas = fase.placas();
 		this.pedras = pedras;
+		this.texturaDetalhes = texturaDetalhes;
+	}
+
+	private static float[] xz(Ponto p) {
+		return new float[] { p.x(), p.z() };
 	}
 
 	/** Quantas árvores a floresta tem, planas ou 3D. */
@@ -70,5 +88,6 @@ public class Mundo {
 		if (arvores3d != null) arvores3d.liberar();
 		if (monstro != null) monstro.liberar();
 		if (pedras != null) pedras.liberar();
+		org.lwjgl.opengl.GL11.glDeleteTextures(texturaDetalhes);
 	}
 }

@@ -67,6 +67,24 @@ public final class Regras {
 	public static final float DURACAO_TIRO = 0.3f;
 	public static final float DURACAO_CARTUCHO = 0.5f;
 
+	// ---------- AG da fase ----------
+
+	/** Pesos de cada termo do fitness da fase (somam 1). */
+	public static final double PESO_CAMINHO_UNIVALI = 0.30, PESO_PROVAS_ESPALHADAS = 0.25, PESO_PROGRESSAO = 0.20,
+			PESO_UNIVALI_BORDA = 0.10, PESO_CAIXAS = 0.15;
+	/** O caminho (A*) do início até a Univali deve ter pelo menos isto, em metros. */
+	public static final float META_CAMINHO_UNIVALI = 180f;
+	/** Distâncias de caminho desejadas até as provas: uma perto, uma média, uma longe. */
+	public static final float[] PROGRESSAO_PROVAS = { 70f, 130f, 190f };
+	/** Distância mínima entre as provas e delas até o início; e das provas até a Univali. */
+	public static final float DISTANCIA_PROVAS = 60f, DISTANCIA_PROVA_UNIVALI = 40f;
+	/** A Univali fica a pelo menos isto da borda. */
+	public static final float UNIVALI_BORDA = 40f;
+	/** Uma caixa de munição boa fica entre 20 e 50 m de alguma prova. */
+	public static final float CAIXA_MINIMA = 20f, CAIXA_MAXIMA = 50f;
+	/** Peso da inclinação no custo do A* (subir morro custa mais). */
+	public static final float CUSTO_INCLINACAO = 2f;
+
 	/** Intervalo até a próxima aparição: o da tabela, conforme as provas, com ±20% de sorte. */
 	public static float intervaloAparicao(int provasColetadas, float sorteio01) {
 		int i = Math.max(0, Math.min(INTERVALOS.length - 1, provasColetadas));
