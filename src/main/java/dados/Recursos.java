@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import mundo.Arvores3D;
 import mundo.TexturaArvores;
 import render.Fonte;
 import render.MipmapsCobertura;
@@ -17,7 +18,9 @@ import render.Overlay2D;
 import render.TextoTextura;
 import shaders.ShaderProgram;
 import shaders.ShaderArvore;
+import shaders.ShaderArvore3D;
 import shaders.ShaderMd2;
+import shaders.ShaderPs1Tela;
 import shaders.ShaderObjeto;
 import shaders.ShaderTerrenoFloresta;
 import shaders.StaticShaderTerreno;
@@ -53,7 +56,9 @@ public final class Recursos {
 	private static ShaderTerrenoFloresta shaderFloresta;
 	private static ShaderObjeto shaderObjeto;
 	private static ShaderArvore shaderArvore;
+	private static ShaderArvore3D shaderArvore3D;
 	private static ShaderMd2 shaderMd2;
+	private static ShaderPs1Tela shaderPs1Tela;
 
 	/** Desenho 2D (menus, HUD) e o cache de textos, criados na primeira vez. */
 	private static Overlay2D overlay;
@@ -151,6 +156,37 @@ public final class Recursos {
 		return shaderFloresta;
 	}
 
+	/** O shader que amplia a cena do modo PS1. */
+	public static ShaderPs1Tela shaderPs1Tela() {
+		if (shaderPs1Tela == null) {
+			shaderPs1Tela = registrar(new ShaderPs1Tela());
+		}
+		return shaderPs1Tela;
+	}
+
+	/**
+	 * Troca o filtro das texturas da cena 3D (terreno, árvores, skins). No modo PS1, sem
+	 * suavização: cada pixel da textura aparece como um bloco nítido, como no console.
+	 * As texturas da interface (menu, textos) não mudam.
+	 */
+	public static void aplicarModoPs1(boolean ps1) {
+		for (Map.Entry<String, Integer> e : texturas.entrySet()) {
+			String chave = e.getKey();
+			boolean comMipmaps = chave.startsWith("terreno:") || chave.startsWith("repetida:") || chave.startsWith("arvores");
+			glBindTexture(GL_TEXTURE_2D, e.getValue());
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ps1 ? GL_NEAREST : GL_LINEAR);
+			int minificacao = comMipmaps ? (ps1 ? GL_NEAREST_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_LINEAR)
+					: (ps1 ? GL_NEAREST : GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minificacao);
+			if (comMipmaps && org.lwjgl.opengl.GL.getCapabilities().GL_EXT_texture_filter_anisotropic) {
+				float maximo = glGetFloat(org.lwjgl.opengl.EXTTextureFilterAnisotropic.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+				glTexParameterf(GL_TEXTURE_2D, org.lwjgl.opengl.EXTTextureFilterAnisotropic.GL_TEXTURE_MAX_ANISOTROPY_EXT,
+						ps1 ? 1f : Math.min(8f, maximo));
+			}
+		}
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
 	/** O shader dos modelos MD2 animados. */
 	public static ShaderMd2 shaderMd2() {
 		if (shaderMd2 == null) {
@@ -165,6 +201,33 @@ public final class Recursos {
 			shaderArvore = registrar(new ShaderArvore());
 		}
 		return shaderArvore;
+	}
+
+	/** O shader das árvores 3D. */
+	public static ShaderArvore3D shaderArvore3D() {
+		if (shaderArvore3D == null) {
+			shaderArvore3D = registrar(new ShaderArvore3D());
+		}
+		return shaderArvore3D;
+	}
+
+	/**
+	 * A textura de um material das árvores 3D (modelos/arvores/material.png), repetida ao longo
+	 * dos troncos e com mipmaps que preservam o recorte das folhas. Sem o arquivo, o xadrez.
+	 */
+	public static int texturaArvore3D(String material) {
+		String chave = "arvores3d:" + material;
+		Integer id = texturas.get(chave);
+		if (id == null) {
+			String relativo = Arvores3D.PASTA + material + ".png";
+			BufferedImage imagem = Caminhos.arquivo(relativo).exists()
+					? TextureLoader.loadImage(Caminhos.caminho(relativo)) : null;
+			id = MipmapsCobertura.enviar(imagem != null ? imagem : xadrez());
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			texturas.put(chave, id);
+		}
+		return id;
 	}
 
 	/** A textura das árvores (as variações lado a lado), com mipmaps que preservam o recorte. */
@@ -249,7 +312,9 @@ public final class Recursos {
 		shaderFloresta = null;
 		shaderObjeto = null;
 		shaderArvore = null;
+		shaderArvore3D = null;
 		shaderMd2 = null;
+		shaderPs1Tela = null;
 		if (overlay != null) {
 			overlay.liberar();
 			overlay = null;

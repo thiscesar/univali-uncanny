@@ -8,13 +8,14 @@ import java.util.function.Function;
 import audio.Audio;
 import dados.Opcoes;
 import entrada.Entrada;
+import render.Alternador;
 import render.Botao;
 import render.CampoTexto;
 import render.Deslizante;
 import render.Overlay2D;
 
 /**
- * Opções: volumes, sensibilidade do mouse e seed do mapa. As mudanças só valem ao
+ * Opções: volumes, sensibilidade do mouse, modo PS1 e seed do mapa. As mudanças só valem ao
  * "Salvar" (que grava o config.properties); "Cancelar" e ESC descartam.
  *
  * Teclado: setas para cima e para baixo (ou Tab) escolhem a linha; esquerda e direita
@@ -26,6 +27,7 @@ class PainelOpcoes extends Painel {
 
 	private final Deslizante volumeGeral, volumeMusica, volumeEfeitos, sensibilidade;
 	private final Deslizante[] deslizantes;
+	private final Alternador modoPs1;
 	private final CampoTexto seed;
 	private final Botao salvar = new Botao("Salvar", 0, 0, 200, 46);
 	private final Botao cancelar = new Botao("Cancelar", 0, 0, 200, 46);
@@ -33,9 +35,9 @@ class PainelOpcoes extends Painel {
 	/** Para ouvir a mudança de volume na hora, enquanto o controle é arrastado. */
 	private final Audio audio;
 
-	/** 0 a 3: deslizantes; 4: seed; 5: Salvar; 6: Cancelar. */
+	/** 0 a 3: deslizantes; 4: modo PS1; 5: seed; 6: Salvar; 7: Cancelar. */
 	private int foco = 0;
-	private static final int ITENS = 7;
+	private static final int PS1 = 4, SEED = 5, SALVAR = 6, CANCELAR = 7, ITENS = 8;
 
 	PainelOpcoes(Audio audio) {
 		this.audio = audio;
@@ -46,6 +48,7 @@ class PainelOpcoes extends Painel {
 		sensibilidade = new Deslizante("Sensibilidade do mouse", paraDeslizante(o.sensibilidade),
 				v -> String.format(Locale.ROOT, "%.2fx", deDeslizante(v)));
 		deslizantes = new Deslizante[] { volumeGeral, volumeMusica, volumeEfeitos, sensibilidade };
+		modoPs1 = new Alternador("Modo PS1 (pixels grandes)", o.modoPs1);
 		seed = new CampoTexto("Seed do mapa", o.seed, 9, true, "vazia = mapa novo");
 	}
 
@@ -64,9 +67,9 @@ class PainelOpcoes extends Painel {
 		if (entrada.foiPressionadaOuRepetida(GLFW_KEY_UP)) {
 			foco = (foco - 1 + ITENS) % ITENS;
 		}
-		if (foco >= 5) { // na linha dos botões, esquerda e direita escolhem o botão
-			if (entrada.foiPressionada(GLFW_KEY_LEFT)) foco = 5;
-			if (entrada.foiPressionada(GLFW_KEY_RIGHT)) foco = 6;
+		if (foco >= SALVAR) { // na linha dos botões, esquerda e direita escolhem o botão
+			if (entrada.foiPressionada(GLFW_KEY_LEFT)) foco = SALVAR;
+			if (entrada.foiPressionada(GLFW_KEY_RIGHT)) foco = CANCELAR;
 		}
 
 		for (int i = 0; i < deslizantes.length; i++) {
@@ -74,12 +77,15 @@ class PainelOpcoes extends Painel {
 				foco = i;
 			}
 		}
-		if (seed.atualizar(entrada, foco == 4, diftime)) {
-			foco = 4;
+		if (modoPs1.atualizar(entrada, foco == PS1)) {
+			foco = PS1;
+		}
+		if (seed.atualizar(entrada, foco == SEED, diftime)) {
+			foco = SEED;
 		}
 
-		salvar.definirFoco(foco == 5);
-		cancelar.definirFoco(foco == 6);
+		salvar.definirFoco(foco == SALVAR);
+		cancelar.definirFoco(foco == CANCELAR);
 		boolean clicouSalvar = salvar.atualizar(entrada);
 		boolean clicouCancelar = cancelar.atualizar(entrada);
 
@@ -87,16 +93,16 @@ class PainelOpcoes extends Painel {
 		audio.definirVolumes(volumeGeral.valor, volumeMusica.valor, volumeEfeitos.valor);
 
 		boolean enter = entrada.foiPressionada(GLFW_KEY_ENTER) || entrada.foiPressionada(GLFW_KEY_KP_ENTER);
-		if (clicouSalvar || (enter && foco == 5)) {
+		if (clicouSalvar || (enter && foco == SALVAR)) {
 			aplicarESalvar();
 			return true;
 		}
-		if (clicouCancelar || (enter && foco == 6)) {
+		if (clicouCancelar || (enter && foco == CANCELAR)) {
 			restaurarVolumes();
 			return true;
 		}
-		if (enter) {
-			foco++; // Enter num controle passa para o próximo
+		if (enter && foco != PS1) {
+			foco++; // Enter num controle passa para o próximo (no modo PS1, o Enter troca o valor)
 		}
 		return false;
 	}
@@ -109,6 +115,8 @@ class PainelOpcoes extends Painel {
 			d.posicionar(x, y, largura, linha);
 			y += linha;
 		}
+		modoPs1.posicionar(x, y, largura, linha);
+		y += linha;
 		seed.posicionar(x, y, largura, linha);
 		float by = py + pa - salvar.altura - 24;
 		salvar.posicionar(px + pl / 2 - salvar.largura - 12, by);
@@ -122,6 +130,7 @@ class PainelOpcoes extends Painel {
 		o.volumeEfeitos = volumeEfeitos.valor;
 		o.sensibilidade = deDeslizante(sensibilidade.valor);
 		o.seed = seed.texto();
+		o.modoPs1 = modoPs1.valor;
 		o.salvar();
 	}
 
@@ -136,7 +145,8 @@ class PainelOpcoes extends Painel {
 		for (int i = 0; i < deslizantes.length; i++) {
 			deslizantes[i].desenhar(overlay, foco == i, tamanhoTexto);
 		}
-		seed.desenhar(overlay, foco == 4, tamanhoTexto);
+		modoPs1.desenhar(overlay, foco == PS1, tamanhoTexto);
+		seed.desenhar(overlay, foco == SEED, tamanhoTexto);
 		salvar.desenhar(overlay);
 		cancelar.desenhar(overlay);
 	}

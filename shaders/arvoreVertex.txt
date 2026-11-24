@@ -3,6 +3,8 @@
 // Árvores desenhadas por instancing: o modelo de uma árvore (dois planos cruzados de
 // altura 1) é esticado, girado e posicionado com os dados de cada instância.
 
+#include "ps1Vertice.glsl"
+
 in vec3 position;   // att 0: vértice do modelo (x ou z de -0,5 a 0,5; y de 0 a 1)
 in vec3 normal;     // att 2: normal do plano
 in vec2 textuv;     // att 3: coordenada de textura dentro de uma variação
@@ -32,7 +34,7 @@ void main(void){
 
 	// a posição já fica no mundo: não há matriz model
 	vec4 pv = vec4(girado + instancia.xyz, 1.0) * view;
-	gl_Position = pv * projection;
+	gl_Position = tremerPs1(pv * projection);
 	posVista = pv.xyz;
 
 	vec3 n = vec3(c * normal.x - s * normal.z, normal.y, s * normal.x + c * normal.z);

@@ -1,0 +1,46 @@
+#version 330 core
+
+// Árvores 3D desenhadas por instancing: o mesmo modelo (tronco, galhos, copa) é escalado,
+// girado e posicionado com os dados de cada árvore.
+
+#include "ps1Vertice.glsl"
+
+in vec3 position;   // att 0: vértice do modelo, em metros, com a base em y = 0
+in vec3 cor;        // att 1: sombra assada pelo gerador (cantos e parte de baixo da copa mais escuros)
+in vec3 normal;     // att 2: normal do vértice
+in vec2 textuv;     // att 3: coordenada de textura do material
+in vec4 instancia;  // att 4: x, y (chão), z, escala
+in vec4 extra;      // att 5: giro em radianos, brilho, altura do modelo, (livre)
+
+uniform mat4 view;
+uniform mat4 projection;
+uniform float tempo;
+
+out vec2 uv;
+out vec3 normalVista;
+out vec3 posVista;
+out vec3 corVertice;
+
+void main(void){
+	float c = cos(extra.x), s = sin(extra.x);
+	vec3 p = position * instancia.w;
+	vec3 girado = vec3(c * p.x - s * p.z, p.y, s * p.x + c * p.z);
+
+	// vento: só a parte de cima balança (quadrático na altura), cada árvore numa fase
+	float h = clamp(position.y / extra.z, 0.0, 1.0);
+	float fase = tempo * 1.3 + instancia.x * 0.31 + instancia.z * 0.17;
+	float balanco = sin(fase) * 0.22 * h * h;
+	girado.x += balanco;
+	girado.z += balanco * 0.5;
+
+	// a posição já fica no mundo: não há matriz model
+	vec4 pv = vec4(girado + instancia.xyz, 1.0) * view;
+	gl_Position = tremerPs1(pv * projection);
+	posVista = pv.xyz;
+
+	vec3 n = vec3(c * normal.x - s * normal.z, normal.y, s * normal.x + c * normal.z);
+	normalVista = (vec4(n, 0.0) * view).xyz;
+
+	uv = textuv;
+	corVertice = cor * extra.y;
+}

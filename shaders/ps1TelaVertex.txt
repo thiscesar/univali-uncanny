@@ -1,0 +1,12 @@
+#version 330 core
+
+// Modo PS1: um retângulo que cobre a tela inteira, para ampliar a imagem pequena.
+
+in vec3 position; // att 0: canto do retângulo, de -1 a 1
+
+out vec2 uv;
+
+void main(void){
+	gl_Position = vec4(position.xy, 0.0, 1.0);
+	uv = position.xy * 0.5 + 0.5;
+}

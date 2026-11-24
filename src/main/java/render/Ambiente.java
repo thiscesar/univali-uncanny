@@ -36,6 +36,11 @@ public class Ambiente {
 
 	public float intensidadePreenchimento = 0;
 
+	/** Modo PS1 (vértices tremendo e textura sem correção de perspectiva): 1 ligado, 0 desligado. */
+	public float modoPs1 = 0;
+	/** Resolução em que a cena é desenhada no modo PS1 (a grade em que os vértices caem). */
+	public final float[] resolucaoPs1 = { 320, 240 };
+
 	/** Envia todos os valores ao shader (que precisa estar ativo, com start()). */
 	public void enviar(ShaderProgram shader) {
 		int p = shader.programID;
@@ -57,5 +62,8 @@ public class Ambiente {
 		glUniform1f(glGetUniformLocation(p, "alcanceClarao"), alcanceClarao);
 
 		glUniform1f(glGetUniformLocation(p, "intensidadePreenchimento"), intensidadePreenchimento);
+
+		glUniform1f(glGetUniformLocation(p, "modoPs1"), modoPs1);
+		glUniform2f(glGetUniformLocation(p, "resolucaoPs1"), resolucaoPs1[0], resolucaoPs1[1]);
 	}
 }

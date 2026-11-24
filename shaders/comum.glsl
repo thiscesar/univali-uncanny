@@ -5,6 +5,9 @@
 // olhando para -Z. Assim a lanterna, presa ao jogador, tem posição e direção quase
 // constantes, e normais, posições e luzes precisam estar todas nesse mesmo espaço.
 
+// ---------- modo PS1 ----------
+uniform float modoPs1;           // 1 = ligado: as texturas usam a coordenada "afim" (entorta como no console)
+
 // ---------- ambiente ----------
 uniform vec3  corNeblina;        // igual à cor de fundo (glClearColor)
 uniform float densidadeNeblina;  // neblina exp²: com 0,05, quase nada aparece depois de 40 m

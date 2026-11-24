@@ -3,6 +3,8 @@
 // Terreno da floresta. Igual ao terrenoVertex.txt da ilha, mais a normal em espaço da câmera
 // (para a iluminação do comum.glsl).
 
+#include "ps1Vertice.glsl"
+
 in vec3 position; // att 0: posição (água já achatada no nível 0)
 in vec3 cor;      // att 1: cor.x = altura REAL em metros / 1000 (inclusive abaixo d'água)
 in vec3 normal;   // att 2: normal suave do vértice
@@ -17,15 +19,17 @@ out vec3 normalVista;
 out vec2 coordTerreno;
 out float alturaReal;
 out vec3 posVista;
+noperspective out vec2 coordAfim; // a mesma coordenada, interpolada sem correção de perspectiva (PS1)
 
 void main(void){
 	mat4 modelview = model * view;
 	vec4 pv = vec4(position, 1.0) * modelview;
-	gl_Position = pv * projection;
+	gl_Position = tremerPs1(pv * projection);
 
 	posVista = pv.xyz;
 	normalMundo = (vec4(normal, 0.0) * model).xyz;   // w = 0: só gira, não translada
 	normalVista = (vec4(normal, 0.0) * modelview).xyz;
 	coordTerreno = textuv;
+	coordAfim = textuv;
 	alturaReal = cor.x * 1000.0;
 }

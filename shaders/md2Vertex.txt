@@ -3,6 +3,8 @@
 // Modelos MD2 animados: recebe dois quadros (A nos atributos 0 e 2, B nos atributos 4 e 5)
 // e mistura os dois com o fator, na placa de vídeo, a cada quadro da tela.
 
+#include "ps1Vertice.glsl"
+
 in vec3 position;   // att 0: posição no quadro A
 in vec3 cor;        // att 1: constante (não usada)
 in vec3 normal;     // att 2: normal no quadro A
@@ -18,6 +20,7 @@ uniform float fator; // 0 = só o quadro A; 1 = só o quadro B
 out vec2 uv;
 out vec3 normalVista;
 out vec3 posVista;
+noperspective out vec2 uvAfim;
 
 void main(void){
 	vec3 p = mix(position, positionB, fator);
@@ -25,8 +28,9 @@ void main(void){
 
 	mat4 modelview = model * view;
 	vec4 pv = vec4(p, 1.0) * modelview;
-	gl_Position = pv * projection;
+	gl_Position = tremerPs1(pv * projection);
 	posVista = pv.xyz;
 	normalVista = (vec4(n, 0.0) * modelview).xyz;
 	uv = textuv; // o t do MD2 já conta a partir do topo da imagem, como o TextureLoader
+	uvAfim = uv;
 }

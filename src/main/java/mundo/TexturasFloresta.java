@@ -28,7 +28,7 @@ public final class TexturasFloresta {
 						() -> tingir(base("texturas/grama.png"), 0.42f, 0.55f, 0.38f)),
 				Recursos.texturaTerreno("texturas/terra.png",
 						() -> tingir(base("texturas/areia.png"), 0.50f, 0.38f, 0.28f)),
-				Recursos.texturaTerreno("texturas/pedra.png",
+				Recursos.texturaTerreno("texturas/pedra_floresta.png", // a pedra.png é do terreno da ilha
 						() -> tingir(base("texturas/pedra.png"), 0.70f, 0.70f, 0.72f)),
 				Recursos.texturaTerreno("texturas/agua.png",
 						() -> base("texturas/agua.png")),

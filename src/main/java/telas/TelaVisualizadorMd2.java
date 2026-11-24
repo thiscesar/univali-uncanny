@@ -14,6 +14,7 @@ import org.lwjgl.BufferUtils;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
 
+import dados.Opcoes;
 import dados.Recursos;
 import entrada.Entrada;
 import md2.Animacao;
@@ -21,6 +22,7 @@ import md2.Animador;
 import md2.PersonagemMd2;
 import render.Ambiente;
 import render.Camera;
+import render.FiltroPs1;
 import render.Overlay2D;
 import render.Texto;
 import shaders.ShaderMd2;
@@ -52,6 +54,8 @@ public class TelaVisualizadorMd2 implements Tela {
 	private final Camera camera = new Camera(0, 1.5f, 7.5f, 0, (float) Math.toRadians(-6));
 	private final Ambiente ambiente = new Ambiente();
 	private final FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+	private final FiltroPs1 filtroPs1 = new FiltroPs1();
+	private boolean ps1;
 
 	public TelaVisualizadorMd2(GerenciadorTelas gerenciador) {
 		this.gerenciador = gerenciador;
@@ -65,6 +69,8 @@ public class TelaVisualizadorMd2 implements Tela {
 		PersonagemMd2.Dados dados = PersonagemMd2.ler(PASTA, ALTURA);
 		if (dados != null) {
 			personagem = new PersonagemMd2(dados);
+			ps1 = Opcoes.atual().modoPs1;
+			Recursos.aplicarModoPs1(ps1);
 			animacoes = personagem.animacoes();
 			animador = new Animador(animacoes);
 			tocarAtual();
@@ -96,6 +102,7 @@ public class TelaVisualizadorMd2 implements Tela {
 		if (personagem != null) {
 			personagem.liberar();
 		}
+		filtroPs1.liberar();
 	}
 
 	@Override
@@ -122,6 +129,12 @@ public class TelaVisualizadorMd2 implements Tela {
 
 	@Override
 	public void desenhar() {
+		if (ps1) {
+			filtroPs1.comecar(gerenciador.largura(), gerenciador.altura());
+			ambiente.resolucaoPs1[0] = filtroPs1.largura();
+			ambiente.resolucaoPs1[1] = filtroPs1.altura();
+		}
+		ambiente.modoPs1 = ps1 ? 1 : 0;
 		glClearColor(ambiente.corCeu[0], ambiente.corCeu[1], ambiente.corCeu[2], 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glEnable(GL_DEPTH_TEST);
@@ -142,6 +155,9 @@ public class TelaVisualizadorMd2 implements Tela {
 			ambiente.enviar(shader);
 			personagem.desenhar(shader, animador.quadroA(), animador.quadroB(), animador.fator(), comArma, comNormalMap);
 			shader.stop();
+		}
+		if (ps1) {
+			filtroPs1.terminar(gerenciador.largura(), gerenciador.altura());
 		}
 		desenharTexto();
 	}

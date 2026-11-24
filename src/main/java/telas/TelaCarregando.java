@@ -16,9 +16,11 @@ import dados.Constantes;
 import dados.Recursos;
 import entidades.Jogador;
 import mundo.Arvores;
+import mundo.Arvores3D;
 import mundo.ConsultaAltura;
 import mundo.DistribuidorArvores;
 import mundo.GradeColisao;
+import mundo.LeitorObj;
 import mundo.Mundo;
 import mundo.TexturasFloresta;
 import obj.Mapa3D;
@@ -53,7 +55,7 @@ public class TelaCarregando implements Tela {
 
 	/** O que a thread de geração entrega: só dados, nada de OpenGL. */
 	private record DadosTerreno(int[][] alturas, ConsultaAltura chao, GradeColisao colisao,
-			List<DistribuidorArvores.Arvore> arvores, float[] inicio) {}
+			List<DistribuidorArvores.Arvore> arvores, List<LeitorObj.ModeloObj> modelosArvores, float[] inicio) {}
 
 	/** Raio, em metros, da clareira sem árvores em volta do início do jogador. */
 	private static final float CLAREIRA_INICIO = 6f;
@@ -173,7 +175,10 @@ public class TelaCarregando implements Tela {
 			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed,
 					List.of(new DistribuidorArvores.Clareira(inicio[0], inicio[1], CLAREIRA_INICIO)));
 			DistribuidorArvores.registrarTroncos(arvores, colisao);
-			return new DadosTerreno(alturas, chao, colisao, arvores, inicio);
+
+			// os modelos 3D das árvores, se estiverem na pasta (senão, null: árvores planas)
+			List<LeitorObj.ModeloObj> modelos = Arvores3D.arquivosPresentes() ? Arvores3D.lerModelos() : null;
+			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, inicio);
 		});
 		estado = Estado.GERANDO;
 	}
@@ -283,9 +288,17 @@ public class TelaCarregando implements Tela {
 		if (reaproveitar) {
 			return;
 		}
-		Arvores arvores = new Arvores(dados.arvores());
-		arvores.load();
-		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, dados.inicio());
+		Arvores arvores = null;
+		Arvores3D arvores3d = null;
+		if (dados.modelosArvores() != null) {
+			arvores3d = new Arvores3D(dados.arvores(), dados.modelosArvores());
+			arvores3d.load();
+		} else {
+			arvores = new Arvores(dados.arvores());
+			arvores.load();
+		}
+		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, arvores3d,
+				dados.inicio());
 		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo
 		terrenoNovo = null;
 	}
@@ -295,7 +308,14 @@ public class TelaCarregando implements Tela {
 		Recursos.shaderObjeto();
 		Recursos.shaderArvore();
 		TexturasFloresta.carregar();
-		Recursos.texturaArvores();
+		if (Arvores3D.arquivosPresentes()) {
+			Recursos.shaderArvore3D();
+			for (String material : Arvores3D.MATERIAIS) {
+				Recursos.texturaArvore3D(material);
+			}
+		} else {
+			Recursos.texturaArvores();
+		}
 	}
 
 	// ---------- desenho ----------

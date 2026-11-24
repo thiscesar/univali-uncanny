@@ -15,3 +15,6 @@ config.properties
 
 # Originais em MP3 (o jogo usa as versões em OGG)
 *.mp3
+
+# Ambientes Python (ferramentas de geração de texturas)
+venv/

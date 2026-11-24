@@ -27,6 +27,8 @@ public class Opcoes {
 	public float sensibilidade = 1.0f;
 	/** Seed digitada (só dígitos). Vazia = um mapa novo a cada partida. */
 	public String seed = "";
+	/** Visual de PlayStation: baixa resolução, texturas sem suavização, vértices tremendo. */
+	public boolean modoPs1 = true;
 
 	public static final float SENSIBILIDADE_MINIMA = 0.25f;
 	public static final float SENSIBILIDADE_MAXIMA = 3.0f;
@@ -65,6 +67,7 @@ public class Opcoes {
 				SENSIBILIDADE_MAXIMA);
 		String seed = p.getProperty("mapa.seed", "").trim();
 		o.seed = seed.matches("\\d{0,18}") ? seed : "";
+		o.modoPs1 = !"false".equals(p.getProperty("video.ps1", "true").trim());
 		return o;
 	}
 
@@ -79,6 +82,7 @@ public class Opcoes {
 		p.setProperty("volume.efeitos", String.valueOf(volumeEfeitos));
 		p.setProperty("mouse.sensibilidade", String.valueOf(sensibilidade));
 		p.setProperty("mapa.seed", seed);
+		p.setProperty("video.ps1", String.valueOf(modoPs1));
 		try (Writer w = Files.newBufferedWriter(arquivo.toPath(), StandardCharsets.UTF_8)) {
 			p.store(w, "Univali Uncanny - opcoes do jogador");
 		} catch (IOException e) {
@@ -98,6 +102,7 @@ public class Opcoes {
 		volumeEfeitos = o.volumeEfeitos;
 		sensibilidade = o.sensibilidade;
 		seed = o.seed;
+		modoPs1 = o.modoPs1;
 	}
 
 	/** A seed da próxima partida: a digitada nas opções ou uma nova, sorteada. */

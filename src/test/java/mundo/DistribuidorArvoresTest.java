@@ -76,7 +76,8 @@ class DistribuidorArvoresTest {
 	@Test
 	void tamanhosETexturasNasFaixas() {
 		for (Arvore a : arvores) {
-			assertTrue(a.altura() >= 8 && a.altura() <= 16);
+			assertTrue(a.altura() >= 6 && a.altura() <= 16);
+			assertTrue(a.largura() > 0 && a.largura() < a.altura() * 1.1f, "proporção da variação " + a.textura());
 			assertTrue(a.textura() >= 0 && a.textura() < DistribuidorArvores.VARIACOES);
 			assertEquals(chao.alturaEm(a.x(), a.z()) - 0.15f, a.y(), 1e-4, "apoiada no chão");
 		}

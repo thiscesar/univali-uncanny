@@ -32,10 +32,12 @@ import mundo.TexturasFloresta;
 import render.Ambiente;
 import render.Camera;
 import render.CameraLivre;
+import render.FiltroPs1;
 import render.Lanterna;
 import render.Overlay2D;
 import render.Texto;
 import shaders.ShaderArvore;
+import shaders.ShaderArvore3D;
 import shaders.ShaderTerrenoFloresta;
 import util.Utils3D;
 
@@ -66,6 +68,10 @@ public class TelaJogo implements Tela {
 	/** Luz e neblina da cena, iguais para o terreno e para os objetos (ver comum.glsl). */
 	private final Ambiente ambiente = new Ambiente();
 	private final Lanterna lanterna = new Lanterna();
+
+	/** Modo PS1: a cena é desenhada pequena e ampliada sem suavização (liga e desliga nas Opções). */
+	private final FiltroPs1 filtroPs1 = new FiltroPs1();
+	private boolean ps1;
 
 	/** Câmera livre de depuração (F4), começando onde o jogador estiver. */
 	private CameraLivre cameraLivre = null;
@@ -101,6 +107,8 @@ public class TelaJogo implements Tela {
 		gerenciador.definirTitulo(TITULO);
 		gerenciador.entrada().prenderCursor(true);
 		texturasTerreno = TexturasFloresta.carregar(); // já carregadas na tela de carregamento: aqui só pega
+		ps1 = Opcoes.atual().modoPs1;
+		Recursos.aplicarModoPs1(ps1);
 
 		Audio audio = gerenciador.audio();
 		passos = new Efeito[4];
@@ -122,6 +130,7 @@ public class TelaJogo implements Tela {
 		somTeste = null;
 		somRespiracao = null;
 		somAmbiente.parar();
+		filtroPs1.liberar();
 	}
 
 	// ---------- atualização ----------
@@ -248,6 +257,13 @@ public class TelaJogo implements Tela {
 
 	@Override
 	public void desenhar() {
+		if (ps1) {
+			filtroPs1.comecar(gerenciador.largura(), gerenciador.altura());
+			ambiente.resolucaoPs1[0] = filtroPs1.largura();
+			ambiente.resolucaoPs1[1] = filtroPs1.altura();
+		}
+		ambiente.modoPs1 = ps1 ? 1 : 0;
+
 		// fundo da mesma cor da neblina: o que some na neblina se funde com o céu
 		glClearColor(ambiente.corCeu[0], ambiente.corCeu[1], ambiente.corCeu[2], 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -257,7 +273,14 @@ public class TelaJogo implements Tela {
 		guardar(cameraAtual().matrizVisao(), bufferVisao);
 		lanterna.aplicar(ambiente);
 		desenharTerreno();
-		desenharArvores();
+		if (mundo.arvores3d != null) {
+			desenharArvores3D();
+		} else {
+			desenharArvores();
+		}
+		if (ps1) {
+			filtroPs1.terminar(gerenciador.largura(), gerenciador.altura()); // amplia sem suavização
+		}
 
 		Overlay2D overlay = Recursos.overlay();
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
@@ -327,12 +350,36 @@ public class TelaJogo implements Tela {
 		shader.stop();
 	}
 
+	/**
+	 * As árvores 3D: primeiro escolhe as que a câmera pode ver (perto e não atrás dela),
+	 * depois desenha todas de uma vez por variação e material.
+	 */
+	private void desenharArvores3D() {
+		Camera c = cameraAtual();
+		mundo.arvores3d.escolher(c.x, c.z, c.frente.x, c.frente.z);
+
+		ShaderArvore3D shader = Recursos.shaderArvore3D();
+		shader.start();
+		int prog = shader.programID;
+		glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), false, bufferProjecao);
+		glUniformMatrix4fv(glGetUniformLocation(prog, "view"), false, bufferVisao);
+		glUniform1f(glGetUniformLocation(prog, "tempo"), tempo);
+		glUniform1i(glGetUniformLocation(prog, "tex"), 0);
+		ambiente.enviar(shader);
+
+		glActiveTexture(GL_TEXTURE0);
+		mundo.arvores3d.draw(); // cada material liga a sua textura
+		shader.stop();
+	}
+
 	/** Painel F3: números para conferir o que o jogo está calculando. */
 	private void desenharDepuracao(Overlay2D overlay) {
 		ConsultaAltura chao = mundo.chao;
 		Camera c = cameraAtual();
 		String[] linhas = {
-				String.format("FPS %.0f    seed %d    árvores %d", fps, mundo.seed, mundo.arvores.quantidade()),
+				String.format("FPS %.0f    seed %d    árvores %d%s", fps, mundo.seed, mundo.quantidadeArvores(),
+						mundo.arvores3d != null ? String.format(" (3D, %d desenhadas)", mundo.arvores3d.desenhadas())
+								: " (planas)"),
 				String.format("posição  x %.1f  z %.1f   olhos %.2f m", c.x, c.z, c.y),
 				String.format("chão %.2f m   inclinação %.0f°   %s", chao.alturaEm(c.x, c.z), chao.anguloEm(c.x, c.z),
 						chao.ehAgua(c.x, c.z) ? String.format("água, %.2f m de fundo", chao.profundidadeAgua(c.x, c.z))
@@ -341,7 +388,8 @@ public class TelaJogo implements Tela {
 						jogador.correndo() ? "correndo" : jogador.velocidade() > 0.1f ? "andando" : "parado"),
 				String.format("estamina %.0f%%%s   lanterna %s", jogador.estamina() * 100,
 						jogador.ofegante() ? "   ofegante" : "", lanterna.ligada() ? "ligada" : "desligada"),
-				cameraLivre != null ? "câmera livre (F4 volta ao jogador)" : "F4: câmera livre",
+				(cameraLivre != null ? "câmera livre (F4 volta ao jogador)" : "F4: câmera livre")
+						+ (ps1 ? String.format("   modo PS1 %dx%d", filtroPs1.largura(), filtroPs1.altura()) : ""),
 				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota",
 		};
 		int tamanho = 16;

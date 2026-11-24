@@ -16,19 +16,28 @@ public class Mundo {
 	public final Mapa3D terreno;
 	public final ConsultaAltura chao;
 	public final GradeColisao colisao;
+	/** As árvores planas: só quando os modelos 3D não estão na pasta (senão, null). */
 	public final Arvores arvores;
+	/** As árvores 3D, feitas pelo gerador (null quando os modelos não estão na pasta). */
+	public final Arvores3D arvores3d;
 	/** Onde o jogador começa (x, z), já com a clareira em volta. */
 	public final float[] inicio;
 
 	public Mundo(long seed, PerfilTerreno perfil, Mapa3D terreno, ConsultaAltura chao, GradeColisao colisao,
-			Arvores arvores, float[] inicio) {
+			Arvores arvores, Arvores3D arvores3d, float[] inicio) {
 		this.seed = seed;
 		this.perfil = perfil;
 		this.terreno = terreno;
 		this.chao = chao;
 		this.colisao = colisao;
 		this.arvores = arvores;
+		this.arvores3d = arvores3d;
 		this.inicio = inicio;
+	}
+
+	/** Quantas árvores a floresta tem, planas ou 3D. */
+	public int quantidadeArvores() {
+		return arvores3d != null ? arvores3d.quantidade() : arvores.quantidade();
 	}
 
 	/** Lado do mapa em metros. */
@@ -39,6 +48,7 @@ public class Mundo {
 	/** Apaga da placa de vídeo o que este mundo usa. Só na thread principal. */
 	public void liberar() {
 		terreno.model.liberar();
-		arvores.liberar();
+		if (arvores != null) arvores.liberar();
+		if (arvores3d != null) arvores3d.liberar();
 	}
 }

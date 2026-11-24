@@ -22,6 +22,7 @@ in vec3 normalVista;
 in vec2 coordTerreno;      // posição na grade, em metros
 in float alturaReal;       // altura real em metros (negativa no fundo dos lagos)
 in vec3 posVista;
+noperspective in vec2 coordAfim;
 
 out vec4 out_Color;
 
@@ -43,15 +44,16 @@ float luminancia(vec3 c){
 	return dot(c, vec3(0.299, 0.587, 0.114));
 }
 
-// lê a textura em duas escalas e mistura: disfarça a repetição do ladrilho
+// Uma leitura só da textura, repetida a cada 4 m. (Uma cópia ampliada misturada por cima
+// também se repetia, a cada 17 m, e formava listras vistas de longe.) Quem disfarça a
+// repetição são as manchas de brilho em escala grande, mais abaixo.
 vec3 amostra(sampler2D t, vec2 c){
-	vec3 perto = texture(t, c).rgb;
-	vec3 longe = texture(t, c * 0.23 + vec2(0.37, 0.11)).rgb;
-	return mix(perto, longe, 0.35);
+	return texture(t, c).rgb;
 }
 
 void main(void){
-	vec2 c = coordTerreno * ESCALA_TEXTURA;
+	// no modo PS1, a textura usa a coordenada sem correção de perspectiva: entorta como no console
+	vec2 c = (modoPs1 > 0.5 ? coordAfim : coordTerreno) * ESCALA_TEXTURA;
 	float inclinacao = 1.0 - normalize(normalMundo).y; // 0 = plano, 1 = parede
 	float h = alturaReal;
 
@@ -74,6 +76,9 @@ void main(void){
 	// lama: faixa escura e úmida na beira dos lagos (até ~0,6 m acima da água)
 	float pesoLama = 1.0 - smoothstep(0.05, 0.6 + ruido(coordTerreno * 0.3) * 0.3, h);
 	cor = mix(cor, terra * 0.45, pesoLama);
+
+	// manchas de brilho de dezenas de metros: a repetição do ladrilho (a cada 4 m) some
+	cor *= 0.82 + 0.36 * ruido(coordTerreno * 0.035 + vec2(13.1, 7.7));
 
 	vec3 chaoIluminado = iluminar(cor, normalVista, posVista);
 

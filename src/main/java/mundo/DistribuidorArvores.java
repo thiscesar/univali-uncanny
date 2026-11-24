@@ -35,7 +35,14 @@ public final class DistribuidorArvores {
 	/** Quantas texturas de árvore existem (pinheiro, abeto, árvore seca, copa redonda). */
 	public static final int VARIACOES = 4;
 
-	private static final float ALTURA_MINIMA = 8f, ALTURA_MAXIMA = 16f;
+	/**
+	 * Para cada variação (pinheiro, abeto, seca, copa redonda): a proporção largura / altura
+	 * da imagem texturas/arvore_N.png e a faixa de altura em metros. A imagem preenche o
+	 * pedaço do atlas inteiro; é a largura do plano no mundo que devolve a forma certa.
+	 */
+	private static final float[] PROPORCAO = { 0.61f, 0.35f, 0.70f, 0.98f };
+	private static final float[] ALTURA_MINIMA = { 8f, 9f, 6f, 6f };
+	private static final float[] ALTURA_MAXIMA = { 15f, 16f, 11f, 10f };
 	private static final float DECLIVE_MAXIMO = 32f;  // graus
 	private static final float ALTURA_MINIMA_CHAO = 0.25f; // m acima da água (nada na margem dos lagos)
 
@@ -56,12 +63,12 @@ public final class DistribuidorArvores {
 			if (chao.alturaEm(x, z) < ALTURA_MINIMA_CHAO) continue;  // água e margem
 			if (chao.anguloEm(x, z) > DECLIVE_MAXIMO) continue;
 
-			float altura = ALTURA_MINIMA + random.nextFloat() * (ALTURA_MAXIMA - ALTURA_MINIMA);
-			float largura = altura * (0.38f + random.nextFloat() * 0.14f);
+			int textura = sortearTextura(random);
+			float altura = ALTURA_MINIMA[textura] + random.nextFloat() * (ALTURA_MAXIMA[textura] - ALTURA_MINIMA[textura]);
+			float largura = altura * PROPORCAO[textura] * (0.9f + random.nextFloat() * 0.2f);
 			float rotacao = random.nextFloat() * (float) Math.PI;
 			float brilho = 0.75f + random.nextFloat() * 0.35f;
-			arvores.add(new Arvore(x, chao.alturaEm(x, z) - 0.15f, z, altura, largura, rotacao, brilho,
-					sortearTextura(random)));
+			arvores.add(new Arvore(x, chao.alturaEm(x, z) - 0.15f, z, altura, largura, rotacao, brilho, textura));
 		}
 		return arvores;
 	}

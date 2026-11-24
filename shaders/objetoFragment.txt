@@ -10,11 +10,12 @@ uniform float emissividade;   // 0 = só reflete luz; 1 = brilha sozinho (e sofr
 in vec2 uv;
 in vec3 normalVista;
 in vec3 posVista;
+noperspective in vec2 uvAfim;
 
 out vec4 out_Color;
 
 void main(void){
-	vec4 c = texture(tex, uv);
+	vec4 c = texture(tex, modoPs1 > 0.5 ? uvAfim : uv);
 	if(c.a < 0.5){
 		discard;
 	}

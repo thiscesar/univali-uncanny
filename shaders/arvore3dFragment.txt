@@ -1,0 +1,30 @@
+#version 330 core
+
+// Árvores 3D: textura do material vezes a sombra assada, com a luz e a neblina do comum.glsl.
+// A textura usa a coordenada com correção de perspectiva também no modo PS1: os triângulos
+// das árvores escaladas passam de 3 m, e a textura entortada ficaria deslizando ao andar.
+
+#include "comum.glsl"
+
+uniform sampler2D tex;
+uniform float duplaFace;  // 1 nas folhas recortadas: planos finos, vistos dos dois lados
+
+in vec2 uv;
+in vec3 normalVista;
+in vec3 posVista;
+in vec3 corVertice;
+
+out vec4 out_Color;
+
+void main(void){
+	vec4 c = texture(tex, uv);
+	if(c.a < 0.5){
+		discard; // fora do recorte das folhas: o pixel nem é desenhado
+	}
+	vec3 n = normalize(normalVista);
+	if(duplaFace > 0.5 && !gl_FrontFacing){
+		n = -n; // vendo a folha por trás: a normal é a da outra face
+	}
+	vec3 cor = iluminar(c.rgb * corVertice, n, posVista);
+	out_Color = vec4(aplicarNeblina(cor, length(posVista), 0.0), 1.0);
+}

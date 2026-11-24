@@ -15,6 +15,8 @@ in float brilho;
 out vec4 out_Color;
 
 void main(void){
+	// mesmo no modo PS1 a árvore usa a coordenada com correção de perspectiva: cada plano tem só
+	// dois triângulos de até 16 m, e a textura entortada deslizava pelo tronco enquanto se anda
 	vec4 c = texture(tex, uv);
 	if(c.a < 0.5){
 		discard; // fora da silhueta: o pixel nem é desenhado
