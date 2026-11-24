@@ -16,6 +16,9 @@ config.properties
 # Originais em MP3 (o jogo usa as versões em OGG)
 *.mp3
 
+# Gravações originais da voz do professor (o jogo usa as de audio/voz_professor, com o efeito)
+audio/professor/
+
 # Ambientes Python (ferramentas de geração de texturas)
 venv/
 fase_*.png

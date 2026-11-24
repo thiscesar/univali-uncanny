@@ -175,6 +175,14 @@ public class Audio {
 	}
 
 	/** Som "na cabeça" do jogador (interface, música de susto...). Devolve null se mudo. */
+	/** Quanto dura o efeito, em segundos (0 sem som ou sem o efeito). */
+	public float duracao(Efeito efeito) {
+		if (!disponivel || efeito.buffer() == 0) return 0;
+		int bytes = alGetBufferi(efeito.buffer(), AL_SIZE), bits = alGetBufferi(efeito.buffer(), AL_BITS);
+		int canais = alGetBufferi(efeito.buffer(), AL_CHANNELS), taxa = alGetBufferi(efeito.buffer(), AL_FREQUENCY);
+		return bits == 0 || canais == 0 || taxa == 0 ? 0 : (float) bytes / (bits / 8 * canais) / taxa;
+	}
+
 	public SomTocando tocar(Efeito efeito, float volume) {
 		return tocar(efeito, volume, false);
 	}

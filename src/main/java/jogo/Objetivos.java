@@ -89,10 +89,33 @@ public class Objetivos {
 			return List.of("Professor: \"Hm? Cadê as provas?\"", "Professor: \"Sem as três provas, nem pensar.\"",
 					"Professor: \"Elas estão na floresta. A porta da frente está aberta.\"");
 		}
-		return List.of("Professor: \"Ainda faltam: " + String.join(", ", faltando) + ".\"");
+		return List.of("Professor: \"Hm, deixa eu ver... ainda faltam: " + String.join(", ", faltando) + ".\"");
 	}
 
 	public boolean falouComProfessor() {
 		return falouComProfessor;
+	}
+
+	/**
+	 * A gravação da voz de uma fala do professor (o texto entre aspas), na pasta
+	 * audio/voz_professor/, ou null se a fala não tem gravação (aí o jogo usa a voz sussurrada
+	 * gerada por código). "Ainda faltam" tem uma gravação para cada combinação de provas.
+	 */
+	public static String arquivoDeVoz(String fala) {
+		String base = switch (fala) {
+		case "Quem está aí?" -> "quem_esta_ai";
+		case "Sem crachá, ninguém entra na minha sala." -> "sem_cracha";
+		case "Hm? Cadê as provas?" -> "cade_as_provas";
+		case "Sem as três provas, nem pensar." -> "nem_pensar";
+		case "Elas estão na floresta. A porta da frente está aberta." -> "estao_na_floresta";
+		case "Atrasado de novo?" -> "atrasado";
+		case "Tá bom. Vou corrigir." -> "vou_corrigir";
+		default -> null;
+		};
+		String faltam = "Hm, deixa eu ver... ainda faltam: ";
+		if (base == null && fala.startsWith(faltam) && fala.endsWith(".")) {
+			base = "faltam_" + fala.substring(faltam.length(), fala.length() - 1).replace(", ", "_");
+		}
+		return base == null ? null : "audio/voz_professor/" + base + ".ogg";
 	}
 }

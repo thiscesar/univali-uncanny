@@ -232,6 +232,8 @@ public class TelaJogo implements Tela {
 	private final java.util.Map<Prova, Float> esperaSussurro = new java.util.HashMap<>();
 	private Efeito somSussurro, somPegarProva, somSinal;
 	private SomTocando somZumbido;
+	/** A voz de rádio da TV do saguão, em loop (audio/tv_univali.ogg). */
+	private SomTocando somTv;
 	/** Segundos desde que cada prova foi pega (para o pulso no HUD); negativo = ainda não. */
 	private final java.util.Map<Prova, Float> pulsoProva = new java.util.HashMap<>();
 
@@ -249,9 +251,9 @@ public class TelaJogo implements Tela {
 	private Recursos.Textura fotoFim = null;
 
 	/** A cena da entrega: o escurecimento e as falas (início e fim de cada uma, em segundos). */
-	private static final float FIM_ENTREGA = 8.2f;
+	private static final float FIM_ENTREGA = 8.6f;
 	private static final String[] FALAS = { "Professor: \"Atrasado de novo?\"", "...", "Professor: \"Tá bom. Vou corrigir.\"" };
-	private static final float[][] TEMPO_FALAS = { { 1.6f, 3.6f }, { 3.8f, 5.0f }, { 5.2f, 7.6f } };
+	private static final float[][] TEMPO_FALAS = { { 1.6f, 4.0f }, { 4.1f, 5.1f }, { 5.3f, 8.0f } };
 
 	/** sprites/susto.png, se existir (0 = sem a imagem: o susto é o próprio modelo bem de perto). */
 	private int texturaSusto = 0;
@@ -391,6 +393,11 @@ public class TelaJogo implements Tela {
 		somZumbido = gerenciador.audio().tocar3D(gerenciador.audio().criarEfeito("zumbido das lampadas",
 				Sintetizador.zumbido(44100), 44100), saguao[0], saguao[1], saguao[2], 0.22f, true, 2.5f);
 		temMusicaMonstro = Caminhos.existe(MUSICA_MONSTRO);
+		if (Caminhos.existe("audio/tv_univali.ogg")) { // a voz de rádio da TV, saindo dela (3D)
+			float[] tv = mundo.predio.noMundo(DesenhoPredio.TV[0], DesenhoPredio.TV[1], DesenhoPredio.TV[2]);
+			somTv = gerenciador.audio().tocar3D(gerenciador.audio().carregarEfeito("audio/tv_univali.ogg"), tv[0], tv[1], tv[2],
+					0.85f, true, 2.5f);
+		}
 
 		caixas = new java.util.ArrayList<>();
 		for (float[] c : mundo.caixas) { // onde o AG da fase pôs as caixas
@@ -478,6 +485,7 @@ public class TelaJogo implements Tela {
 		}
 		sussurros.clear();
 		audio.parar(somZumbido);
+		audio.parar(somTv);
 		particulas.liberar();
 	}
 
@@ -697,7 +705,8 @@ public class TelaJogo implements Tela {
 	}
 
 	/**
-	 * A voz do professor numa fala: o texto entre aspas vira um sussurro "sem palavras" (sílabas
+	 * A voz do professor numa fala: a gravação dela (audio/voz_professor/, ver Objetivos.arquivoDeVoz)
+	 * ou, sem o arquivo, o texto entre aspas vira um sussurro "sem palavras" (sílabas
 	 * sintetizadas com o timbre das vogais do texto), saindo da cabeça dele, em 3D. Cada frase é
 	 * gerada uma vez (o Audio guarda pelo nome). Falas sem letras ("...") ficam em silêncio.
 	 * Devolve a duração da voz, em segundos (0 = sem voz).
@@ -707,10 +716,16 @@ public class TelaJogo implements Tela {
 		String texto = a >= 0 && b > a ? fala.substring(a + 1, b) : fala;
 		if (texto.chars().noneMatch(Character::isLetter)) return 0;
 		Audio audio = gerenciador.audio();
-		short[] amostras = Sintetizador.voz(44100, texto, 0.6, 7);
-		Efeito voz = audio.criarEfeito("voz do professor: " + texto, amostras, 44100);
 		float[] prof = mundo.predio.professorNoModelo();
 		float[] cabeca = mundo.predio.noMundo(prof[0], 1.3f, prof[1]);
+		String gravacao = jogo.Objetivos.arquivoDeVoz(texto);
+		if (gravacao != null && Caminhos.existe(gravacao)) { // a voz gravada (já com o efeito de voz maluca)
+			Efeito voz = audio.carregarEfeito(gravacao);
+			audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, 3f);
+			return audio.duracao(voz);
+		}
+		short[] amostras = Sintetizador.voz(44100, texto, 0.6, 7);
+		Efeito voz = audio.criarEfeito("voz do professor: " + texto, amostras, 44100);
 		audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, 3f);
 		return amostras.length / 44100f;
 	}
@@ -1796,6 +1811,10 @@ public class TelaJogo implements Tela {
 		}
 		float[] l = desenhoPredio.luminariaNoMundo();
 		luzes.add(new float[] { l[0], l[1], l[2], 1.1f, 0.95f, 0.6f, 6f });
+		// o brilho azulado da TV do saguão, tremulando com o chuvisco
+		float[] tv = mundo.predio.noMundo(DesenhoPredio.TV[0], DesenhoPredio.TV[1], DesenhoPredio.TV[2] - 0.4f);
+		float tremula = 0.7f + 0.3f * random.nextFloat();
+		luzes.add(new float[] { tv[0], tv[1], tv[2], 0.32f * tremula, 0.38f * tremula, 0.5f * tremula, 4.5f });
 		List<fase.AndarUnivali.Lampada> lampadas = mundo.predio.andar.lampadas();
 		for (int i = 0; i < lampadas.size(); i++) {
 			float brilho = falhasDeLuz.brilho(i); // a mesma conta do desenho: a luz pisca junto com a lâmpada

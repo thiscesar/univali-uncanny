@@ -63,6 +63,10 @@ public class DesenhoPredio {
 	/** A folha de uma porta de sala (dobradiça em x = 0, abre girando em volta dela) e o ângulo de cada porta que abre sozinha. */
 	private final MalhaCaixas folhaPorta;
 	public final float[] anguloPortas;
+	/** A TV de tubo no balcão do saguão: o gabinete e a tela (chuvisco animado, às vezes o logo). */
+	private final MalhaCaixas tvGabinete, tvTela;
+	/** Onde fica a tela da TV, no modelo: {x, y, z} (a TelaJogo põe ali a luz e o som). */
+	public static final float[] TV = { 1.8f, 1.4f, 8.7f };
 	/** A frase escrita com sangue na parede do fim do corredor, do lado da sala do professor. */
 	private final MalhaCaixas escritaSangue;
 	private final List<MalhaCaixas> placas = new ArrayList<>();
@@ -195,6 +199,15 @@ public class DesenhoPredio {
 			metalInterno.caixa(x - 0.25f, x + 0.25f, 0.42f, 0.48f, 4.5f, 7.5f, TUDO, TUDO, TUDO);
 			metalInterno.caixa(x - 0.05f, x + 0.05f, 0, 0.42f, 5.8f, 6.2f, TUDO, TUDO, TUDO);
 		}
+		// a TV de tubo no balcão, na ponta direita, com a tela virada para o corredor (-z): quem
+		// vai para a saída a vê de frente. A face de trás da caixa (-z) é lida certo de lá.
+		float[] vazio = { 0, 0, 0.01f, 0.01f };
+		tvGabinete = new MalhaCaixas()
+				.caixa(1.45f, 2.15f, 1.12f, 1.68f, 8.75f, 9.32f, TUDO, TUDO, TUDO)  // a caixa
+				.caixa(1.62f, 1.98f, 1.68f, 1.71f, 8.9f, 9.15f, TUDO, TUDO, TUDO)   // a saída de ar em cima
+				.caixa(1.98f, 2.08f, 1.2f, 1.3f, 8.72f, 8.75f, TUDO, TUDO, TUDO)    // os botões
+				.caixa(1.98f, 2.08f, 1.34f, 1.44f, 8.72f, 8.75f, TUDO, TUDO, TUDO).enviar();
+		tvTela = new MalhaCaixas().caixa(1.5f, 1.95f, 1.18f, 1.62f, 8.735f, 8.75f, vazio, TUDO, vazio).enviar();
 		logoSaguao = new MalhaCaixas().caixa(-AndarUnivali.MEIO_SAGUAO + 0.12f, -AndarUnivali.MEIO_SAGUAO + 0.16f, 1.6f, 2.8f,
 				5.5f, 10.5f, TUDO, TUDO, TUDO).enviar();
 		// a escrita de sangue: na parede do fim do corredor do lado da sala do professor (a sala fica
@@ -484,6 +497,12 @@ public class DesenhoPredio {
 		desenhar(p, murais, "predio: mural", DesenhoPredio::mural, 0.04f, false);
 		desenhar(p, logoSaguao, "predio: letreiro", DesenhoPredio::letreiro, 0.5f, false);
 		desenhar(p, escritaSangue, "predio: escrita de sangue", DesenhoPredio::escritaSangue, 0.04f, false);
+		desenhar(p, tvGabinete, "predio: plastico da tv", () -> liso(new Color(38, 34, 32)), 0f, false);
+		// a tela: um quadro de chuvisco a cada 70 ms; por meio segundo a cada 7 s, o logo atravessa o chuvisco
+		int quadro = (int) (tempo / 0.07f) % 4;
+		boolean logo = tempo % 7.0f < 0.5f;
+		desenhar(p, tvTela, logo ? "predio: tv logo" : "predio: tv chuvisco " + quadro,
+				logo ? () -> chuvisco(99, true) : () -> chuvisco(quadro, false), 0.9f, false);
 		for (int i = 0; i < placas.size(); i++) {
 			String nome = nomesPlacas.get(i);
 			desenhar(p, placas.get(i), "placa da porta: " + nome, () -> placaDaPorta(nome), 0.2f, false);
@@ -549,7 +568,7 @@ public class DesenhoPredio {
 
 	public void liberar() {
 		for (MalhaCaixas m : new MalhaCaixas[] { casca, concreto, letreiro, metal, lampadasPoste, acesas, apagadas, piscando,
-				vulto, pintura, piso, forro, saida, escritaSangue, folhaPorta, portaEntrada, portaProfessor, portasTrancadas,
+				vulto, pintura, piso, forro, saida, escritaSangue, folhaPorta, tvGabinete, tvTela, portaEntrada, portaProfessor, portasTrancadas,
 				madeira, metalInterno, lousas, monitores, telas, louca, armarios, murais, logoSaguao, cracha, mesa, papeis,
 				luminaria, cadeira, corpoProfessor, cabecaProfessor }) {
 			m.liberar();
@@ -663,6 +682,34 @@ public class DesenhoPredio {
 		int w = g.getFontMetrics().stringWidth("UNIVALI");
 		g.drawString("UNIVALI", (256 - w) / 2, 31);
 		g.dispose();
+		return img;
+	}
+
+	/**
+	 * Um quadro de chuvisco de TV velha (64 x 48): pontos de cinza ao acaso, linhas de varredura
+	 * mais escuras e uma faixa clara rolando. Com o logo, "UNIVALI" aparece fraco no meio do chuvisco.
+	 */
+	public static BufferedImage chuvisco(int semente, boolean logo) {
+		int w = 64, h = 48;
+		BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+		Random r = new Random(semente * 7919L);
+		int faixa = r.nextInt(h);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				int v = 40 + r.nextInt(170);
+				if (y % 2 == 1) v = v * 7 / 10;                  // linhas de varredura
+				if (Math.abs(y - faixa) < 3) v = Math.min(255, v + 50); // a faixa clara
+				int azul = Math.min(255, v + 18);
+				img.setRGB(x, y, new Color(v, v, azul).getRGB());
+			}
+		}
+		if (logo) {
+			Graphics2D g = img.createGraphics();
+			g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+			g.setColor(new Color(235, 240, 255, 170));
+			g.drawString("UNIVALI", 6, 29);
+			g.dispose();
+		}
 		return img;
 	}
 

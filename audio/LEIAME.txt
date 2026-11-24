@@ -30,3 +30,9 @@ maquina_tecla_1..8.ogg: as 8 batidas mais fortes recortadas de type-writer.mp3 (
 sininho com o retorno do carro e a folha continuam sintetizados (maquina_espaco/retorno/folha.ogg substituem).
 lampada_falhando.ogg: de flicker.mp3, só as rajadas (1,25 s a 3,6 s), mono (toca em 3D na lâmpada que falha).
 porta_abrindo.ogg: de door-opening.mp3, só o rangido (1,6 s a 4,4 s), mono (toca em 3D na porta).
+tv_univali.ogg: de voz-univali-tv.mp3 com efeito de rádio/TV velha (faixa 380 Hz-3 kHz, compressão, bits
+reduzidos, sinal caindo, eco curto, chiado e estalos), 2,6 s de chuvisco antes e depois, em loop na TV do saguão.
+voz_professor/*.ogg: as falas do professor, gravadas e passadas por um efeito de "voz maluca" (o original
+fica em audio/professor/, fora do repositório): três vozes da mesma gravação com o tom e o timbre mudados
+(rubberband: 0,7x, 0,5x e 1,28x, a aguda atrasada), tremor no tom, saturação e eco de sala; silêncio cortado.
+faltam_<provas>.ogg: "Hm, deixa eu ver... ainda faltam" + as provas, uma para cada combinação.
