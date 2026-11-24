@@ -26,6 +26,7 @@ class OpcoesTest {
 		o.campoVisao = 85;
 		o.densidadeArvores = 0.6f;
 		o.inverterY = true;
+		o.sombras = 2;
 		o.salvar(arquivo);
 
 		Opcoes lidas = Opcoes.carregar(arquivo);
@@ -36,6 +37,7 @@ class OpcoesTest {
 		assertEquals(85f, lidas.campoVisao, 1e-6);
 		assertEquals(0.6f, lidas.densidadeArvores, 1e-6);
 		assertTrue(lidas.inverterY);
+		assertEquals(2, lidas.sombras);
 	}
 
 	@Test
@@ -48,12 +50,13 @@ class OpcoesTest {
 	@Test
 	void valoresInvalidosSaoCorrigidos() throws IOException {
 		File arquivo = new File(pasta, "config.properties");
-		Files.writeString(arquivo.toPath(), "volume.geral=7\nvolume.musica=abc\nmapa.seed=12x\nvideo.campoVisao=500\n");
+		Files.writeString(arquivo.toPath(), "volume.geral=7\nvolume.musica=abc\nmapa.seed=12x\nvideo.campoVisao=500\nvideo.sombras=9\n");
 		Opcoes o = Opcoes.carregar(arquivo);
 		assertEquals(1f, o.volumeGeral, 1e-6, "limitado ao máximo");
 		assertEquals(0.7f, o.volumeMusica, 1e-6, "inválido volta ao padrão");
 		assertEquals("", o.seed);
 		assertEquals(Opcoes.CAMPO_VISAO_MAXIMO, o.campoVisao, 1e-6);
+		assertEquals(2, o.sombras, "limitado à mais alta");
 	}
 
 	@Test

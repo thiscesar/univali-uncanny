@@ -2,6 +2,10 @@ package render;
 
 import static org.lwjgl.opengl.GL20.*;
 
+import java.nio.FloatBuffer;
+
+import org.lwjgl.BufferUtils;
+
 import shaders.ShaderProgram;
 
 /**
@@ -48,6 +52,17 @@ public class Ambiente {
 	/** Resolução em que a cena é desenhada no modo PS1 (a grade em que os vértices caem). */
 	public final float[] resolucaoPs1 = { 320, 240 };
 
+	/** A unidade de textura do mapa de sombra (longe das que o terreno usa: 0 a 6). */
+	public static final int UNIDADE_SOMBRA = 10;
+	/** Sombra da lanterna neste quadro: 1 usa o mapa; 0 não. */
+	public float usaSombra = 0;
+	/** 1 enquanto o próprio mapa de sombra é desenhado (os fragment shaders saem logo). */
+	public float passadaSombra = 0;
+	/** 1 / lado do mapa de sombra. */
+	public float texelSombra = 1f / 1024;
+	/** Espaço da câmera -> recorte da lanterna (ver SombraLanterna), já transposta como as outras. */
+	public final FloatBuffer vistaParaLuz = BufferUtils.createFloatBuffer(16);
+
 	/** Envia todos os valores ao shader (que precisa estar ativo, com start()). */
 	public void enviar(ShaderProgram shader) {
 		int p = shader.programID;
@@ -77,5 +92,11 @@ public class Ambiente {
 
 		glUniform1f(glGetUniformLocation(p, "modoPs1"), modoPs1);
 		glUniform2f(glGetUniformLocation(p, "resolucaoPs1"), resolucaoPs1[0], resolucaoPs1[1]);
+
+		glUniform1f(glGetUniformLocation(p, "usaSombra"), usaSombra);
+		glUniform1f(glGetUniformLocation(p, "passadaSombra"), passadaSombra);
+		glUniform1i(glGetUniformLocation(p, "mapaSombra"), UNIDADE_SOMBRA); // sempre: senão ficaria na unidade 0
+		glUniform1f(glGetUniformLocation(p, "texelSombra"), texelSombra);
+		glUniformMatrix4fv(glGetUniformLocation(p, "vistaParaLuz"), false, vistaParaLuz);
 	}
 }

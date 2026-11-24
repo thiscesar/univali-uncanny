@@ -21,6 +21,10 @@ void main(void){
 	if(c.a < 0.5){
 		discard; // fora da silhueta: o pixel nem é desenhado
 	}
+	if(passadaSombra > 0.5){
+		out_Color = vec4(1.0); // desenhando o mapa de sombra: só a profundidade importa
+		return;
+	}
 	// o plano é fino: quem olha por trás vê a "outra face", com a normal invertida
 	vec3 n = gl_FrontFacing ? normalVista : -normalVista;
 	vec3 cor = iluminar(c.rgb * brilho, n, posVista);

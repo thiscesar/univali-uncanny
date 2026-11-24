@@ -55,6 +55,10 @@ vec3 amostra(sampler2D t, vec2 c){
 }
 
 void main(void){
+	if(passadaSombra > 0.5){
+		out_Color = vec4(1.0); // desenhando o mapa de sombra: só a profundidade importa
+		return;
+	}
 	// no modo PS1, a textura usa a coordenada sem correção de perspectiva: entorta como no console
 	vec2 c = (modoPs1 > 0.5 ? coordAfim : coordTerreno) * ESCALA_TEXTURA;
 	float inclinacao = 1.0 - normalize(normalMundo).y; // 0 = plano, 1 = parede

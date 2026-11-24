@@ -21,6 +21,10 @@ void main(void){
 	if(c.a < 0.5){
 		discard; // fora do recorte das folhas: o pixel nem é desenhado
 	}
+	if(passadaSombra > 0.5){
+		out_Color = vec4(1.0); // desenhando o mapa de sombra: só a profundidade importa
+		return;
+	}
 	vec3 n = normalize(normalVista);
 	if(duplaFace > 0.5 && !gl_FrontFacing){
 		n = -n; // vendo a folha por trás: a normal é a da outra face

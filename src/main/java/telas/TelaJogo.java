@@ -59,6 +59,7 @@ import render.FiltroPs1;
 import render.Lanterna;
 import render.Overlay2D;
 import render.Particulas;
+import render.SombraLanterna;
 import render.Texto;
 import render.TextoTextura;
 import shaders.ShaderArvore;
@@ -122,6 +123,9 @@ public class TelaJogo implements Tela {
 	private boolean ps1;
 	/** Campo de visão vertical, em graus (das Opções). */
 	private float campoVisao;
+	/** A sombra da lanterna e o lado do mapa dela (0 = desligada, das Opções). */
+	private final SombraLanterna sombra = new SombraLanterna();
+	private int ladoSombra;
 	/** De 0 a 1: o quanto o monstro está em cena (separa as cores e ondula a imagem). */
 	private float presencaMonstro = 0;
 
@@ -244,6 +248,7 @@ public class TelaJogo implements Tela {
 
 		Audio audio = gerenciador.audio();
 		campoVisao = Opcoes.atual().campoVisao;
+		ladoSombra = Opcoes.LADO_SOMBRA[Opcoes.atual().sombras];
 		for (MaterialChao m : MaterialChao.values()) {
 			Efeito[] variacoes = new Efeito[4];
 			for (int i = 0; i < variacoes.length; i++) {
@@ -372,6 +377,7 @@ public class TelaJogo implements Tela {
 		somRespiracao = null;
 		somAmbiente.parar();
 		filtroPs1.liberar();
+		sombra.liberar();
 		desenhoMonstro.liberar();
 		desenhoEscopeta.liberar();
 		desenhoProvas.liberar();
@@ -970,6 +976,10 @@ public class TelaJogo implements Tela {
 
 	@Override
 	public void desenhar() {
+		Matrix4f visao = visaoComTremor();
+		lanterna.aplicar(ambiente);
+		desenharMapaDeSombra(visao); // antes da cena: o que a lanterna enxerga
+
 		// a cena vai para uma imagem à parte: pequena no modo PS1, do tamanho da janela fora dele
 		filtroPs1.comecar(gerenciador.largura(), gerenciador.altura(), ps1);
 		if (ps1) {
@@ -984,9 +994,7 @@ public class TelaJogo implements Tela {
 		glEnable(GL_DEPTH_TEST);
 
 		guardar(projecao(), bufferProjecao);
-		Matrix4f visao = visaoComTremor();
 		guardar(visao, bufferVisao);
-		lanterna.aplicar(ambiente);
 		luzesDosPostes(visao);
 		desenharTerreno();
 		if (mundo.arvores3d != null) {
@@ -1036,6 +1044,48 @@ public class TelaJogo implements Tela {
 					Texto.Alinhamento.ESQUERDA);
 		}
 		overlay.finalizar();
+	}
+
+	/**
+	 * A passada de profundidade da sombra: desenha, do ponto de vista da lanterna, tudo o que faz
+	 * sombra (terreno, árvores, pedras, monstro, caixas, placas e o prédio; a escopeta não, a sombra
+	 * da própria arma na cena ficaria errada). Usa os mesmos desenhos e shaders da cena, com as
+	 * matrizes da luz: a posição de cada vértice sai igual nas duas passadas (até a animação do
+	 * monstro e o vento nas árvores), e os fragment shaders só descartam o recorte das folhas e saem.
+	 * Só com a lanterna ligada e a opção de sombra ligada.
+	 */
+	private void desenharMapaDeSombra(Matrix4f visao) {
+		ambiente.usaSombra = 0;
+		if (ladoSombra == 0 || !lanterna.ligada() || cameraLivre != null) {
+			return;
+		}
+		sombra.preparar(ladoSombra);
+		sombra.calcular(visao, lanterna, ambiente);
+		bufferProjecao.clear();
+		bufferProjecao.put(sombra.projecaoLuz.rewind()).flip();
+		bufferVisao.clear();
+		bufferVisao.put(sombra.visaoLuz.rewind()).flip();
+		sombra.projecaoLuz.rewind();
+		sombra.visaoLuz.rewind();
+		float modo = ambiente.modoPs1;
+		ambiente.modoPs1 = 0; // sem o tremido do PS1: a profundidade precisa da posição exata
+
+		sombra.comecar(ambiente);
+		desenharTerreno();
+		if (mundo.arvores3d != null) {
+			desenharArvores3D();
+		} else {
+			desenharArvores();
+		}
+		desenharPedras();
+		Camera camera = cameraAtual();
+		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, ladoSombra);
+		desenharCaixas();
+		desenhoPlacas.desenhar(mundo.placas, mundo.chao, bufferProjecao, bufferVisao, ambiente);
+		desenhoPredio.desenhar(bufferProjecao, bufferVisao, ambiente, ladoSombra);
+		sombra.terminar(ambiente);
+
+		ambiente.modoPs1 = modo;
 	}
 
 	/** As caixas de munição: o cubo do projeto original achatado, com a textura da caixa e um brilho leve. */
@@ -1469,7 +1519,9 @@ public class TelaJogo implements Tela {
 								: " (planas)")
 						+ String.format("   pedras %d   placas %d", mundo.pedras != null ? mundo.pedras.quantidade() : 0,
 								mundo.placas.size()),
-				String.format("posição  x %.1f  z %.1f   olhos %.2f m", c.x, c.z, c.y),
+				String.format("posição  x %.1f  z %.1f   olhos %.2f m   sombra %s", c.x, c.z, c.y,
+						ambiente.usaSombra > 0 ? String.format("%d², %.2f ms na placa", sombra.lado(), sombra.milissegundos())
+								: ladoSombra == 0 ? "desligada" : "lanterna apagada"),
 				String.format("chão %.2f m   inclinação %.0f°   %s", chao.alturaEm(c.x, c.z), chao.anguloEm(c.x, c.z),
 						chao.ehAgua(c.x, c.z) ? String.format("água, %.2f m de fundo", chao.profundidadeAgua(c.x, c.z))
 								: "terra firme"),

@@ -21,6 +21,10 @@ void main(void){
 	if(c.a < 0.5){
 		discard;
 	}
+	if(passadaSombra > 0.5){
+		out_Color = vec4(1.0); // desenhando o mapa de sombra: só a profundidade importa
+		return;
+	}
 
 	// Modelos sem normal por vértice (o VboCube do projeto original) chegam com normal zero:
 	// usamos a normal da face, tirada das derivadas da posição na tela.

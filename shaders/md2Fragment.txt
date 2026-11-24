@@ -19,6 +19,10 @@ noperspective in vec2 uvAfim;
 out vec4 out_Color;
 
 void main(void){
+	if(passadaSombra > 0.5){
+		out_Color = vec4(1.0); // desenhando o mapa de sombra: só a profundidade importa
+		return;
+	}
 	vec2 uvTextura = modoPs1 > 0.5 ? uvAfim : uv;
 	vec4 c = texture(skin, uvTextura);
 	vec3 n = normalVista;
