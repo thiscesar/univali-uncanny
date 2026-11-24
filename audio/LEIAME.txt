@@ -9,7 +9,7 @@ Conversões úteis:
 
 Arquivos esperados: musica_menu.ogg, musica_monstro.ogg (toca quando o Dragon Knight surge), menu_passar.ogg, menu_clique.ogg, ambiente_floresta.ogg,
 passo_grama_1..4.ogg, passo_terra_1..4.ogg, passo_agua_1..4.ogg, passo_piso_1..4.ogg,
-passo_<material>_correndo_1..4.ogg (opcional: correndo), risada.ogg (mono: susto falso e REPROVADO),
+passo_<material>_correndo_1..4.ogg (opcional: correndo), risada.ogg (mono: susto falso e REPROVADO), risada_professor.ogg (mono: ao sair da sala dele),
 respiracao.ogg, lanterna_clique.ogg, galho_quebrando.ogg, coruja.ogg, escopeta_tiro.ogg, escopeta_telha.ogg, escopeta_cartucho.ogg,
 escopeta_vazia.ogg, monstro_grito.ogg, monstro_morte.ogg, batimento.ogg,
 sussurro.ogg, pegar_prova.ogg, sinal_aula.ogg, susto.ogg.
@@ -25,3 +25,4 @@ passo_terra_* são os passos correndo na grama com os agudos cortados (passa-bai
 passo_piso_*: a gravação tinha quase toda a energia abaixo de 90 Hz (um ronco que soava como
 batida); foi cortada abaixo de 120 Hz, renormalizada e encurtada para 0,2 s.
 musica_monstro.ogg veio de headbanger-monster.mp3, sem os 5 s de silêncio do fim (para o loop não ter pausa).
+risada_professor.ogg veio de teacher-laugh.mp3: sem o silêncio do começo e do fim, mono, normalizada.

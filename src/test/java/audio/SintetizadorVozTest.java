@@ -14,15 +14,15 @@ class SintetizadorVozTest {
 
 	@Test
 	void fraseMaiorFalaMaisTempoEMesmaFraseSaiIgual() {
-		short[] curta = Sintetizador.voz(44100, "Hm?", 110, 1);
-		short[] longa = Sintetizador.voz(44100, "Elas estão na floresta. A porta da frente está aberta.", 110, 1);
+		short[] curta = Sintetizador.voz(44100, "Hm?", 0.6, 1);
+		short[] longa = Sintetizador.voz(44100, "Elas estão na floresta. A porta da frente está aberta.", 0.6, 1);
 		assertTrue(longa.length > curta.length * 3, "uma sílaba por vogal");
-		assertArrayEquals(longa, Sintetizador.voz(44100, "Elas estão na floresta. A porta da frente está aberta.", 110, 1));
+		assertArrayEquals(longa, Sintetizador.voz(44100, "Elas estão na floresta. A porta da frente está aberta.", 0.6, 1));
 	}
 
 	@Test
 	void temSomEPausaNoPonto() {
-		short[] s = Sintetizador.voz(44100, "Tá bom. Vou corrigir.", 110, 2);
+		short[] s = Sintetizador.voz(44100, "Tá bom. Vou corrigir.", 0.6, 2);
 		assertTrue(rms(s, 0, s.length) > 1000, "não é silêncio");
 		// em algum lugar há uma pausa de pelo menos 150 ms (depois do ponto)
 		int janela = 44100 * 15 / 100;
@@ -35,6 +35,6 @@ class SintetizadorVozTest {
 
 	@Test
 	void textoSemVogalNaoQuebra() {
-		assertTrue(Sintetizador.voz(44100, "...", 110, 3).length > 0);
+		assertTrue(Sintetizador.voz(44100, "...", 0.6, 3).length > 0);
 	}
 }

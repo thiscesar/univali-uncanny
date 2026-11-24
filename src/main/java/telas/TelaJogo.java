@@ -164,6 +164,12 @@ public class TelaJogo implements Tela {
 	private DesenhoFantasma desenhoFantasma;
 	/** A fala do professor cuja voz já tocou (para tocar uma vez por fala) e a última fala da entrega com voz. */
 	private String falaComVoz = null;
+	/** Quanto tempo a fala atual fica na tela: pelo menos 3,2 s, ou até a voz acabar. */
+	private static final float DURACAO_MINIMA_FALA = 3.2f;
+	private float duracaoFala = DURACAO_MINIMA_FALA;
+	/** audio/risada_professor.ogg: ele ri quando o jogador sai da sala depois da negativa (null = sem o arquivo). */
+	private Efeito somRisadaProfessor;
+	private boolean risadaPendente = false, naSalaDoProfessor = false;
 	private int ultimaFalaEntrega = -1;
 	/** audio/risada.ogg (null = sem o arquivo: a risada vira galho). */
 	private Efeito somRisada;
@@ -296,6 +302,8 @@ public class TelaJogo implements Tela {
 		}
 		somGalho = efeitoOuSintetizado("audio/galho_quebrando.ogg", () -> Sintetizador.galho(44100, 3));
 		somRisada = Caminhos.existe("audio/risada.ogg") ? audio.carregarEfeito("audio/risada.ogg") : null;
+		somRisadaProfessor = Caminhos.existe("audio/risada_professor.ogg") ? audio.carregarEfeito("audio/risada_professor.ogg")
+				: null;
 		sustos = new SustosFalsos(mundo.seed + 5);
 		desenhoSilhueta = new DesenhoSilhueta();
 		desenhoFantasma = new DesenhoFantasma();
@@ -647,19 +655,22 @@ public class TelaJogo implements Tela {
 	}
 
 	/**
-	 * A voz do professor numa fala: o texto entre aspas vira "fala sem palavras" (sílabas
+	 * A voz do professor numa fala: o texto entre aspas vira um sussurro "sem palavras" (sílabas
 	 * sintetizadas com o timbre das vogais do texto), saindo da cabeça dele, em 3D. Cada frase é
 	 * gerada uma vez (o Audio guarda pelo nome). Falas sem letras ("...") ficam em silêncio.
+	 * Devolve a duração da voz, em segundos (0 = sem voz).
 	 */
-	private void falarComVoz(String fala) {
+	private float falarComVoz(String fala) {
 		int a = fala.indexOf('"'), b = fala.lastIndexOf('"');
 		String texto = a >= 0 && b > a ? fala.substring(a + 1, b) : fala;
-		if (texto.chars().noneMatch(Character::isLetter)) return;
+		if (texto.chars().noneMatch(Character::isLetter)) return 0;
 		Audio audio = gerenciador.audio();
-		Efeito voz = audio.criarEfeito("voz do professor: " + texto, Sintetizador.voz(44100, texto, 112, 7), 44100);
+		short[] amostras = Sintetizador.voz(44100, texto, 0.6, 7);
+		Efeito voz = audio.criarEfeito("voz do professor: " + texto, amostras, 44100);
 		float[] prof = mundo.predio.professorNoModelo();
 		float[] cabeca = mundo.predio.noMundo(prof[0], 1.3f, prof[1]);
 		audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, 3f);
+		return amostras.length / 44100f;
 	}
 
 	/** Uma frase sussurrada de cada prova não pega, a cada 7–13 s, só se o jogador estiver a menos de 30 m. */
@@ -686,6 +697,7 @@ public class TelaJogo implements Tela {
 			return;
 		}
 		boolean primeira = !objetivos.falouComProfessor();
+		risadaPendente = true; // negou: quando o jogador sair da sala, ele ri
 		falas.clear();
 		falaComVoz = null;
 		falas.addAll(objetivos.falarSemAsProvas(partida.faltando()));
@@ -809,14 +821,26 @@ public class TelaJogo implements Tela {
 		particulas.atualizar(dt);
 		mundo.predio.SimulaSe(Math.round(dt * 1000));
 		desenhoPredio.atualizar(dt, jogador.x, jogador.z);
+		// depois da negativa, quando o jogador sai da sala do professor, ele ri (lá da mesa)
+		fase.AndarUnivali.Sala sala = mundo.predio.andar.professores();
+		float[] noModelo = mundo.predio.paraModelo(jogador.x, jogador.z);
+		boolean naSala = noModelo[0] > sala.xMin() && noModelo[0] < sala.xMax() && noModelo[1] > sala.zMin()
+				&& noModelo[1] < sala.zMax();
+		if (naSalaDoProfessor && !naSala && risadaPendente && somRisadaProfessor != null) {
+			float[] prof = mundo.predio.professorNoModelo();
+			float[] cabeca = mundo.predio.noMundo(prof[0], 1.3f, prof[1]);
+			gerenciador.audio().tocar3D(somRisadaProfessor, cabeca[0], cabeca[1], cabeca[2], 1f, false, 4f);
+			risadaPendente = false;
+		}
+		naSalaDoProfessor = naSala;
 		// as falas do professor, uma de cada vez, cada uma com a voz dele
 		if (!falas.isEmpty() && falas.peek() != falaComVoz) {
 			falaComVoz = falas.peek();
-			falarComVoz(falaComVoz);
+			duracaoFala = Math.max(DURACAO_MINIMA_FALA, falarComVoz(falaComVoz) + 0.6f); // a fala fica até a voz acabar
 		}
 		if (!falas.isEmpty()) {
 			tempoFala += dt;
-			if (tempoFala >= 3.2f) {
+			if (tempoFala >= duracaoFala) {
 				falas.poll();
 				tempoFala = 0;
 			}
@@ -1408,7 +1432,7 @@ public class TelaJogo implements Tela {
 		Texto.desenhar(o, objetivos.texto(partida.provasColetadas(), partida.provas().size()), cx, 18 * escala,
 				Math.round(16 * escala), new Color(190, 180, 165, 200), Texto.Alinhamento.CENTRO);
 		if (!falas.isEmpty()) {
-			float alfa = Math.min(1, Math.min(tempoFala, 3.2f - tempoFala) / 0.3f);
+			float alfa = Math.min(1, Math.min(tempoFala, duracaoFala - tempoFala) / 0.3f);
 			Texto.desenhar(o, falas.peek(), cx, h * 0.76f, Math.round(22 * escala),
 					new Color(235, 225, 205, Math.round(Math.max(0, alfa) * 255)), Texto.Alinhamento.CENTRO);
 		}

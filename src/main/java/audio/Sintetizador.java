@@ -218,19 +218,20 @@ public final class Sintetizador {
 	}
 	// ---------- voz ----------
 
-	/** Formantes (F1, F2 em Hz) das vogais, numa voz masculina: o que faz um "a" soar como "a". */
+	/** Formantes (F1, F2 em Hz) das vogais, numa voz masculina: o que faz um "a" soar como "a" (também sussurrado). */
 	private static final double[][] FORMANTES = { { 730, 1090 }, { 530, 1840 }, { 270, 2290 }, { 570, 840 }, { 300, 870 } };
 
 	/**
-	 * Uma voz que fala sem dizer nada (como nos jogos antigos): cada vogal do texto vira uma
-	 * sílaba com o timbre daquela vogal, cada consoante um sopro ou estalo curto. A fonte é um
-	 * zumbido de cordas vocais (dente de serra num tom grave que oscila um pouco) passando por dois
-	 * filtros ressonantes nas frequências da vogal (síntese por formantes). Pergunta termina
-	 * subindo; o resto vai caindo de leve, como uma frase. Dá para entender que é fala, não as palavras.
+	 * Uma voz sussurrada que fala sem dizer nada: cada vogal do texto vira uma sílaba com o timbre
+	 * daquela vogal, cada consoante um sopro ou estalo curto. Num sussurro as cordas vocais não
+	 * vibram: a fonte é só o ar (ruído), que passa por três filtros ressonantes nas frequências da
+	 * vogal (síntese por formantes). As sílabas têm duração e força irregulares e entram e saem
+	 * suaves, e um eco curto põe a voz numa sala. Dá para perceber que é fala, não as palavras.
+	 * (A primeira versão usava um zumbido de tom fixo como fonte: soava como um robô.)
 	 *
-	 * @param tom frequência média da voz em Hz (ex.: 110 para um professor de voz grave)
+	 * @param grave de 0 a 1: quanto baixar os formantes (uma voz mais grave e mais escura)
 	 */
-	public static short[] voz(int taxa, String texto, double tom, long semente) {
+	public static short[] voz(int taxa, String texto, double grave, long semente) {
 		Random r = new Random(semente ^ texto.hashCode());
 		String t = texto.toLowerCase();
 		boolean pergunta = t.trim().endsWith("?");
@@ -252,55 +253,58 @@ public final class Sintetizador {
 				consoante = 3;
 			} else if (!silabas.isEmpty()) {
 				int[] ultima = silabas.get(silabas.size() - 1);
-				ultima[2] = Math.max(ultima[2], ".,!?:;".indexOf(c) >= 0 ? 220 : c == ' ' ? 45 : 0);
+				ultima[2] = Math.max(ultima[2], ".,!?:;".indexOf(c) >= 0 ? 260 : c == ' ' ? 60 : 0);
 			}
 		}
 		if (silabas.isEmpty()) return new short[taxa / 10];
 
-		// a duração de cada sílaba (com um pouco de sorte) e o total
+		double escala = 1 - 0.12 * grave; // formantes mais baixos = voz mais grave
 		int[] duracao = new int[silabas.size()];
 		int total = 0;
 		for (int k = 0; k < duracao.length; k++) {
-			duracao[k] = (int) ((0.10 + r.nextDouble() * 0.06) * taxa);
+			duracao[k] = (int) ((0.11 + r.nextDouble() * 0.09) * taxa); // irregular: fala de gente, não de máquina
 			total += duracao[k] + silabas.get(k)[2] * taxa / 1000;
 		}
-		double[] s = new double[total + taxa / 10];
+		double[] s = new double[total + taxa / 3];
 		int pos = 0;
-		double fase = 0;
-		double[] f1 = filtro(FORMANTES[silabas.get(0)[0]][0], 6, taxa), f2 = filtro(FORMANTES[silabas.get(0)[0]][1], 9, taxa);
-		double[] e1 = new double[4], e2 = new double[4]; // memória dos dois filtros
-		double atualF1 = FORMANTES[silabas.get(0)[0]][0], atualF2 = FORMANTES[silabas.get(0)[0]][1];
+		double[] e1 = new double[4], e2 = new double[4], e3 = new double[4]; // memória dos três filtros
+		double atualF1 = FORMANTES[silabas.get(0)[0]][0] * escala, atualF2 = FORMANTES[silabas.get(0)[0]][1] * escala;
+		double[] f1 = filtro(atualF1, 3, taxa), f2 = filtro(atualF2, 5, taxa), f3 = filtro(2500 * escala, 4, taxa);
+		double agudoAnterior = 0;
 		for (int k = 0; k < silabas.size(); k++) {
 			int[] sil = silabas.get(k);
-			double alvoF1 = FORMANTES[sil[0]][0] * (0.95 + r.nextDouble() * 0.1), alvoF2 = FORMANTES[sil[0]][1] * (0.95 + r.nextDouble() * 0.1);
 			double progresso = (double) k / Math.max(1, silabas.size() - 1);
-			// entonação: cai ao longo da frase; numa pergunta, sobe no fim
-			double tomSilaba = tom * (1.08 - 0.15 * progresso + (pergunta && progresso > 0.7 ? 0.35 * (progresso - 0.7) / 0.3 : 0))
-					* (0.97 + r.nextDouble() * 0.06);
+			double sobe = pergunta && progresso > 0.7 ? 1 + 0.08 * (progresso - 0.7) / 0.3 : 1; // a pergunta "sobe" um pouco
+			double alvoF1 = FORMANTES[sil[0]][0] * escala * sobe * (0.93 + r.nextDouble() * 0.14);
+			double alvoF2 = FORMANTES[sil[0]][1] * escala * sobe * (0.93 + r.nextDouble() * 0.14);
+			double forca = 0.55 + r.nextDouble() * 0.45;
 			int n = duracao[k];
 			for (int i = 0; i < n; i++) {
 				if (i % 64 == 0) { // os formantes deslizam de uma vogal para a outra
-					atualF1 += (alvoF1 - atualF1) * 0.25;
-					atualF2 += (alvoF2 - atualF2) * 0.25;
-					f1 = filtro(atualF1, 6, taxa);
-					f2 = filtro(atualF2, 9, taxa);
+					atualF1 += (alvoF1 - atualF1) * 0.2;
+					atualF2 += (alvoF2 - atualF2) * 0.2;
+					f1 = filtro(atualF1, 3, taxa);
+					f2 = filtro(atualF2, 5, taxa);
 				}
-				double tt = (double) i / taxa;
-				double vibrato = 1 + 0.015 * Math.sin(2 * Math.PI * 5.5 * (pos + i) / taxa);
-				fase += tomSilaba * vibrato / taxa;
-				double fonte = 2 * (fase - Math.floor(fase)) - 1 + (r.nextDouble() * 2 - 1) * 0.08; // cordas vocais + ar
-				double y = aplicar(f1, e1, fonte) + 0.6 * aplicar(f2, e2, fonte);
-				double env = Math.min(1, tt / 0.015) * Math.min(1, (n - i) / (0.03 * taxa));
-				// a consoante: nos primeiros 30 ms, um sopro (chiado) ou um estalo (ruído curtinho)
+				double tt = (double) i / taxa, fracao = (double) i / n;
+				double ar = r.nextDouble() * 2 - 1;
+				double y = aplicar(f1, e1, ar) + 0.7 * aplicar(f2, e2, ar) + 0.3 * aplicar(f3, e3, ar);
+				double env = Math.sin(Math.PI * Math.min(1, fracao * 1.15)); // entra e sai suave
+				// consoantes: o "s" é um chiado agudo antes da vogal; o "t" um estalinho
+				double agudo = ar - agudoAnterior;
+				agudoAnterior = ar;
 				double ruido = 0;
-				if (sil[1] == 1 && tt < 0.05) ruido = (r.nextDouble() * 2 - 1) * 0.35 * (1 - tt / 0.05);
-				if (sil[1] == 2 && tt < 0.012) ruido = (r.nextDouble() * 2 - 1) * 0.6;
-				double abre = sil[1] == 3 ? Math.min(1, tt / 0.04) : 1; // m, n, l, r: a vogal entra devagar
-				s[pos + i] += y * env * abre + ruido;
+				if (sil[1] == 1 && tt < 0.07) ruido = agudo * 0.25 * Math.sin(Math.PI * tt / 0.07);
+				if (sil[1] == 2 && tt < 0.01) ruido = agudo * 0.4;
+				double abre = sil[1] == 3 ? Math.min(1, tt / 0.05) : 1;
+				s[pos + i] += y * env * forca * abre + ruido;
 			}
 			pos += n + sil[2] * taxa / 1000;
 		}
-		return normalizar(s, 0.75);
+		// um eco curto e fraco (duas reflexões): a voz numa sala, não dentro do fone
+		int eco1 = taxa * 37 / 1000, eco2 = taxa * 61 / 1000;
+		for (int i = s.length - 1; i >= eco2; i--) s[i] += 0.22 * s[i - eco1] + 0.12 * s[i - eco2];
+		return normalizar(s, 0.8);
 	}
 
 	private static int vogal(char c) {

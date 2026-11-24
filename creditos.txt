@@ -35,7 +35,8 @@ Música do menu · (autor e licença)
 Música do Dragon Knight (Headbanger Monster) · (autor e licença)
 Passos na grama, correndo na grama, na terra e no piso da Univali · (autor e licença)
 Risada · (autor e licença)
-Passos na água, galho, tiro, monstro, sussurro, sinal e zumbido · sintetizados por código
+Risada do professor · (autor e licença)
+Passos na água, voz sussurrada do professor, galho, tiro, monstro, sussurro, sinal e zumbido · sintetizados por código
 
 # Fontes
 Fontes do sistema (serifada e sem serifa)
