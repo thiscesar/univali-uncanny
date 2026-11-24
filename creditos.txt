@@ -3,7 +3,9 @@ Jogo de terror em primeira pessoa
 Disciplina de Computação Gráfica, Univali
 
 # Desenvolvimento
-(seu nome aqui)
+Cesar Luiz de Sousa Júnior
+Vitor Borges Paes
+Ciência da Computação, Univali, Campus Kobrasol
 
 # Base
 Projeto de OpenGL do professor da disciplina
