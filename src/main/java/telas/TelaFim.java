@@ -222,8 +222,9 @@ public abstract class TelaFim implements Tela {
 			int n = e.aparicoesSobrevividas();
 			String linha1 = String.format("Mapa %d   ·   %d:%02d na floresta   ·   %d %s", e.seed(), minutos, segundos, n,
 					n == 1 ? "aparição sobrevivida" : "aparições sobrevividas");
-			String linha2 = String.format("%d %s   ·   pontaria de %d%%   ·   provas %d de %d", e.tiros(),
-					e.tiros() == 1 ? "tiro" : "tiros", e.precisao(), e.provasColetadas(), e.provasTotal());
+			// as provas não entram aqui: o REPROVADO já mostra na linha de destaque, e o APROVADO é sempre 3 de 3
+			String linha2 = String.format("%d %s   ·   pontaria de %d%%", e.tiros(), e.tiros() == 1 ? "tiro" : "tiros",
+					e.precisao());
 			int tamanho = Math.max(14, Math.round(h * 0.022f));
 			Texto.desenharAlinhado(o, Recursos.fonteTexto(), linha1, w / 2f, h * 0.645f, tamanho, COR_RESUMO,
 					Texto.Alinhamento.CENTRO, false, true);
