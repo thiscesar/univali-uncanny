@@ -27,7 +27,7 @@ Rosto do professor · foto do próprio professor, usada com a autorização dele
 
 # Texturas
 Chão, grama, terra, pedra e árvores · geradas por código (gerador próprio em estilo PS1)
-Prédio, placas, provas, caixas, silhueta e fantasma · desenhados por código (Java2D)
+Prédio, placas, provas, caixas e silhueta · desenhados por código (Java2D)
 
 # Imagens
 Logo do Computer on the Beach · evento da Univali (uso acadêmico)
