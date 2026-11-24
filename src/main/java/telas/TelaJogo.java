@@ -35,7 +35,6 @@ import entidades.Prova;
 import entidades.Tiro;
 import entidades.Jogador;
 import entrada.Entrada;
-import jogo.Fantasma;
 import jogo.MaterialChao;
 import jogo.Objetivos;
 import jogo.Partida;
@@ -51,7 +50,6 @@ import render.Ambiente;
 import render.Camera;
 import render.CameraLivre;
 import render.DesenhoEscopeta;
-import render.DesenhoFantasma;
 import render.DesenhoMonstro;
 import render.DesenhoPlacas;
 import render.DesenhoPredio;
@@ -158,10 +156,6 @@ public class TelaJogo implements Tela {
 	/** A silhueta em cena: {x, y, z, guinada, segundos na tela}; null = nenhuma. */
 	private float[] silhueta = null;
 	private Efeito somGalho;
-	/** O fantasma de passagem (null = nenhum) e quanto tempo um fantasma da Univali ainda espera o jogador no corredor. */
-	private Fantasma fantasma = null;
-	private float esperaFantasmaPredio = 0;
-	private DesenhoFantasma desenhoFantasma;
 	/** A fala do professor cuja voz já tocou (para tocar uma vez por fala) e a última fala da entrega com voz. */
 	private String falaComVoz = null;
 	/** Quanto tempo a fala atual fica na tela: pelo menos 3,2 s, ou até a voz acabar. */
@@ -335,7 +329,6 @@ public class TelaJogo implements Tela {
 		portasSozinhas = new jogo.PortasSozinhas(centros);
 		sustos = new SustosFalsos(mundo.seed + 5);
 		desenhoSilhueta = new DesenhoSilhueta();
-		desenhoFantasma = new DesenhoFantasma();
 		ultimoX = jogador.x;
 		ultimoZ = jogador.z;
 		respiracao = audio.carregarEfeito("audio/respiracao.ogg");
@@ -479,7 +472,6 @@ public class TelaJogo implements Tela {
 		desenhoPlacas.liberar();
 		desenhoPredio.liberar();
 		desenhoSilhueta.liberar();
-		desenhoFantasma.liberar();
 		for (SomTocando s : sussurros.values()) {
 			audio.parar(s);
 		}
@@ -568,10 +560,6 @@ public class TelaJogo implements Tela {
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_B)) {
 			falhasDeLuz.forcarFalhaGeral();
 			mostrarMensagem("Falha geral das luzes (só dentro da Univali)");
-		}
-		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_N)) {
-			sustos.forcar(SustosFalsos.Tipo.FANTASMA);
-			mostrarMensagem("Susto falso: fantasma (na Univali, só no corredor olhando ao longo dele)");
 		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_L)) {
 			sustos.forcar(SustosFalsos.Tipo.RISADA);
@@ -1026,51 +1014,30 @@ public class TelaJogo implements Tela {
 		tempoMensagem = segundos;
 	}
 
-	/** O monstro, o batimento, a lanterna em pânico e, no fim do ataque, o susto. */
 	/**
-	 * Os sustos falsos, com o monstro fora de cena. Na floresta: o fantasma passando entre as
-	 * árvores, a silhueta (na borda do facho, some se a luz a pegar, se o jogador chegar perto, se
-	 * o monstro aparecer ou depois de um tempo), a risada longe e o galho atrás. Na Univali: o
-	 * fantasma atravessando o corredor mais à frente.
+	 * Os sustos falsos, só na floresta e com o monstro fora de cena: a silhueta (na borda do facho,
+	 * some se a luz a pegar, se o jogador chegar perto, se o monstro aparecer ou depois de um
+	 * tempo), a risada longe e o galho atrás.
 	 */
 	private void atualizarSustosFalsos(float dt) {
-		boolean dentro = mundo.predio.dentro(jogador.x, jogador.z);
-		SustosFalsos.Lugar lugar = tempoEntrega >= 0 ? null
-				: dentro ? SustosFalsos.Lugar.PREDIO : monstro.ativo ? SustosFalsos.Lugar.FLORESTA : null;
+		boolean naFloresta = tempoEntrega < 0 && monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z);
 		boolean monstroEmCena = monstro.estado() != DragonKnight.Estado.AUSENTE;
 		Camera c = jogador.camera();
-		if (fantasma != null) {
-			if (monstroEmCena) fantasma.sumir();
-			fantasma.atualizar(dt, c.x, c.z);
-			if (fantasma.acabou()) fantasma = null;
-			return;
-		}
 		if (silhueta != null) {
 			silhueta[4] += dt;
 			float d = (float) Math.hypot(silhueta[0] - c.x, silhueta[2] - c.z);
-			if (monstroEmCena || lugar != SustosFalsos.Lugar.FLORESTA || d < SustosFalsos.SILHUETA_SOME_PERTO
+			if (monstroEmCena || !naFloresta || d < SustosFalsos.SILHUETA_SOME_PERTO
 					|| silhueta[4] > SustosFalsos.SILHUETA_DURACAO
 					|| SustosFalsos.iluminado(lanterna.ligada(), c.x, c.z, c.frente.x, c.frente.z, silhueta[0], silhueta[2])) {
 				silhueta = null;
 			}
 			return;
 		}
-		// um fantasma da Univali que ainda espera o jogador estar no corredor, olhando ao longo dele
-		if (esperaFantasmaPredio > 0) {
-			esperaFantasmaPredio -= dt;
-			if (dentro && !monstroEmCena) fantasma = fantasmaNoCorredor(c);
-			if (fantasma != null || !dentro) esperaFantasmaPredio = 0;
-			return;
-		}
-		SustosFalsos.Tipo tipo = sustos.atualizar(dt, lugar, monstroEmCena);
+		SustosFalsos.Tipo tipo = sustos.atualizar(dt, naFloresta, monstroEmCena);
 		if (tipo == null) return;
 		Random r = sustos.random();
 		float olhando = (float) Math.atan2(c.frente.x, c.frente.z);
-		if (tipo == SustosFalsos.Tipo.FANTASMA && dentro) {
-			esperaFantasmaPredio = 25; // tenta por até 25 s
-		} else if (tipo == SustosFalsos.Tipo.FANTASMA) {
-			fantasma = fantasmaNaFloresta(c, olhando, r);
-		} else if (tipo == SustosFalsos.Tipo.SILHUETA) {
+		if (tipo == SustosFalsos.Tipo.SILHUETA) {
 			for (int tentativa = 0; tentativa < 20 && silhueta == null; tentativa++) {
 				// na borda do facho da lanterna, para um dos lados: vista de relance, meio iluminada
 				float desvio = SustosFalsos.BORDA_MINIMA + r.nextFloat() * (SustosFalsos.BORDA_MAXIMA - SustosFalsos.BORDA_MINIMA);
@@ -1112,47 +1079,7 @@ public class TelaJogo implements Tela {
 		return true;
 	}
 
-	/**
-	 * O fantasma da floresta: de 14 a 20 m, num lugar aberto, até 25 graus para o lado de onde o jogador olha (para
-	 * ser visto), atravessando a vista de lado, devagar, por 10 a 14 s. Um sussurro sai dele.
-	 */
-	private Fantasma fantasmaNaFloresta(Camera c, float olhando, Random r) {
-		for (int tentativa = 0; tentativa < 20; tentativa++) {
-			float angulo = olhando + (r.nextFloat() * 2 - 1) * (float) Math.toRadians(25);
-			float d = 14 + r.nextFloat() * 6;
-			float x = c.x + (float) Math.sin(angulo) * d, z = c.z + (float) Math.cos(angulo) * d;
-			// num lugar aberto: os galhos de baixo dos pinheiros escondiam o fantasma inteiro
-			if (!lugarLivreNaFloresta(c, x, z) || mundo.colisao.colide(x, z, 2f) || !mundo.colisao.linhaLivre(c.x, c.z, x, z, 0.8f)) {
-				continue;
-			}
-			float lado = r.nextBoolean() ? 1 : -1; // anda para a esquerda ou para a direita de quem olha
-			gerenciador.audio().tocar3D(somSussurro, x, mundo.chao.alturaEm(x, z) + 1.5f, z, 0.35f, false, 3f);
-			return new Fantasma(x, z, (float) Math.cos(angulo) * lado, -(float) Math.sin(angulo) * lado, 1.1f,
-					10 + r.nextFloat() * 4);
-		}
-		return null;
-	}
-
-	/**
-	 * O fantasma da Univali: só com o jogador no corredor olhando ao longo dele. Atravessa o
-	 * corredor de 9 a 15 m à frente, de uma parede à outra (sai de uma sala e entra na da frente).
-	 */
-	private Fantasma fantasmaNoCorredor(Camera c) {
-		entidades.PredioUnivali p = mundo.predio;
-		float[] m = p.paraModelo(c.x, c.z);
-		float[] olhar = p.direcaoParaModelo(c.frente.x, c.frente.z);
-		float t = (float) Math.hypot(olhar[0], olhar[1]);
-		if (Math.abs(m[1]) > fase.AndarUnivali.MEIO_CORREDOR || t < 1e-4f || Math.abs(olhar[0] / t) < 0.75f) return null;
-		Random r = sustos.random();
-		float gx = m[0] + Math.signum(olhar[0]) * (9 + r.nextFloat() * 6);
-		float limite = -fase.AndarUnivali.X0 - 2;
-		if (Math.abs(gx) > limite) return null; // fora do fim do corredor
-		float lado = r.nextBoolean() ? 1 : -1;
-		float[] de = p.noMundo(gx, 0, 2.6f * lado), para = p.noMundo(gx, 0, -2.6f * lado);
-		gerenciador.audio().tocar3D(somSussurro, de[0], p.y + 1.5f, de[2], 0.3f, false, 3f);
-		return new Fantasma(de[0], de[2], para[0] - de[0], para[2] - de[2], 0.9f, 5.8f + Fantasma.SAIDA);
-	}
-
+	/** O monstro, o batimento, a lanterna em pânico e, no fim do ataque, o susto. */
 	private void atualizarMonstro(long diftime) {
 		float dt = diftime / 1000f;
 		Camera olhos = jogador.camera(); // ele mira o jogador, mesmo com a câmera livre ligada
@@ -1372,11 +1299,6 @@ public class TelaJogo implements Tela {
 		desenhoPredio.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		desenhoProvas.desenhar(partida.provas(), bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
-		if (fantasma != null) { // translúcido: depois das coisas opacas
-			float chaoFantasma = mundo.predio.dentro(fantasma.x, fantasma.z) ? mundo.predio.y : mundo.chao.alturaEm(fantasma.x, fantasma.z);
-			desenhoFantasma.desenhar(fantasma.x, chaoFantasma, fantasma.z, fantasma.alfa(), fantasma.tempo(), camera.x, camera.z,
-					bufferProjecao, bufferVisao, ambiente);
-		}
 		desenhoProvas.desenharFeixes(partida.provas(), camera.x, camera.z, bufferProjecao, bufferVisao, ambiente);
 		if (tempoSusto < 0) { // no susto, só a cara dele
 			desenhoEscopeta.desenhar(escopeta, ambiente, gerenciador.proporcao(), alturaImagem);
@@ -1905,7 +1827,7 @@ public class TelaJogo implements Tela {
 				String.format("arma %s   cano %d   reserva %d   partículas %d   caixas %d", escopeta.estado().name().toLowerCase(),
 						escopeta.cano(), escopeta.reserva(), particulas.quantidade(),
 						caixas.stream().filter(cx -> !cx.pega()).count()),
-				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata   B luzes   N fantasma   H silhueta   J galho   L risada",
+				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata   B luzes   H silhueta   J galho   L risada",
 				"clique atira   R recarrega   E pega   P vai até a próxima prova   I salva o mapa da fase   setas e PgUp/PgDn: arma",
 		};
 		int tamanho = 16;
