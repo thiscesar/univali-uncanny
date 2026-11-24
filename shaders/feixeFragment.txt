@@ -1,0 +1,21 @@
+#version 330 core
+
+// Somado à cena (aditivo): forte no meio da largura e embaixo, sumindo para as bordas e para
+// cima. A neblina o apaga com bem menos força que o resto (densidade x 0,3): de longe, por
+// cima das árvores, ele ainda aparece fraco, como um farol.
+
+#include "comum.glsl"
+
+uniform vec3 corFeixe;
+
+in vec2 uv;
+in float distancia;
+
+out vec4 out_Color;
+
+void main(void){
+	float meio = 1.0 - abs(uv.x * 2.0 - 1.0);
+	float forca = meio * meio * pow(1.0 - uv.y, 1.2);
+	float neblina = exp(-pow(densidadeNeblina * 0.3 * distancia, 2.0));
+	out_Color = vec4(corFeixe * forca * neblina, 1.0);
+}

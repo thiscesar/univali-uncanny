@@ -10,7 +10,7 @@ Projeto de OpenGL do professor da disciplina
 LWJGL 3, licença BSD
 
 # Modelos
-Árvores 3D: geradas por código (gerador próprio em estilo PS1)
+Árvores 3D e pedras: geradas por código (gerador próprio em estilo PS1)
 Dragon Knight: modelo de Magarnigal (1998)
 Skin vermelha do Dragon Knight: Deranged
 Formato MD2: Quake II, id Software
@@ -19,6 +19,7 @@ Formato MD2: Quake II, id Software
 Chão, grama, terra, pedra e árvores: geradas por código (gerador próprio em estilo PS1)
 
 # Imagens
+Logo do Computer on the Beach: evento da Univali
 Foto do campus da Univali: (autor e licença)
 
 # Fontes

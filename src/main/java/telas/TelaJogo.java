@@ -46,6 +46,7 @@ import render.Camera;
 import render.CameraLivre;
 import render.DesenhoEscopeta;
 import render.DesenhoMonstro;
+import render.DesenhoPlacas;
 import render.DesenhoProvas;
 import render.FiltroPs1;
 import render.Lanterna;
@@ -88,7 +89,8 @@ public class TelaJogo implements Tela {
 
 	private static final float CAMPO_DE_VISAO = 70f; // graus, na vertical
 	private static final float PERTO = 0.1f;
-	private static final float LONGE = 60f;          // além disso a neblina já escondeu tudo
+	// a neblina esconde tudo antes de ~50 m; só os feixes das provas (neblina mais fraca) vão além
+	private static final float LONGE = 120f;
 
 	private static final Color COR_PAINEL = new Color(0, 0, 0, 160);
 	private static final Color COR_DEPURACAO = new Color(200, 195, 185);
@@ -142,6 +144,7 @@ public class TelaJogo implements Tela {
 	// as provas
 	private final Partida partida;
 	private DesenhoProvas desenhoProvas;
+	private DesenhoPlacas desenhoPlacas;
 	private final java.util.Map<Prova, SomTocando> sussurros = new java.util.HashMap<>();
 	private Efeito somSussurro, somPegarProva, somSinal;
 	/** Segundos desde que cada prova foi pega (para o pulso no HUD); negativo = ainda não. */
@@ -237,6 +240,7 @@ public class TelaJogo implements Tela {
 			}
 		});
 		desenhoProvas = new DesenhoProvas();
+		desenhoPlacas = new DesenhoPlacas();
 		somSussurro = efeitoOuSintetizado("audio/sussurro.ogg", () -> Sintetizador.sussurro(44100, 13));
 		somPegarProva = efeitoOuSintetizado("audio/pegar_prova.ogg", () -> Sintetizador.ping(44100, 660, 600, 900));
 		somSinal = efeitoOuSintetizado("audio/sinal_aula.ogg", () -> Sintetizador.sinal(44100));
@@ -292,6 +296,7 @@ public class TelaJogo implements Tela {
 		desenhoMonstro.liberar();
 		desenhoEscopeta.liberar();
 		desenhoProvas.liberar();
+		desenhoPlacas.liberar();
 		for (SomTocando s : sussurros.values()) {
 			audio.parar(s);
 		}
@@ -462,8 +467,11 @@ public class TelaJogo implements Tela {
 		float[] frente = { c.frente.x, c.frente.y, c.frente.z };
 		float[] direita = { c.direita.x, c.direita.y, c.direita.z };
 		float[] cima = { c.cima.x, c.cima.y, c.cima.z };
+		// só vale contar os bagos se ele ainda pode levar dano (não conta o corpo caído)
+		boolean atingivel = monstro.estado() == DragonKnight.Estado.SURGINDO
+				|| monstro.estado() == DragonKnight.Estado.ENCARANDO;
 		Tiro.Resultado r = Tiro.disparar(origem, frente, direita, cima, monstro, mundo.colisao, mundo.chao, random);
-		if (monstro.visivel()) {
+		if (atingivel) {
 			System.out.println("[Tiro] " + r.acertos() + " de " + Regras.BAGOS + " bagos acertaram o monstro");
 		}
 		for (Tiro.Impacto i : r.impactos()) {
@@ -694,12 +702,15 @@ public class TelaJogo implements Tela {
 		} else {
 			desenharArvores();
 		}
+		desenharPedras();
 		Camera camera = cameraAtual();
 		int alturaImagem = ps1 ? filtroPs1.altura() : gerenciador.altura();
 		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, alturaImagem);
 		desenharCaixas();
+		desenhoPlacas.desenhar(mundo.placas, mundo.chao, bufferProjecao, bufferVisao, ambiente);
 		desenhoProvas.desenhar(partida.provas(), bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
+		desenhoProvas.desenharFeixes(partida.provas(), camera.x, camera.z, bufferProjecao, bufferVisao, ambiente);
 		if (tempoSusto < 0) { // no susto, só a cara dele
 			desenhoEscopeta.desenhar(escopeta, ambiente, gerenciador.proporcao(), alturaImagem);
 		}
@@ -1036,6 +1047,25 @@ public class TelaJogo implements Tela {
 		return base + detalhe + animacao + String.format("   sobrevividas %d", monstro.aparicoesSobrevividas());
 	}
 
+	/** As pedras: o shader das árvores 3D, sem o vento. */
+	private void desenharPedras() {
+		if (mundo.pedras == null) return;
+		ShaderArvore3D shader = Recursos.shaderArvore3D();
+		shader.start();
+		int prog = shader.programID;
+		glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), false, bufferProjecao);
+		glUniformMatrix4fv(glGetUniformLocation(prog, "view"), false, bufferVisao);
+		glUniform1f(glGetUniformLocation(prog, "tempo"), tempo);
+		glUniform1f(glGetUniformLocation(prog, "semVento"), 1f);
+		glUniform1f(glGetUniformLocation(prog, "duplaFace"), 0f);
+		glUniform1i(glGetUniformLocation(prog, "tex"), 0);
+		ambiente.enviar(shader);
+		glActiveTexture(GL_TEXTURE0);
+		mundo.pedras.draw();
+		glUniform1f(glGetUniformLocation(prog, "semVento"), 0f);
+		shader.stop();
+	}
+
 	/** Painel F3: números para conferir o que o jogo está calculando. */
 	private void desenharDepuracao(Overlay2D overlay) {
 		ConsultaAltura chao = mundo.chao;
@@ -1043,7 +1073,9 @@ public class TelaJogo implements Tela {
 		String[] linhas = {
 				String.format("FPS %.0f    seed %d    árvores %d%s", fps, mundo.seed, mundo.quantidadeArvores(),
 						mundo.arvores3d != null ? String.format(" (3D, %d desenhadas)", mundo.arvores3d.desenhadas())
-								: " (planas)"),
+								: " (planas)")
+						+ String.format("   pedras %d   placas %d", mundo.pedras != null ? mundo.pedras.quantidade() : 0,
+								mundo.placas.size()),
 				String.format("posição  x %.1f  z %.1f   olhos %.2f m", c.x, c.z, c.y),
 				String.format("chão %.2f m   inclinação %.0f°   %s", chao.alturaEm(c.x, c.z), chao.anguloEm(c.x, c.z),
 						chao.ehAgua(c.x, c.z) ? String.format("água, %.2f m de fundo", chao.profundidadeAgua(c.x, c.z))

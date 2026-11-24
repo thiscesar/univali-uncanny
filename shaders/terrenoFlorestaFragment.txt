@@ -4,7 +4,7 @@
 // altura e pela inclinação de cada ponto:
 //   folhas secas no chão plano, manchas de grama escura (mais comuns nas partes altas),
 //   terra exposta nos declives médios, pedra nos declives fortes, lama na beira dos
-//   lagos e água escura, que reflete a lanterna.
+//   lagos e água, que reflete o céu, a lua e a lanterna.
 // A luz e a neblina vêm do comum.glsl, iguais às dos outros objetos.
 
 #include "comum.glsl"
@@ -94,8 +94,24 @@ void main(void){
 	vec2 p = coordTerreno;
 	float dx = 0.06 * cos(p.x * 1.3 + tempo * 1.5) + 0.03 * cos((p.x + p.y) * 2.1 + tempo * 2.3);
 	float dz = 0.06 * cos(p.y * 1.1 + tempo * 1.2) + 0.03 * cos((p.x - p.y) * 1.7 + tempo * 1.9);
-	vec3 normalAgua = (vec4(normalize(vec3(-dx, 1.0, -dz)), 0.0) * view).xyz;
-	vec3 aguaIluminada = iluminar(corAgua, normalAgua, posVista) + brilhoLanterna(normalAgua, posVista, 90.0) * 0.9;
+	vec3 normalAgua = normalize((vec4(normalize(vec3(-dx, 1.0, -dz)), 0.0) * view).xyz);
+	vec3 V = normalize(-posVista); // do ponto até a câmera
+
+	// reflexo do céu noturno (um pouco mais claro e azulado que a neblina). Efeito de Fresnel:
+	// olhando de cima a água é escura e transparente; olhando rente, ela vira um espelho
+	float fresnel = 0.1 + 0.9 * pow(1.0 - max(dot(normalAgua, V), 0.0), 4.0);
+	vec3 ceu = corNeblina * 4.0 + vec3(0.06, 0.08, 0.12);
+	vec3 aguaIluminada = mix(iluminar(corAgua, normalAgua, posVista), ceu, fresnel);
+
+	// a lua: uma luz fixa no céu; as ondinhas quebram o reflexo dela em pontos que tremem
+	vec3 lua = normalize((vec4(normalize(vec3(-0.35, 0.45, -0.8)), 0.0) * view).xyz);
+	vec3 meioLua = normalize(lua + V);
+	aguaIluminada += vec3(0.5, 0.58, 0.72) * pow(max(dot(normalAgua, meioLua), 0.0), 50.0) * 1.2;
+	aguaIluminada += brilhoLanterna(normalAgua, posVista, 90.0) * 0.9;
+
+	// a margem: uma faixa clara e úmida onde a água encontra a terra, ondulando devagar
+	float margem = smoothstep(-0.15, -0.03, h) * (1.0 - smoothstep(-0.03, 0.01, h));
+	aguaIluminada += vec3(0.07, 0.08, 0.08) * margem * (0.5 + 0.5 * sin(tempo * 1.7 + ruido(coordTerreno * 0.8) * 6.0));
 
 	// a margem: alturaReal é interpolada dentro do triângulo, então a linha da água sai suave
 	float pesoAgua = 1.0 - smoothstep(-0.05, 0.02, h);

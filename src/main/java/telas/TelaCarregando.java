@@ -20,7 +20,9 @@ import mundo.Arvores3D;
 import mundo.ConsultaAltura;
 import mundo.DistribuidorArvores;
 import mundo.GradeColisao;
+import mundo.DistribuidorPedras;
 import mundo.LeitorObj;
+import mundo.Pedras;
 import mundo.SorteioLugares;
 import mundo.Mundo;
 import mundo.TexturasFloresta;
@@ -58,7 +60,8 @@ public class TelaCarregando implements Tela {
 	/** O que a thread de geração entrega: só dados, nada de OpenGL. */
 	private record DadosTerreno(int[][] alturas, ConsultaAltura chao, GradeColisao colisao,
 			List<DistribuidorArvores.Arvore> arvores, List<LeitorObj.ModeloObj> modelosArvores,
-			PersonagemMd2.Dados monstro, float[] inicio, List<float[]> provas, float[] univali) {}
+			PersonagemMd2.Dados monstro, float[] inicio, List<float[]> provas, float[] univali,
+			List<SorteioLugares.Placa> placas, List<DistribuidorPedras.Pedra> pedras, List<LeitorObj.ModeloObj> modelosPedras) {}
 
 	/** Raio, em metros, da clareira sem árvores em volta de cada prova. */
 	private static final float CLAREIRA_PROVA = 4f;
@@ -180,21 +183,39 @@ public class TelaCarregando implements Tela {
 			Random sorteio = new Random(seed * 17 + 3);
 			float[] univali = SorteioLugares.univali(chao, inicio, sorteio);
 			List<float[]> provas = SorteioLugares.provas(chao, inicio, univali, 3, sorteio);
+			List<SorteioLugares.Placa> placas = SorteioLugares.placas(chao, inicio, provas, sorteio);
 			List<DistribuidorArvores.Clareira> clareiras = new java.util.ArrayList<>();
 			clareiras.add(new DistribuidorArvores.Clareira(inicio[0], inicio[1], CLAREIRA_INICIO));
 			for (float[] p : provas) {
 				clareiras.add(new DistribuidorArvores.Clareira(p[0], p[1], CLAREIRA_PROVA));
 			}
+			for (SorteioLugares.Placa p : placas) {
+				clareiras.add(new DistribuidorArvores.Clareira(p.x(), p.z(), p.evento() ? 3f : 1.5f));
+			}
+
+			// pedras (se os modelos estiverem na pasta), também antes das árvores
+			List<LeitorObj.ModeloObj> modelosPedras = Pedras.arquivosPresentes() ? Pedras.lerModelos() : null;
+			float[] larguras = modelosPedras != null ? Pedras.larguras(modelosPedras) : null;
+			List<DistribuidorPedras.Pedra> pedras = modelosPedras != null
+					? DistribuidorPedras.distribuir(chao, larguras, clareiras, seed) : List.of();
+			if (larguras != null) {
+				clareiras.addAll(DistribuidorPedras.clareiras(pedras, larguras));
+			}
 
 			// árvores, com as clareiras, e os troncos na grade de colisão
 			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed, clareiras);
 			DistribuidorArvores.registrarTroncos(arvores, colisao);
+			if (larguras != null) {
+				DistribuidorPedras.registrar(pedras, larguras, colisao);
+			}
+			registrarPlacas(placas, colisao);
 
 			// os modelos 3D das árvores, se estiverem na pasta (senão, null: árvores planas)
 			List<LeitorObj.ModeloObj> modelos = Arvores3D.arquivosPresentes() ? Arvores3D.lerModelos() : null;
 			// o Dragon Knight (só leitura dos arquivos; null se o MD2 não estiver na pasta)
 			PersonagemMd2.Dados monstro = PersonagemMd2.ler(TelaJogo.PASTA_MONSTRO, TelaJogo.ALTURA_MONSTRO);
-			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, inicio, provas, univali);
+			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, inicio, provas, univali, placas, pedras,
+					modelosPedras);
 		});
 		estado = Estado.GERANDO;
 	}
@@ -300,6 +321,20 @@ public class TelaCarregando implements Tela {
 		Constantes.mapa = terrenoNovo; // o campo global do projeto original continua apontando para o terreno
 	}
 
+	/** Os postes das placas na grade de colisão: dois na do evento, um na de trilha. */
+	private static void registrarPlacas(List<SorteioLugares.Placa> placas, GradeColisao colisao) {
+		for (SorteioLugares.Placa p : placas) {
+			if (p.evento()) {
+				// os postes ficam em x = ±1,1 m no modelo; girados: (cos g, -sen g) por metro de x
+				float c = (float) Math.cos(p.giro()), s = (float) Math.sin(p.giro());
+				colisao.adicionar(p.x() + c * 1.1f, p.z() - s * 1.1f, 0.15f);
+				colisao.adicionar(p.x() - c * 1.1f, p.z() + s * 1.1f, 0.15f);
+			} else {
+				colisao.adicionar(p.x(), p.z(), 0.12f);
+			}
+		}
+	}
+
 	private void montarArvores() {
 		if (reaproveitar) {
 			return;
@@ -315,8 +350,13 @@ public class TelaCarregando implements Tela {
 		}
 		// o monstro vai para a placa de vídeo aqui também (sem o MD2, o jogo usa o substituto)
 		PersonagemMd2 monstro = dados.monstro() != null ? new PersonagemMd2(dados.monstro()) : null;
+		Pedras pedras = null;
+		if (dados.modelosPedras() != null) {
+			pedras = new Pedras(dados.pedras(), dados.modelosPedras());
+			pedras.load();
+		}
 		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, arvores3d,
-				monstro, dados.inicio(), dados.provas(), dados.univali());
+				monstro, dados.inicio(), dados.provas(), dados.univali(), dados.placas(), pedras);
 		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo
 		terrenoNovo = null;
 	}
@@ -325,6 +365,11 @@ public class TelaCarregando implements Tela {
 		Recursos.shaderFloresta();
 		Recursos.shaderObjeto();
 		Recursos.shaderArvore();
+		Recursos.shaderObjeto();
+		if (Pedras.arquivosPresentes()) {
+			Recursos.texturaModelo(Pedras.PASTA + "pedra.png");
+			Recursos.shaderArvore3D();
+		}
 		Recursos.shaderMd2();
 		Recursos.shaderBrilho();
 		TexturasFloresta.carregar();

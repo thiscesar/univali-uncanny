@@ -30,10 +30,14 @@ public class Mundo {
 	public final java.util.List<float[]> provas;
 	/** Onde fica a Univali (x, z). */
 	public final float[] univali;
+	/** As placas do evento e as de trilha. */
+	public final java.util.List<SorteioLugares.Placa> placas;
+	/** As pedras já na placa de vídeo (null sem os modelos). */
+	public final Pedras pedras;
 
 	public Mundo(long seed, PerfilTerreno perfil, Mapa3D terreno, ConsultaAltura chao, GradeColisao colisao,
 			Arvores arvores, Arvores3D arvores3d, PersonagemMd2 monstro, float[] inicio, java.util.List<float[]> provas,
-			float[] univali) {
+			float[] univali, java.util.List<SorteioLugares.Placa> placas, Pedras pedras) {
 		this.seed = seed;
 		this.perfil = perfil;
 		this.terreno = terreno;
@@ -45,6 +49,8 @@ public class Mundo {
 		this.inicio = inicio;
 		this.provas = provas;
 		this.univali = univali;
+		this.placas = placas;
+		this.pedras = pedras;
 	}
 
 	/** Quantas árvores a floresta tem, planas ou 3D. */
@@ -63,5 +69,6 @@ public class Mundo {
 		if (arvores != null) arvores.liberar();
 		if (arvores3d != null) arvores3d.liberar();
 		if (monstro != null) monstro.liberar();
+		if (pedras != null) pedras.liberar();
 	}
 }

@@ -15,6 +15,7 @@ in vec4 extra;      // att 5: giro em radianos, brilho, altura do modelo, (livre
 uniform mat4 view;
 uniform mat4 projection;
 uniform float tempo;
+uniform float semVento;   // 1 nas pedras: o mesmo shader, sem balançar
 
 out vec2 uv;
 out vec3 normalVista;
@@ -29,7 +30,7 @@ void main(void){
 	// vento: só a parte de cima balança (quadrático na altura), cada árvore numa fase
 	float h = clamp(position.y / extra.z, 0.0, 1.0);
 	float fase = tempo * 1.3 + instancia.x * 0.31 + instancia.z * 0.17;
-	float balanco = sin(fase) * 0.22 * h * h;
+	float balanco = sin(fase) * 0.22 * h * h * (1.0 - semVento);
 	girado.x += balanco;
 	girado.z += balanco * 0.5;
 

@@ -20,6 +20,7 @@ import shaders.ShaderProgram;
 import shaders.ShaderArvore;
 import shaders.ShaderArvore3D;
 import shaders.ShaderBrilho;
+import shaders.ShaderFeixe;
 import shaders.ShaderParticula;
 import shaders.ShaderMd2;
 import shaders.ShaderPs1Tela;
@@ -61,6 +62,7 @@ public final class Recursos {
 	private static ShaderArvore3D shaderArvore3D;
 	private static ShaderBrilho shaderBrilho;
 	private static ShaderParticula shaderParticula;
+	private static ShaderFeixe shaderFeixe;
 	private static ShaderMd2 shaderMd2;
 	private static ShaderPs1Tela shaderPs1Tela;
 
@@ -223,6 +225,14 @@ public final class Recursos {
 		return shaderParticula;
 	}
 
+	/** O shader do feixe de luz das provas. */
+	public static ShaderFeixe shaderFeixe() {
+		if (shaderFeixe == null) {
+			shaderFeixe = registrar(new ShaderFeixe());
+		}
+		return shaderFeixe;
+	}
+
 	/** O shader das árvores 3D. */
 	public static ShaderArvore3D shaderArvore3D() {
 		if (shaderArvore3D == null) {
@@ -236,10 +246,17 @@ public final class Recursos {
 	 * dos troncos e com mipmaps que preservam o recorte das folhas. Sem o arquivo, o xadrez.
 	 */
 	public static int texturaArvore3D(String material) {
-		String chave = "arvores3d:" + material;
+		return texturaModelo(Arvores3D.PASTA + material + ".png");
+	}
+
+	/**
+	 * A textura de um modelo 3D da cena (árvores, pedras): repetida, com mipmaps que preservam
+	 * o recorte (as folhas), e com o filtro do modo PS1. Sem o arquivo, o xadrez.
+	 */
+	public static int texturaModelo(String relativo) {
+		String chave = "arvores3d:" + relativo; // o prefixo "arvores" faz o modo PS1 trocar o filtro
 		Integer id = texturas.get(chave);
 		if (id == null) {
-			String relativo = Arvores3D.PASTA + material + ".png";
 			BufferedImage imagem = Caminhos.arquivo(relativo).exists()
 					? TextureLoader.loadImage(Caminhos.caminho(relativo)) : null;
 			id = MipmapsCobertura.enviar(imagem != null ? imagem : xadrez());
@@ -335,6 +352,7 @@ public final class Recursos {
 		shaderArvore3D = null;
 		shaderBrilho = null;
 		shaderParticula = null;
+		shaderFeixe = null;
 		shaderMd2 = null;
 		shaderPs1Tela = null;
 		if (overlay != null) {

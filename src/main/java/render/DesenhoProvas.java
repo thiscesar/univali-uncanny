@@ -38,7 +38,12 @@ public class DesenhoProvas {
 	private static final float TAMANHO_HALO = 1.3f;
 	private static final float[] COR_HALO = { 0.26f, 0.25f, 0.19f };
 
-	private final int vbo;
+	/** O feixe: largura e altura em metros, e a cor (fraca, pálida). */
+	private static final float LARGURA_FEIXE = 1.8f, ALTURA_FEIXE = 30f;
+	private static final float[] COR_FEIXE = { 0.22f, 0.23f, 0.17f };
+
+	private final int vbo, vboFeixes;
+	private final FloatBuffer feixes = BufferUtils.createFloatBuffer(8 * 6 * 5);
 	private final PontosBrilhantes halos = new PontosBrilhantes(8);
 	private final FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
 
@@ -57,7 +62,61 @@ public class DesenhoProvas {
 		vbo = glGenBuffers();
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 		glBufferData(GL_ARRAY_BUFFER, b, GL_STATIC_DRAW);
+		vboFeixes = glGenBuffers();
+		glBindBuffer(GL_ARRAY_BUFFER, vboFeixes);
+		glBufferData(GL_ARRAY_BUFFER, (long) feixes.capacity() * 4, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	/**
+	 * O feixe de luz de cada prova que falta: um retângulo alto em pé sobre a folha, virado para
+	 * a câmera só em volta do eixo vertical (um "billboard cilíndrico": o feixe não deita quando
+	 * se olha para cima). Desenhado por último, somado à cena, sem gravar profundidade.
+	 */
+	public void desenharFeixes(List<Prova> provas, float cameraX, float cameraZ, FloatBuffer projecao, FloatBuffer visao,
+			Ambiente ambiente) {
+		feixes.clear();
+		int vertices = 0;
+		for (Prova p : provas) {
+			if (p.coletada() || vertices >= 6 * 8) continue;
+			// "direita" do feixe: perpendicular, no chão, à direção da câmera até a prova
+			float dx = p.x - cameraX, dz = p.z - cameraZ, t = (float) Math.sqrt(dx * dx + dz * dz);
+			if (t < 0.01f) continue;
+			float rx = dz / t * LARGURA_FEIXE / 2, rz = -dx / t * LARGURA_FEIXE / 2;
+			float y0 = p.y - Prova.ALTURA, y1 = y0 + ALTURA_FEIXE;
+			float[][] cantos = { { -1, y0, 0, 0 }, { 1, y0, 1, 0 }, { 1, y1, 1, 1 }, { 1, y1, 1, 1 }, { -1, y1, 0, 1 },
+					{ -1, y0, 0, 0 } };
+			for (float[] c : cantos) {
+				feixes.put(p.x + rx * c[0]).put(c[1]).put(p.z + rz * c[0]).put(c[2]).put(c[3]);
+				vertices++;
+			}
+		}
+		if (vertices == 0) return;
+		feixes.flip();
+		glBindBuffer(GL_ARRAY_BUFFER, vboFeixes);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, feixes);
+
+		shaders.ShaderFeixe shader = Recursos.shaderFeixe();
+		shader.start();
+		int prog = shader.programID;
+		glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), false, projecao);
+		glUniformMatrix4fv(glGetUniformLocation(prog, "view"), false, visao);
+		glUniform3f(glGetUniformLocation(prog, "corFeixe"), COR_FEIXE[0], COR_FEIXE[1], COR_FEIXE[2]);
+		ambiente.enviar(shader);
+		boolean tinhaBlend = glIsEnabled(GL_BLEND);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE);
+		glDepthMask(false);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, false, 20, 0);
+		glEnableVertexAttribArray(3);
+		glVertexAttribPointer(3, 2, GL_FLOAT, false, 20, 12);
+		glDrawArrays(GL_TRIANGLES, 0, vertices);
+		glDepthMask(true);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		if (!tinhaBlend) glDisable(GL_BLEND);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		shader.stop();
 	}
 
 	public void desenhar(List<Prova> provas, FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente, int alturaImagem) {
@@ -158,6 +217,7 @@ public class DesenhoProvas {
 
 	public void liberar() {
 		glDeleteBuffers(vbo);
+		glDeleteBuffers(vboFeixes);
 		halos.liberar();
 	}
 }

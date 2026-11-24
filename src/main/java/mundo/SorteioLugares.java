@@ -24,7 +24,70 @@ public final class SorteioLugares {
 	public static final float DISTANCIA_PROVA_UNIVALI = 40f;
 	public static final float DECLIVE_MAXIMO_PROVA = 25f;
 
+	/** Uma placa: do evento (Computer on the Beach) ou de trilha (seta pintada com o nome de uma prova). */
+	public record Placa(boolean evento, float x, float z, float giro, String texto) {}
+
+	public static final int PLACAS_EVENTO = 3, PLACAS_TRILHA_POR_PROVA = 2;
+	/** A que distância da prova ficam as placas de trilha: perto o bastante para ajudar, longe para não entregar. */
+	public static final float TRILHA_MINIMA = 25f, TRILHA_MAXIMA = 45f;
+
 	private SorteioLugares() {}
+
+	/**
+	 * As placas. Três do evento: uma a uns 10 m do início, virada para o jogador (o clima logo
+	 * de cara), e duas longe dela e uma da outra, viradas para um lado qualquer. Duas de trilha
+	 * por prova, a 25–45 m dela, com a seta apontando para a prova.
+	 *
+	 * O giro é a rotação em volta do eixo vertical: a placa do evento mostra a frente (+z) na
+	 * direção (sen g, cos g); a seta da placa de trilha aponta para o +x do modelo, que girado
+	 * fica em (cos g, -sen g).
+	 */
+	public static List<Placa> placas(ConsultaAltura chao, float[] inicio, List<float[]> provas, Random random) {
+		List<Placa> placas = new ArrayList<>();
+		float t = chao.tamanho();
+
+		// a do início
+		for (int tentativa = 0; tentativa < 200; tentativa++) {
+			double a = random.nextDouble() * 2 * Math.PI;
+			float x = inicio[0] + 10 * (float) Math.cos(a), z = inicio[1] + 10 * (float) Math.sin(a);
+			if (!bomParaPlaca(chao, x, z, 20)) continue;
+			placas.add(new Placa(true, x, z, (float) Math.atan2(inicio[0] - x, inicio[1] - z), "evento"));
+			break;
+		}
+		// as outras do evento
+		for (int tentativa = 0; tentativa < 3000 && placas.size() < PLACAS_EVENTO; tentativa++) {
+			float x = 35 + random.nextFloat() * (t - 70), z = 35 + random.nextFloat() * (t - 70);
+			if (!bomParaPlaca(chao, x, z, 20) || pertoDeOutra(placas, x, z, 70)) continue;
+			if (distancia(x, z, inicio[0], inicio[1]) < 50) continue;
+			placas.add(new Placa(true, x, z, random.nextFloat() * 6.283f, "evento"));
+		}
+		// as de trilha: em volta de cada prova, apontando para ela
+		for (int i = 0; i < provas.size(); i++) {
+			float[] p = provas.get(i);
+			int feitas = 0;
+			for (int tentativa = 0; tentativa < 500 && feitas < PLACAS_TRILHA_POR_PROVA; tentativa++) {
+				double a = random.nextDouble() * 2 * Math.PI;
+				float d = TRILHA_MINIMA + random.nextFloat() * (TRILHA_MAXIMA - TRILHA_MINIMA);
+				float x = p[0] + d * (float) Math.cos(a), z = p[1] + d * (float) Math.sin(a);
+				if (!bomParaPlaca(chao, x, z, 25) || pertoDeOutra(placas, x, z, 15)) continue;
+				float giro = (float) Math.atan2(-(p[1] - z), p[0] - x); // +x do modelo aponta para a prova
+				placas.add(new Placa(false, x, z, giro, "M" + (i + 1)));
+				feitas++;
+			}
+		}
+		return placas;
+	}
+
+	private static boolean bomParaPlaca(ConsultaAltura chao, float x, float z, float margem) {
+		return chao.dentroDoMapa(x, z, margem) && chao.alturaEm(x, z) > 0.2f && chao.anguloEm(x, z) < 22;
+	}
+
+	private static boolean pertoDeOutra(List<Placa> placas, float x, float z, float distancia) {
+		for (Placa p : placas) {
+			if (distancia(x, z, p.x(), p.z()) < distancia) return true;
+		}
+		return false;
+	}
 
 	/**
 	 * O lugar da Univali {x, z}: terra firme, plano (no centro e a 15 m em volta), a mais de 150 m
