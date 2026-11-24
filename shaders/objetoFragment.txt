@@ -8,6 +8,7 @@ uniform sampler2D tex;
 uniform sampler2D texNormal;
 uniform int usaNormalMap;      // 1 = usa o texNormal para o relevo fino (riscos do metal, veios da madeira)
 uniform float emissividade;   // 0 = só reflete luz; 1 = brilha sozinho (e sofre menos neblina)
+uniform float transparencia;  // 0 = opaco (o padrão de todo uniform); o fantasma usa, com mistura ligada
 
 in vec2 uv;
 in vec3 normalVista;
@@ -40,5 +41,5 @@ void main(void){
 		n = perturbarNormal(n, posVista, uv, texture(texNormal, modoPs1 > 0.5 ? uvAfim : uv).rgb);
 	}
 	vec3 cor = iluminar(c.rgb, n, posVista) + c.rgb * emissividade;
-	out_Color = vec4(aplicarNeblina(cor, length(posVista), emissividade), 1.0);
+	out_Color = vec4(aplicarNeblina(cor, length(posVista), emissividade), 1.0 - transparencia);
 }

@@ -3,22 +3,27 @@ package jogo;
 import java.util.Random;
 
 /**
- * Sustos que não machucam: de vez em quando, na floresta, uma silhueta parada ao longe (que some
- * quando a lanterna a ilumina) ou um galho quebrando logo atrás do jogador. Raros de propósito:
- * se acontecem toda hora, o jogador aprende a ignorar.
+ * Sustos que não machucam. Na floresta: um fantasma pálido passando entre as árvores, uma
+ * silhueta parada ao longe (que some quando a lanterna a ilumina), um galho quebrando logo atrás
+ * do jogador ou uma risada longe. Dentro da Univali: o fantasma atravessando o corredor, de uma
+ * sala para a outra. Não podem ser frequentes demais (o jogador aprende a ignorar), mas também
+ * não tão raros que ninguém veja: um a cada 35–70 s de jogo, fora o tempo com o monstro em cena.
  *
  * Esta classe só decide QUANDO (e qual); onde e como desenhar fica com a TelaJogo.
  */
 public class SustosFalsos {
 
-	public enum Tipo { SILHUETA, GALHO }
+	public enum Tipo { FANTASMA, SILHUETA, GALHO, RISADA }
+
+	/** Onde o jogador está (cada lugar tem os seus sustos). */
+	public enum Lugar { FLORESTA, PREDIO }
 
 	/** Intervalo entre dois sustos, em segundos (sorteado nessa faixa). */
-	public static final float INTERVALO_MINIMO = 50f, INTERVALO_MAXIMO = 110f;
-	/** Antes do primeiro, o jogador fica esse tempo na floresta sem nada. */
-	public static final float CARENCIA = 30f;
-	/** Chance de o susto ser a silhueta (o resto é o galho). */
-	public static final float CHANCE_SILHUETA = 0.45f;
+	public static final float INTERVALO_MINIMO = 35f, INTERVALO_MAXIMO = 70f;
+	/** Antes do primeiro, o jogador fica esse tempo sem nada. */
+	public static final float CARENCIA = 20f;
+	/** Chance de cada susto na floresta: fantasma, silhueta, risada; o resto é o galho. */
+	public static final float CHANCE_FANTASMA = 0.35f, CHANCE_SILHUETA = 0.25f, CHANCE_RISADA = 0.15f;
 
 	/** A silhueta: a que distância aparece, e quando some. */
 	public static final float SILHUETA_PERTO = 14f, SILHUETA_LONGE = 20f;
@@ -33,21 +38,45 @@ public class SustosFalsos {
 
 	private final Random random;
 	private float cronometro = CARENCIA;
+	/** Pedido pela depuração (F3): dispara este na próxima vez que puder (null = nenhum). */
+	private Tipo forcado = null;
 
 	public SustosFalsos(long semente) {
 		random = new Random(semente);
 	}
 
 	/**
-	 * Um passo do tempo. Só conta com o jogador na floresta e o monstro fora de cena (um susto
-	 * falso no meio de um verdadeiro não assusta ninguém). Devolve o susto da vez, ou null.
+	 * Um passo do tempo. Não conta com o monstro em cena (um susto falso no meio de um verdadeiro
+	 * não assusta ninguém) nem fora dos lugares (lugar null: a cena final, por exemplo). Devolve o
+	 * susto da vez, ou null. Dentro da Univali, só o fantasma.
 	 */
-	public Tipo atualizar(float dt, boolean naFloresta, boolean monstroEmCena) {
-		if (!naFloresta || monstroEmCena) return null;
+	public Tipo atualizar(float dt, Lugar lugar, boolean monstroEmCena) {
+		if (lugar == null || monstroEmCena) return null;
+		if (forcado != null) {
+			Tipo t = forcado;
+			forcado = null;
+			return t;
+		}
 		cronometro -= dt;
 		if (cronometro > 0) return null;
 		cronometro = INTERVALO_MINIMO + random.nextFloat() * (INTERVALO_MAXIMO - INTERVALO_MINIMO);
-		return random.nextFloat() < CHANCE_SILHUETA ? Tipo.SILHUETA : Tipo.GALHO;
+		if (lugar == Lugar.PREDIO) return Tipo.FANTASMA;
+		float sorteio = random.nextFloat();
+		if (sorteio < CHANCE_FANTASMA) return Tipo.FANTASMA;
+		sorteio -= CHANCE_FANTASMA;
+		if (sorteio < CHANCE_SILHUETA) return Tipo.SILHUETA;
+		sorteio -= CHANCE_SILHUETA;
+		return sorteio < CHANCE_RISADA ? Tipo.RISADA : Tipo.GALHO;
+	}
+
+	/** Depuração: dispara esse susto assim que puder (num lugar com sustos, sem o monstro em cena). */
+	public void forcar(Tipo tipo) {
+		forcado = tipo;
+	}
+
+	/** Segundos (de floresta, sem o monstro) até o próximo susto. */
+	public float cronometro() {
+		return cronometro;
 	}
 
 	/** Para sortear posições com a mesma semente. */

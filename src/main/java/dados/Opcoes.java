@@ -28,7 +28,7 @@ public class Opcoes {
 	/** Seed digitada (só dígitos). Vazia = um mapa novo a cada partida. */
 	public String seed = "";
 	/** Visual de PlayStation: baixa resolução, texturas sem suavização, vértices tremendo. */
-	public boolean modoPs1 = true;
+	public boolean modoPs1 = false; // desligado por padrão: a imagem limpa ficou melhor; o efeito continua nas Opções
 	/** Campo de visão vertical, em graus. */
 	public float campoVisao = 70f;
 	/** Multiplica a chance de cada árvore existir (a muralha da borda não muda). */
@@ -79,7 +79,7 @@ public class Opcoes {
 				SENSIBILIDADE_MAXIMA);
 		String seed = p.getProperty("mapa.seed", "").trim();
 		o.seed = seed.matches("\\d{0,18}") ? seed : "";
-		o.modoPs1 = !"false".equals(p.getProperty("video.ps1", "true").trim());
+		o.modoPs1 = "true".equals(p.getProperty("video.ps1", "false").trim());
 		o.campoVisao = lerNumero(p, "video.campoVisao", o.campoVisao, CAMPO_VISAO_MINIMO, CAMPO_VISAO_MAXIMO);
 		o.densidadeArvores = lerNumero(p, "video.densidadeArvores", o.densidadeArvores, DENSIDADE_MINIMA, DENSIDADE_MAXIMA);
 		o.inverterY = "true".equals(p.getProperty("mouse.inverterY", "false").trim());

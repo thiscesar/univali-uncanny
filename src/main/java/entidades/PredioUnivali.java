@@ -132,6 +132,17 @@ public class PredioUnivali extends Object3D {
 	}
 
 	/** Um retângulo do modelo levado ao mundo (com o giro de 90° em 90°, continua alinhado aos eixos). */
+	/** O contrário do noMundo (só no chão): {x, z} no modelo de um ponto (x, z) do mundo. */
+	public float[] paraModelo(float wx, float wz) {
+		float dx = wx - x, dz = wz - z; // a rotação é um múltiplo de 90 graus: a inversa é a transposta
+		return new float[] { dx * frenteZ - dz * frenteX, dx * frenteX + dz * frenteZ };
+	}
+
+	/** Uma direção do mundo (x, z) levada para o modelo (sem a posição). */
+	public float[] direcaoParaModelo(float dx, float dz) {
+		return new float[] { dx * frenteZ - dz * frenteX, dx * frenteX + dz * frenteZ };
+	}
+
 	public GradeColisao.Retangulo noMundo(AndarUnivali.Caixa c) {
 		float[] a = noMundo(c.xMin(), 0, c.zMin()), b = noMundo(c.xMax(), 0, c.zMax());
 		return new GradeColisao.Retangulo(Math.min(a[0], b[0]), Math.min(a[2], b[2]), Math.max(a[0], b[0]),

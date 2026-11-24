@@ -70,14 +70,14 @@ class OpcoesTest {
 	}
 
 	@Test
-	void modoPs1ComecaLigadoESalvaDesligado() throws IOException {
-		assertTrue(new Opcoes().modoPs1);
+	void modoPs1ComecaDesligadoESalvaLigado() throws IOException {
+		assertFalse(new Opcoes().modoPs1);
 		File arquivo = new File(pasta, "config.properties");
 		Opcoes o = new Opcoes();
-		o.modoPs1 = false;
+		o.modoPs1 = true;
 		o.salvar(arquivo);
-		assertFalse(Opcoes.carregar(arquivo).modoPs1);
-		Files.writeString(arquivo.toPath(), "volume.geral=0.5\n"); // arquivo antigo, sem a opção
 		assertTrue(Opcoes.carregar(arquivo).modoPs1);
+		Files.writeString(arquivo.toPath(), "volume.geral=0.5\n"); // arquivo antigo, sem a opção
+		assertFalse(Opcoes.carregar(arquivo).modoPs1);
 	}
 }

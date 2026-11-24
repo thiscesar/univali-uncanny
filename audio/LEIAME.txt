@@ -7,11 +7,21 @@ Conversões úteis:
   MP3 para OGG:     ffmpeg -i musica.mp3 -c:a libvorbis -q:a 5 musica_menu.ogg
   Estéreo para mono: ffmpeg -i grito.wav -ac 1 monstro_grito.ogg
 
-Arquivos esperados: musica_menu.ogg, menu_passar.ogg, menu_clique.ogg, ambiente_floresta.ogg,
+Arquivos esperados: musica_menu.ogg, musica_monstro.ogg (toca quando o Dragon Knight surge), menu_passar.ogg, menu_clique.ogg, ambiente_floresta.ogg,
 passo_grama_1..4.ogg, passo_terra_1..4.ogg, passo_agua_1..4.ogg, passo_piso_1..4.ogg,
+passo_<material>_correndo_1..4.ogg (opcional: correndo), risada.ogg (mono: susto falso e REPROVADO),
 respiracao.ogg, lanterna_clique.ogg, galho_quebrando.ogg, coruja.ogg, escopeta_tiro.ogg, escopeta_telha.ogg, escopeta_cartucho.ogg,
 escopeta_vazia.ogg, monstro_grito.ogg, monstro_morte.ogg, batimento.ogg,
 sussurro.ogg, pegar_prova.ogg, sinal_aula.ogg, susto.ogg.
 
 Se um arquivo não existir, o jogo toca silêncio no lugar (passos, galho, arma, monstro,
 provas e sinal têm um substituto sintetizado por código).
+
+Passos: um passo por arquivo, curto (0,2 a 0,4 s), começando logo antes da pisada. Os arquivos
+passo_grama_*, passo_grama_correndo_* e passo_piso_* foram recortados das gravações em MP3
+(walking-on-grass, running-on-grass, inside-univali-steps): os 4 passos mais fortes de cada uma,
+normalizados e com esmaecimento nas pontas. risada.ogg veio de evil-laugh.mp3 (mono).
+passo_terra_* são os passos correndo na grama com os agudos cortados (passa-baixa de 1,5 kHz).
+passo_piso_*: a gravação tinha quase toda a energia abaixo de 90 Hz (um ronco que soava como
+batida); foi cortada abaixo de 120 Hz, renormalizada e encurtada para 0,2 s.
+musica_monstro.ogg veio de headbanger-monster.mp3, sem os 5 s de silêncio do fim (para o loop não ter pausa).

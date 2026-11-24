@@ -142,4 +142,15 @@ class PredioUnivaliTest {
 		assertEquals(100 + 90 * 10, cm[45][90], 1, "longe do prédio, nada muda");
 		assertTrue(cm[45][70] > piso * 100 && cm[45][70] < 100 + 70 * 10, "na rampa, entre os dois");
 	}
+
+	@Test
+	void paraModeloDesfazNoMundoNosQuatroGiros() {
+		for (int k = 0; k < 4; k++) {
+			PredioUnivali p = new PredioUnivali(100, 0, 120, k * (float) Math.PI / 2, 1);
+			float[] w = p.noMundo(7.5f, 0, -3.25f);
+			float[] m = p.paraModelo(w[0], w[2]);
+			assertEquals(7.5f, m[0], 1e-4);
+			assertEquals(-3.25f, m[1], 1e-4);
+		}
+	}
 }

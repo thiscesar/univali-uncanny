@@ -13,6 +13,7 @@ import jogo.Partida;
 import render.Escorridos;
 import render.Overlay2D;
 import render.TextoTextura;
+import util.Caminhos;
 
 /**
  * REPROVADO. O fundo é o último quadro da partida (o Dragon Knight bem de perto), congelado,
@@ -61,8 +62,11 @@ public class TelaDerrota extends TelaFim {
 
 	@Override
 	protected void tocarEntrada(Audio audio) {
-		// um rugido grave sumindo, como se ele ainda estivesse ali
-		audio.tocar(audio.criarEfeito("rugido do fim", Sintetizador.rugido(44100, 2600, 70, 26, 0.5, 9), 44100), 0.8f);
+		// um rugido grave sumindo, como se ele ainda estivesse ali, e a risada dele (audio/risada.ogg)
+		audio.tocar(audio.criarEfeito("rugido do fim", Sintetizador.rugido(44100, 2600, 70, 26, 0.5, 9), 44100), 0.6f);
+		if (Caminhos.existe("audio/risada.ogg")) {
+			audio.tocar(audio.carregarEfeito("audio/risada.ogg"), 0.9f);
+		}
 	}
 
 	@Override

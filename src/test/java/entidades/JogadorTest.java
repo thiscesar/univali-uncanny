@@ -183,12 +183,14 @@ class JogadorTest {
 	}
 
 	@Test
-	void umPassoACada60Centimetros() {
+	void umPassoACada1Metro40EUmRitmoDeCaminhada() {
 		Jogador j = new Jogador(50, 90, chao(plano(100)), new GradeColisao(100));
 		j.comandar(1, 0, false);
 		int passos = simular(j, 4);
 		float andou = 90 - j.z;
-		assertEquals(andou / 0.6f, passos, 1.5);
+		assertEquals(andou / Jogador.PASSO_ANDANDO, passos, 1.5);
+		float porSegundo = passos / 4f;
+		assertTrue(porSegundo > 2 && porSegundo < 3, "passos por segundo: " + porSegundo);
 	}
 
 	@Test

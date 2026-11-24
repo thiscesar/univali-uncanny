@@ -35,6 +35,7 @@ public class Musica {
 	// ---- pedidos da thread principal (protegidos pelo synchronized) ----
 	private String arquivoPedido;
 	private boolean loopPedido;
+	private float inicioPedido;
 	private boolean pararPedido;
 	private float fadeAlvo = 1, fadeInicio = 1;
 	private long fadeComeco = 0, fadeDuracao = 0;
@@ -67,8 +68,17 @@ public class Musica {
 
 	/** Começa a tocar um OGG (caminho relativo, ex.: "audio/musica_menu.ogg"). Arquivo ausente = silêncio. */
 	public synchronized void tocar(String relativo, boolean loop) {
+		tocar(relativo, loop, 0);
+	}
+
+	/**
+	 * O mesmo, começando "inicio" segundos depois do começo (para continuar uma música de onde
+	 * parou). Com loop, passar do fim dá a volta: o início vale módulo a duração.
+	 */
+	public synchronized void tocar(String relativo, boolean loop, float inicio) {
 		arquivoPedido = relativo;
 		loopPedido = loop;
+		inicioPedido = inicio;
 		pararPedido = false;
 		fadeAlvo = 1;
 		fadeInicio = 1;
@@ -138,11 +148,13 @@ public class Musica {
 		while (rodando) {
 			String abrir;
 			boolean loopNovo, parar;
+			float inicio;
 			float fator, vol;
 			synchronized (this) {
 				abrir = arquivoPedido;
 				arquivoPedido = null;
 				loopNovo = loopPedido;
+				inicio = inicioPedido;
 				parar = pararPedido;
 				pararPedido = false;
 				fator = fatorFade(fadeInicio, fadeAlvo, fadeComeco, fadeDuracao, System.currentTimeMillis());
@@ -152,7 +164,7 @@ public class Musica {
 				fechar();
 			}
 			if (abrir != null) {
-				abrir(abrir, loopNovo);
+				abrir(abrir, loopNovo, inicio);
 			}
 			if (decodificador != 0) {
 				alSourcef(fonte, AL_GAIN, vol * fator);
@@ -174,7 +186,7 @@ public class Musica {
 		return fadeAlvo == 0;
 	}
 
-	private void abrir(String relativo, boolean comLoop) {
+	private void abrir(String relativo, boolean comLoop, float inicio) {
 		fechar();
 		if (!Caminhos.arquivo(relativo).exists()) {
 			return; // o aviso já foi dado pelo Caminhos; fica em silêncio
@@ -189,6 +201,11 @@ public class Musica {
 			stb_vorbis_get_info(decodificador, info);
 			canais = info.channels();
 			taxa = info.sample_rate();
+		}
+		if (inicio > 0) {
+			int total = stb_vorbis_stream_length_in_samples(decodificador); // amostras por canal
+			long amostra = (long) (inicio * taxa);
+			stb_vorbis_seek(decodificador, (int) (total > 0 ? amostra % total : amostra));
 		}
 		loop = comLoop;
 		acabou = false;

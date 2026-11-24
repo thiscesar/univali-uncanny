@@ -35,6 +35,7 @@ import entidades.Prova;
 import entidades.Tiro;
 import entidades.Jogador;
 import entrada.Entrada;
+import jogo.Fantasma;
 import jogo.MaterialChao;
 import jogo.Objetivos;
 import jogo.Partida;
@@ -50,6 +51,7 @@ import render.Ambiente;
 import render.Camera;
 import render.CameraLivre;
 import render.DesenhoEscopeta;
+import render.DesenhoFantasma;
 import render.DesenhoMonstro;
 import render.DesenhoPlacas;
 import render.DesenhoPredio;
@@ -139,8 +141,9 @@ public class TelaJogo implements Tela {
 
 	// sons
 	private final Random random = new Random();
-	/** Quatro variações de passo para cada material do chão. */
+	/** Variações de passo para cada material do chão, andando e (onde houver gravação) correndo. */
 	private final java.util.Map<MaterialChao, Efeito[]> passos = new java.util.EnumMap<>(MaterialChao.class);
+	private final java.util.Map<MaterialChao, Efeito[]> passosCorrendo = new java.util.EnumMap<>(MaterialChao.class);
 	private Efeito respiracao;
 	private Efeito cliqueLanterna;
 	private SomAmbiente somAmbiente;
@@ -155,11 +158,31 @@ public class TelaJogo implements Tela {
 	/** A silhueta em cena: {x, y, z, guinada, segundos na tela}; null = nenhuma. */
 	private float[] silhueta = null;
 	private Efeito somGalho;
+	/** O fantasma de passagem (null = nenhum) e quanto tempo um fantasma da Univali ainda espera o jogador no corredor. */
+	private Fantasma fantasma = null;
+	private float esperaFantasmaPredio = 0;
+	private DesenhoFantasma desenhoFantasma;
+	/** A fala do professor cuja voz já tocou (para tocar uma vez por fala) e a última fala da entrega com voz. */
+	private String falaComVoz = null;
+	private int ultimaFalaEntrega = -1;
+	/** audio/risada.ogg (null = sem o arquivo: a risada vira galho). */
+	private Efeito somRisada;
 
 	// o Dragon Knight
 	private final DragonKnight monstro;
 	private DesenhoMonstro desenhoMonstro;
 	private Efeito somGrito, somMorte, somBatida, somSusto;
+	/**
+	 * A música do monstro (metal): entra quando ele surge e some quando ele morre. Cada aparição
+	 * continua a música de onde a anterior parou (segundosMetal), para não repetir sempre o começo.
+	 */
+	private static final String MUSICA_MONSTRO = "audio/musica_monstro.ogg";
+	private static final long ENTRADA_METAL_MS = 250, SAIDA_METAL_MS = 2500;
+	private float segundosMetal = 0;
+	/** Segundos que a música ainda toca (enquanto ele está em cena, infinito; depois, o fade). */
+	private float metalRestante = 0;
+	/** Com a música do monstro, o batimento da contagem sai (os dois ritmos brigavam). */
+	private boolean temMusicaMonstro;
 
 	// a escopeta, os efeitos dela e as caixas de munição
 	private final Escopeta escopeta = new Escopeta();
@@ -183,7 +206,15 @@ public class TelaJogo implements Tela {
 	private final Objetivos objetivos = new Objetivos();
 	private final java.util.ArrayDeque<String> falas = new java.util.ArrayDeque<>();
 	private float tempoFala = 0;
+	/**
+	 * O chamado das provas: não é mais um sussurro sem fim (incomodava, e se ouvia de longe o tempo
+	 * todo). Cada prova sussurra uma frase de vez em quando, e só com o jogador a menos de 30 m.
+	 */
+	private static final float ALCANCE_SUSSURRO = 30f, VOLUME_SUSSURRO = 0.5f;
+	private static final float SUSSURRO_MINIMO = 7f, SUSSURRO_MAXIMO = 13f;
 	private final java.util.Map<Prova, SomTocando> sussurros = new java.util.HashMap<>();
+	/** Segundos até a próxima frase de cada prova (pode ficar negativo esperando o jogador chegar perto). */
+	private final java.util.Map<Prova, Float> esperaSussurro = new java.util.HashMap<>();
 	private Efeito somSussurro, somPegarProva, somSinal;
 	private SomTocando somZumbido;
 	/** Segundos desde que cada prova foi pega (para o pulso no HUD); negativo = ainda não. */
@@ -250,17 +281,24 @@ public class TelaJogo implements Tela {
 		campoVisao = Opcoes.atual().campoVisao;
 		ladoSombra = Opcoes.LADO_SOMBRA[Opcoes.atual().sombras];
 		for (MaterialChao m : MaterialChao.values()) {
-			Efeito[] variacoes = new Efeito[4];
-			for (int i = 0; i < variacoes.length; i++) {
-				long semente = m.ordinal() * 10L + i;
-				variacoes[i] = efeitoOuSintetizado("audio/passo_" + m.name().toLowerCase() + "_" + (i + 1) + ".ogg",
-						() -> sintetizarPasso(m, semente));
+			String nome = "audio/passo_" + m.name().toLowerCase();
+			Efeito[] gravados = carregarVariacoes(nome + "_");
+			if (gravados.length == 0) { // sem gravação: quatro passos sintetizados
+				gravados = new Efeito[4];
+				for (int i = 0; i < gravados.length; i++) {
+					long semente = m.ordinal() * 10L + i;
+					gravados[i] = audio.criarEfeito(nome + "_" + (i + 1) + " (sintetizado)", sintetizarPasso(m, semente), 44100); // nomes diferentes: o cache é por nome
+				}
 			}
-			passos.put(m, variacoes);
+			passos.put(m, gravados);
+			Efeito[] correndo = carregarVariacoes(nome + "_correndo_");
+			if (correndo.length > 0) passosCorrendo.put(m, correndo);
 		}
 		somGalho = efeitoOuSintetizado("audio/galho_quebrando.ogg", () -> Sintetizador.galho(44100, 3));
+		somRisada = Caminhos.existe("audio/risada.ogg") ? audio.carregarEfeito("audio/risada.ogg") : null;
 		sustos = new SustosFalsos(mundo.seed + 5);
 		desenhoSilhueta = new DesenhoSilhueta();
+		desenhoFantasma = new DesenhoFantasma();
 		ultimoX = jogador.x;
 		ultimoZ = jogador.z;
 		respiracao = audio.carregarEfeito("audio/respiracao.ogg");
@@ -316,11 +354,8 @@ public class TelaJogo implements Tela {
 		// o zumbido das lâmpadas no saguão, em loop
 		float[] saguao = mundo.predio.noMundo(0, 3, 8);
 		somZumbido = gerenciador.audio().tocar3D(gerenciador.audio().criarEfeito("zumbido das lampadas",
-				Sintetizador.zumbido(44100), 44100), saguao[0], saguao[1], saguao[2], 0.5f, true, 4f);
-		for (Prova p : partida.provas()) {
-			// referência de 3 m: o sussurro ainda se ouve a uns 20 m, vindo da direção da folha
-			sussurros.put(p, gerenciador.audio().tocar3D(somSussurro, p.x, p.y, p.z, 0.9f, true, 3f));
-		}
+				Sintetizador.zumbido(44100), 44100), saguao[0], saguao[1], saguao[2], 0.22f, true, 2.5f);
+		temMusicaMonstro = Caminhos.existe(MUSICA_MONSTRO);
 
 		caixas = new java.util.ArrayList<>();
 		for (float[] c : mundo.caixas) { // onde o AG da fase pôs as caixas
@@ -332,6 +367,9 @@ public class TelaJogo implements Tela {
 			@Override
 			public void surgiu(DragonKnight m) {
 				tremor = 1;
+				gerenciador.audio().musica().tocar(MUSICA_MONSTRO, true, segundosMetal);
+				gerenciador.audio().musica().fadeIn(ENTRADA_METAL_MS);
+				metalRestante = Float.MAX_VALUE;
 				// o grito sai de onde ele está: com fone, dá para saber de que lado ele surgiu
 				gerenciador.audio().tocar3D(somGrito, m.x, m.y + 1.6f, m.z, 1f, false);
 			}
@@ -339,6 +377,8 @@ public class TelaJogo implements Tela {
 			@Override
 			public void morreu(DragonKnight m) {
 				gerenciador.audio().tocar3D(somMorte, m.x, m.y + 1.2f, m.z, 1f, false);
+				gerenciador.audio().musica().fadeOut(SAIDA_METAL_MS);
+				metalRestante = SAIDA_METAL_MS / 1000f;
 			}
 
 			@Override
@@ -347,6 +387,15 @@ public class TelaJogo implements Tela {
 				gerenciador.audio().tocar(somGrito, 1f);
 			}
 		});
+	}
+
+	/** Os arquivos prefixo1.ogg, prefixo2.ogg... que existirem (até 8), em ordem. */
+	private Efeito[] carregarVariacoes(String prefixo) {
+		List<Efeito> lista = new java.util.ArrayList<>();
+		for (int i = 1; i <= 8 && Caminhos.existe(prefixo + i + ".ogg"); i++) {
+			lista.add(gerenciador.audio().carregarEfeito(prefixo + i + ".ogg"));
+		}
+		return lista.toArray(new Efeito[0]);
 	}
 
 	private static short[] sintetizarPasso(MaterialChao m, long semente) {
@@ -376,6 +425,9 @@ public class TelaJogo implements Tela {
 		somTeste = null;
 		somRespiracao = null;
 		somAmbiente.parar();
+		if (metalRestante > 0) {
+			audio.musica().fadeOut(800);
+		}
 		filtroPs1.liberar();
 		sombra.liberar();
 		desenhoMonstro.liberar();
@@ -384,6 +436,7 @@ public class TelaJogo implements Tela {
 		desenhoPlacas.liberar();
 		desenhoPredio.liberar();
 		desenhoSilhueta.liberar();
+		desenhoFantasma.liberar();
 		for (SomTocando s : sussurros.values()) {
 			audio.parar(s);
 		}
@@ -410,6 +463,10 @@ public class TelaJogo implements Tela {
 			// a cena final: nada responde; a tela escurece, o professor fala e vem a vitória
 			tempoEntrega += diftime / 1000f;
 			tempo += diftime / 1000f;
+			for (int i = ultimaFalaEntrega + 1; i < FALAS.length && tempoEntrega >= TEMPO_FALAS[i][0]; i++) {
+				falarComVoz(FALAS[i]);
+				ultimaFalaEntrega = i;
+			}
 			if (tempoEntrega >= FIM_ENTREGA) {
 				fim = Fim.VITORIA;
 			}
@@ -455,6 +512,22 @@ public class TelaJogo implements Tela {
 		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_K)) {
 			monstro.matar();
+		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_H)) {
+			sustos.forcar(SustosFalsos.Tipo.SILHUETA);
+			mostrarMensagem("Susto falso: silhueta (só na floresta, sem o monstro)");
+		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_J)) {
+			sustos.forcar(SustosFalsos.Tipo.GALHO);
+			mostrarMensagem("Susto falso: galho (só na floresta, sem o monstro)");
+		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_N)) {
+			sustos.forcar(SustosFalsos.Tipo.FANTASMA);
+			mostrarMensagem("Susto falso: fantasma (na Univali, só no corredor olhando ao longo dele)");
+		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_L)) {
+			sustos.forcar(SustosFalsos.Tipo.RISADA);
+			mostrarMensagem("Susto falso: risada (só na floresta, sem o monstro)");
 		}
 		if (mostrarDepuracao) {
 			ajustarPoseDaArma(entrada);
@@ -573,6 +646,37 @@ public class TelaJogo implements Tela {
 		}
 	}
 
+	/**
+	 * A voz do professor numa fala: o texto entre aspas vira "fala sem palavras" (sílabas
+	 * sintetizadas com o timbre das vogais do texto), saindo da cabeça dele, em 3D. Cada frase é
+	 * gerada uma vez (o Audio guarda pelo nome). Falas sem letras ("...") ficam em silêncio.
+	 */
+	private void falarComVoz(String fala) {
+		int a = fala.indexOf('"'), b = fala.lastIndexOf('"');
+		String texto = a >= 0 && b > a ? fala.substring(a + 1, b) : fala;
+		if (texto.chars().noneMatch(Character::isLetter)) return;
+		Audio audio = gerenciador.audio();
+		Efeito voz = audio.criarEfeito("voz do professor: " + texto, Sintetizador.voz(44100, texto, 112, 7), 44100);
+		float[] prof = mundo.predio.professorNoModelo();
+		float[] cabeca = mundo.predio.noMundo(prof[0], 1.3f, prof[1]);
+		audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, 3f);
+	}
+
+	/** Uma frase sussurrada de cada prova não pega, a cada 7–13 s, só se o jogador estiver a menos de 30 m. */
+	private void atualizarSussurros(float dt) {
+		if (tempoEntrega >= 0) return;
+		Camera c = jogador.camera();
+		for (Prova p : partida.provas()) {
+			if (p.coletada()) continue;
+			float espera = esperaSussurro.getOrDefault(p, random.nextFloat() * 3) - dt;
+			if (espera <= 0 && Math.hypot(p.x - c.x, p.z - c.z) < ALCANCE_SUSSURRO) {
+				sussurros.put(p, gerenciador.audio().tocar3D(somSussurro, p.x, p.y + 0.3f, p.z, VOLUME_SUSSURRO, false, 2.5f));
+				espera = SUSSURRO_MINIMO + random.nextFloat() * (SUSSURRO_MAXIMO - SUSSURRO_MINIMO);
+			}
+			esperaSussurro.put(p, Math.max(espera, 0));
+		}
+	}
+
 	/** Sem as 3 provas, ele nega (e a porta da frente abre na primeira vez); com as 3, a cena final. */
 	private void falarComProfessor() {
 		if (partida.todasColetadas()) {
@@ -583,6 +687,7 @@ public class TelaJogo implements Tela {
 		}
 		boolean primeira = !objetivos.falouComProfessor();
 		falas.clear();
+		falaComVoz = null;
 		falas.addAll(objetivos.falarSemAsProvas(partida.faltando()));
 		tempoFala = 0;
 		if (primeira) {
@@ -704,7 +809,11 @@ public class TelaJogo implements Tela {
 		particulas.atualizar(dt);
 		mundo.predio.SimulaSe(Math.round(dt * 1000));
 		desenhoPredio.atualizar(dt, jogador.x, jogador.z);
-		// as falas do professor, uma de cada vez
+		// as falas do professor, uma de cada vez, cada uma com a voz dele
+		if (!falas.isEmpty() && falas.peek() != falaComVoz) {
+			falaComVoz = falas.peek();
+			falarComVoz(falaComVoz);
+		}
 		if (!falas.isEmpty()) {
 			tempoFala += dt;
 			if (tempoFala >= 3.2f) {
@@ -716,6 +825,8 @@ public class TelaJogo implements Tela {
 		if (!monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z)) {
 			monstro.ativo = true;
 			tutorial.registrar(Tutorial.Acao.SAIU);
+			gerenciador.audio().parar(somZumbido); // lá fora o zumbido do saguão não faz falta
+			somZumbido = null;
 		}
 		andado += (float) Math.hypot(jogador.x - ultimoX, jogador.z - ultimoZ);
 		ultimoX = jogador.x;
@@ -726,6 +837,7 @@ public class TelaJogo implements Tela {
 		for (Prova p : partida.provas()) {
 			p.SimulaSe(Math.round(dt * 1000));
 		}
+		atualizarSussurros(dt);
 		pulsoProva.replaceAll((p, t) -> t + dt);
 
 		// o clarão: uma luz forte na boca do cano por ~80 ms, que ilumina a arma e as árvores
@@ -774,46 +886,129 @@ public class TelaJogo implements Tela {
 
 	/** O monstro, o batimento, a lanterna em pânico e, no fim do ataque, o susto. */
 	/**
-	 * Os sustos falsos, só na floresta e com o monstro fora de cena. A silhueta aparece ao lado
-	 * do que o jogador olha (fora do facho da lanterna) e some se a luz a pegar, se ele chegar
-	 * perto, se o monstro aparecer ou depois de um tempo. O galho quebra logo atrás dele.
+	 * Os sustos falsos, com o monstro fora de cena. Na floresta: o fantasma passando entre as
+	 * árvores, a silhueta (na borda do facho, some se a luz a pegar, se o jogador chegar perto, se
+	 * o monstro aparecer ou depois de um tempo), a risada longe e o galho atrás. Na Univali: o
+	 * fantasma atravessando o corredor mais à frente.
 	 */
 	private void atualizarSustosFalsos(float dt) {
-		boolean naFloresta = monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z) && tempoEntrega < 0;
+		boolean dentro = mundo.predio.dentro(jogador.x, jogador.z);
+		SustosFalsos.Lugar lugar = tempoEntrega >= 0 ? null
+				: dentro ? SustosFalsos.Lugar.PREDIO : monstro.ativo ? SustosFalsos.Lugar.FLORESTA : null;
 		boolean monstroEmCena = monstro.estado() != DragonKnight.Estado.AUSENTE;
 		Camera c = jogador.camera();
+		if (fantasma != null) {
+			if (monstroEmCena) fantasma.sumir();
+			fantasma.atualizar(dt, c.x, c.z);
+			if (fantasma.acabou()) fantasma = null;
+			return;
+		}
 		if (silhueta != null) {
 			silhueta[4] += dt;
 			float d = (float) Math.hypot(silhueta[0] - c.x, silhueta[2] - c.z);
-			if (monstroEmCena || !naFloresta || d < SustosFalsos.SILHUETA_SOME_PERTO
+			if (monstroEmCena || lugar != SustosFalsos.Lugar.FLORESTA || d < SustosFalsos.SILHUETA_SOME_PERTO
 					|| silhueta[4] > SustosFalsos.SILHUETA_DURACAO
 					|| SustosFalsos.iluminado(lanterna.ligada(), c.x, c.z, c.frente.x, c.frente.z, silhueta[0], silhueta[2])) {
 				silhueta = null;
 			}
 			return;
 		}
-		SustosFalsos.Tipo tipo = sustos.atualizar(dt, naFloresta, monstroEmCena);
+		// um fantasma da Univali que ainda espera o jogador estar no corredor, olhando ao longo dele
+		if (esperaFantasmaPredio > 0) {
+			esperaFantasmaPredio -= dt;
+			if (dentro && !monstroEmCena) fantasma = fantasmaNoCorredor(c);
+			if (fantasma != null || !dentro) esperaFantasmaPredio = 0;
+			return;
+		}
+		SustosFalsos.Tipo tipo = sustos.atualizar(dt, lugar, monstroEmCena);
+		if (tipo == null) return;
 		Random r = sustos.random();
 		float olhando = (float) Math.atan2(c.frente.x, c.frente.z);
-		if (tipo == SustosFalsos.Tipo.SILHUETA) {
+		if (tipo == SustosFalsos.Tipo.FANTASMA && dentro) {
+			esperaFantasmaPredio = 25; // tenta por até 25 s
+		} else if (tipo == SustosFalsos.Tipo.FANTASMA) {
+			fantasma = fantasmaNaFloresta(c, olhando, r);
+		} else if (tipo == SustosFalsos.Tipo.SILHUETA) {
 			for (int tentativa = 0; tentativa < 20 && silhueta == null; tentativa++) {
 				// na borda do facho da lanterna, para um dos lados: vista de relance, meio iluminada
 				float desvio = SustosFalsos.BORDA_MINIMA + r.nextFloat() * (SustosFalsos.BORDA_MAXIMA - SustosFalsos.BORDA_MINIMA);
 				float angulo = olhando + (r.nextBoolean() ? 1 : -1) * (float) Math.toRadians(desvio);
 				float d = SustosFalsos.SILHUETA_PERTO + r.nextFloat() * (SustosFalsos.SILHUETA_LONGE - SustosFalsos.SILHUETA_PERTO);
 				float x = c.x + (float) Math.sin(angulo) * d, z = c.z + (float) Math.cos(angulo) * d;
-				if (!mundo.chao.dentroDoMapa(x, z, 25) || mundo.chao.alturaEm(x, z) < 0.3f || mundo.colisao.colide(x, z, 0.5f)
-						|| !mundo.colisao.linhaLivre(c.x, c.z, x, z) || mundo.predio.dentro(x, z)) {
-					continue;
-				}
+				if (!lugarLivreNaFloresta(c, x, z) || mundo.colisao.colide(x, z, 0.5f)) continue;
 				silhueta = new float[] { x, mundo.chao.alturaEm(x, z), z, (float) Math.atan2(c.x - x, c.z - z), 0 };
 			}
-		} else if (tipo == SustosFalsos.Tipo.GALHO) {
+		} else if (tipo == SustosFalsos.Tipo.RISADA && somRisada != null) {
+			// uma risada longe, de um lado qualquer, entre as árvores
+			float angulo = r.nextFloat() * (float) (2 * Math.PI);
+			float d = 25 + r.nextFloat() * 10;
+			float x = c.x + (float) Math.sin(angulo) * d, z = c.z + (float) Math.cos(angulo) * d;
+			gerenciador.audio().tocar3D(somRisada, x, mundo.chao.alturaEm(x, z) + 1.6f, z, 1f, false, 8f);
+		} else if (tipo != SustosFalsos.Tipo.SILHUETA) { // o galho (ou a risada sem o arquivo)
 			float angulo = olhando + (float) Math.PI + (r.nextFloat() - 0.5f) * 1.0f; // atrás, até 30 graus para o lado
 			float d = 4 + r.nextFloat() * 3;
 			float x = c.x + (float) Math.sin(angulo) * d, z = c.z + (float) Math.cos(angulo) * d;
 			gerenciador.audio().tocar3D(somGalho, x, mundo.chao.alturaEm(x, z) + 0.3f, z, 1f, false, 3f);
 		}
+	}
+
+	/**
+	 * Um ponto da floresta onde dá para pôr um susto: no mapa, fora da água e do prédio, sem tronco
+	 * no caminho e sem morro na frente (a linha dos olhos até 40 cm acima do chão de lá passa por
+	 * cima do terreno em todo o caminho: assim aparece o corpo inteiro, e não só a cabeça).
+	 */
+	private boolean lugarLivreNaFloresta(Camera c, float x, float z) {
+		if (!mundo.chao.dentroDoMapa(x, z, 25) || mundo.chao.alturaEm(x, z) < 0.3f || mundo.predio.dentro(x, z)
+				|| !mundo.colisao.linhaLivre(c.x, c.z, x, z)) {
+			return false;
+		}
+		float alvoY = mundo.chao.alturaEm(x, z) + 0.4f;
+		for (float t = 0.1f; t < 1; t += 0.05f) {
+			float px = c.x + (x - c.x) * t, pz = c.z + (z - c.z) * t, py = c.y + (alvoY - c.y) * t;
+			if (mundo.chao.alturaEm(px, pz) > py - 0.1f) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * O fantasma da floresta: de 14 a 20 m, num lugar aberto, até 25 graus para o lado de onde o jogador olha (para
+	 * ser visto), atravessando a vista de lado, devagar, por 10 a 14 s. Um sussurro sai dele.
+	 */
+	private Fantasma fantasmaNaFloresta(Camera c, float olhando, Random r) {
+		for (int tentativa = 0; tentativa < 20; tentativa++) {
+			float angulo = olhando + (r.nextFloat() * 2 - 1) * (float) Math.toRadians(25);
+			float d = 14 + r.nextFloat() * 6;
+			float x = c.x + (float) Math.sin(angulo) * d, z = c.z + (float) Math.cos(angulo) * d;
+			// num lugar aberto: os galhos de baixo dos pinheiros escondiam o fantasma inteiro
+			if (!lugarLivreNaFloresta(c, x, z) || mundo.colisao.colide(x, z, 2f) || !mundo.colisao.linhaLivre(c.x, c.z, x, z, 0.8f)) {
+				continue;
+			}
+			float lado = r.nextBoolean() ? 1 : -1; // anda para a esquerda ou para a direita de quem olha
+			gerenciador.audio().tocar3D(somSussurro, x, mundo.chao.alturaEm(x, z) + 1.5f, z, 0.35f, false, 3f);
+			return new Fantasma(x, z, (float) Math.cos(angulo) * lado, -(float) Math.sin(angulo) * lado, 1.1f,
+					10 + r.nextFloat() * 4);
+		}
+		return null;
+	}
+
+	/**
+	 * O fantasma da Univali: só com o jogador no corredor olhando ao longo dele. Atravessa o
+	 * corredor de 9 a 15 m à frente, de uma parede à outra (sai de uma sala e entra na da frente).
+	 */
+	private Fantasma fantasmaNoCorredor(Camera c) {
+		entidades.PredioUnivali p = mundo.predio;
+		float[] m = p.paraModelo(c.x, c.z);
+		float[] olhar = p.direcaoParaModelo(c.frente.x, c.frente.z);
+		float t = (float) Math.hypot(olhar[0], olhar[1]);
+		if (Math.abs(m[1]) > fase.AndarUnivali.MEIO_CORREDOR || t < 1e-4f || Math.abs(olhar[0] / t) < 0.75f) return null;
+		Random r = sustos.random();
+		float gx = m[0] + Math.signum(olhar[0]) * (9 + r.nextFloat() * 6);
+		float limite = -fase.AndarUnivali.X0 - 2;
+		if (Math.abs(gx) > limite) return null; // fora do fim do corredor
+		float lado = r.nextBoolean() ? 1 : -1;
+		float[] de = p.noMundo(gx, 0, 2.6f * lado), para = p.noMundo(gx, 0, -2.6f * lado);
+		gerenciador.audio().tocar3D(somSussurro, de[0], p.y + 1.5f, de[2], 0.3f, false, 3f);
+		return new Fantasma(de[0], de[2], para[0] - de[0], para[2] - de[2], 0.9f, 5.8f + Fantasma.SAIDA);
 	}
 
 	private void atualizarMonstro(long diftime) {
@@ -823,6 +1018,10 @@ public class TelaJogo implements Tela {
 		monstro.lanternaLigada = lanterna.ligada(); // a luz o atrai mais cedo
 		monstro.SimulaSe(diftime);
 		tremor = Math.max(0, tremor - dt * 2.5f);
+		if (metalRestante > 0) { // a música está tocando: anda junto, para a próxima aparição continuar dela
+			segundosMetal += dt;
+			metalRestante -= dt;
+		}
 
 		DragonKnight.Estado estado = monstro.estado();
 		boolean ameacando = estado == DragonKnight.Estado.SURGINDO || estado == DragonKnight.Estado.ENCARANDO;
@@ -836,7 +1035,7 @@ public class TelaJogo implements Tela {
 		};
 		presencaMonstro += (presenca - presencaMonstro) * Math.min(1, dt * 4);
 		atualizarSustosFalsos(dt);
-		if (ameacando) {
+		if (ameacando && !temMusicaMonstro) {
 			// batimento acelerando: de 0,8 s entre batidas até 0,3 s no fim da contagem
 			proximaBatida -= dt;
 			if (proximaBatida <= 0) {
@@ -908,10 +1107,12 @@ public class TelaJogo implements Tela {
 		if (jogador.passosNoQuadro() > 0) {
 			MaterialChao material = MaterialChao.em(mundo.chao, jogador.x, jogador.z,
 					mundo.predio.dentro(jogador.x, jogador.z), naTrilha(jogador.x, jogador.z));
-			Efeito[] variacoes = passos.get(material);
+			Efeito[] variacoes = jogador.correndo() && passosCorrendo.containsKey(material) ? passosCorrendo.get(material)
+					: passos.get(material);
 			for (int i = 0; i < jogador.passosNoQuadro(); i++) {
-				float volume = (jogador.correndo() ? 0.75f : 0.5f) * (0.85f + random.nextFloat() * 0.3f);
-				audio.tocar(variacoes[random.nextInt(variacoes.length)], volume);
+				float volume = (jogador.correndo() ? 0.5f : 0.35f) * (0.85f + random.nextFloat() * 0.3f)
+						* (material == MaterialChao.AGUA ? 0.8f : 1f);
+				audio.tocar(variacoes[proximaVariacao(variacoes.length)], volume);
 			}
 		}
 		if (jogador.ofegante() && !audio.estaTocando(somRespiracao)) {
@@ -921,6 +1122,21 @@ public class TelaJogo implements Tela {
 			audio.parar(somRespiracao); // só para quando já recuperou bem (não fica liga-desliga)
 			somRespiracao = null;
 		}
+	}
+
+	/** Sorteia a variação do passo, sem repetir a anterior (dois passos iguais seguidos soam de máquina). */
+	private int ultimaVariacao = -1;
+
+	private int proximaVariacao(int quantas) {
+		if (quantas <= 1) return 0;
+		if (ultimaVariacao < 0 || ultimaVariacao >= quantas) { // primeiro passo, ou o chão mudou
+			ultimaVariacao = random.nextInt(quantas);
+			return ultimaVariacao;
+		}
+		int v = random.nextInt(quantas - 1); // uma das outras
+		if (v >= ultimaVariacao) v++;
+		ultimaVariacao = v;
+		return v;
 	}
 
 	/** O ponto está numa trilha? (Os pontos delas ficam a cada ~1 m: basta estar perto de um.) */
@@ -1014,6 +1230,11 @@ public class TelaJogo implements Tela {
 		desenhoPredio.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		desenhoProvas.desenhar(partida.provas(), bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
+		if (fantasma != null) { // translúcido: depois das coisas opacas
+			float chaoFantasma = mundo.predio.dentro(fantasma.x, fantasma.z) ? mundo.predio.y : mundo.chao.alturaEm(fantasma.x, fantasma.z);
+			desenhoFantasma.desenhar(fantasma.x, chaoFantasma, fantasma.z, fantasma.alfa(), fantasma.tempo(), camera.x, camera.z,
+					bufferProjecao, bufferVisao, ambiente);
+		}
 		desenhoProvas.desenharFeixes(partida.provas(), camera.x, camera.z, bufferProjecao, bufferVisao, ambiente);
 		if (tempoSusto < 0) { // no susto, só a cara dele
 			desenhoEscopeta.desenhar(escopeta, ambiente, gerenciador.proporcao(), alturaImagem);
@@ -1431,13 +1652,14 @@ public class TelaJogo implements Tela {
 		default -> "";
 		};
 		String animacao = monstro.animador() != null ? "   " + monstro.animador().nomeAtual() : "   (substituto)";
-		return base + detalhe + animacao + String.format("   sobrevividas %d", monstro.aparicoesSobrevividas());
+		return base + detalhe + animacao + String.format("   sobrevividas %d   susto falso em %.0f s%s",
+				monstro.aparicoesSobrevividas(), sustos.cronometro(), silhueta != null ? " (silhueta em cena)" : "");
 	}
 
 	/**
 	 * As luzes pontuais (o shader aceita 4): das candidatas (os dois postes, a luminária do professor e as
-	 * lâmpadas do teto que funcionam), as 4 mais perto da câmera. A posição vai para o espaço da câmera a posição das lâmpadas vai para o espaço da câmera
-	 * (a matriz de visão vezes o ponto), porque é nesse espaço que o comum.glsl calcula a luz.
+	 * lâmpadas do teto que funcionam), as 4 mais perto da câmera. A posição de cada uma vai para o
+	 * espaço da câmera (a matriz de visão vezes o ponto), porque é nesse espaço que o comum.glsl calcula a luz.
 	 */
 	private void luzesDosPostes(Matrix4f visao) {
 		// as candidatas: os postes, a luminária do professor e as lâmpadas do teto que funcionam
@@ -1536,7 +1758,7 @@ public class TelaJogo implements Tela {
 				String.format("arma %s   cano %d   reserva %d   partículas %d   caixas %d", escopeta.estado().name().toLowerCase(),
 						escopeta.cano(), escopeta.reserva(), particulas.quantidade(),
 						caixas.stream().filter(cx -> !cx.pega()).count()),
-				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata",
+				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata   N fantasma   H silhueta   J galho   L risada",
 				"clique atira   R recarrega   E pega   P vai até a próxima prova   I salva o mapa da fase   setas e PgUp/PgDn: arma",
 		};
 		int tamanho = 16;

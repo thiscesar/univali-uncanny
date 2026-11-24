@@ -44,8 +44,10 @@ public class Jogador extends Object3D {
 	public static final float ESTAMINA_OFEGANTE = 0.3f;    // abaixo disso, respiração ofegante
 	private static final float ESTAMINA_PARA_VOLTAR = 0.3f; // depois de esgotar, só corre de novo com isso
 
-	private static final float PASSO_ANDANDO = 0.6f;       // m entre dois passos
-	private static final float PASSO_CORRENDO = 0.8f;
+	// m entre dois passos: ~2,5 passos por segundo andando e ~3,2 correndo (com passos de 60 cm,
+	// eram quase 6 por segundo, e o som virava uma rajada de batidas)
+	static final float PASSO_ANDANDO = 1.4f;
+	static final float PASSO_CORRENDO = 1.9f;
 	private static final float BALANCO_ALTURA = 0.045f;    // m, na velocidade de corrida
 	private static final float BALANCO_LADO = 0.03f;
 
