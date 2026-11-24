@@ -17,8 +17,12 @@ import shaders.ShaderProgram;
  */
 public class Ambiente {
 
-	/** Céu e neblina da mesma cor: o que some na neblina se funde com o fundo. */
-	public final float[] corCeu = { 0.02f, 0.025f, 0.03f };
+	/**
+	 * Céu e neblina da mesma cor: o que some na neblina se funde com o fundo. Um cinza escuro,
+	 * levemente azulado (no clima de Silent Hill, sem exagero): as árvores ao longe viram
+	 * silhuetas contra a névoa, em vez de sumirem no preto.
+	 */
+	public final float[] corCeu = { 0.068f, 0.071f, 0.078f };
 	/** Com 0,05, a neblina cobre ~86% a 40 m e praticamente tudo a 45 m (o far é de 60 m). */
 	public float densidadeNeblina = 0.05f;
 
