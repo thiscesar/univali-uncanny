@@ -172,6 +172,32 @@ class DragonKnightTest {
 		assertEquals(-1f, DragonKnight.raioCaixa(new float[] { -5, 2, 0 }, new float[] { 1, 0, 0 }, caixa));
 	}
 
+	@Test
+	void provaColetadaApressaAProximaAparicao() {
+		DragonKnight m = monstro(new GradeColisao(101));
+		m.apressarProximaAparicao(Regras.APARICAO_DEPOIS_DA_PROVA);
+		assertEquals(Regras.APARICAO_DEPOIS_DA_PROVA, m.cronometro(), 1e-4f, "a carência de 45 s vira 15 s");
+		// em cena: vale para a próxima aparição, depois que ele morrer e sumir
+		m.forcarAparicao();
+		avancar(m, 1);
+		m.apressarProximaAparicao(5);
+		m.matar();
+		avancar(m, 1.0f + Regras.ESPERA_DEPOIS_DA_MORTE + 0.1f);
+		assertEquals(DragonKnight.Estado.AUSENTE, m.estado());
+		assertTrue(m.cronometro() <= 5f, "cronômetro " + m.cronometro());
+	}
+
+	@Test
+	void comMaisProvasOIntervaloEncolhe() {
+		DragonKnight m = monstro(new GradeColisao(101));
+		m.provasColetadas = 3;
+		m.forcarAparicao();
+		avancar(m, 1);
+		m.matar();
+		avancar(m, 1.0f + Regras.ESPERA_DEPOIS_DA_MORTE + 0.1f);
+		assertTrue(m.cronometro() <= Regras.INTERVALOS[3] * (1 + Regras.VARIACAO_INTERVALO), "cronômetro " + m.cronometro());
+	}
+
 	private static float[] normalizar(float x, float y, float z) {
 		float t = (float) Math.sqrt(x * x + y * y + z * z);
 		return new float[] { x / t, y / t, z / t };

@@ -30,9 +30,11 @@ import dados.Recursos;
 import entidades.CaixaMunicao;
 import entidades.DragonKnight;
 import entidades.Escopeta;
+import entidades.Prova;
 import entidades.Tiro;
 import entidades.Jogador;
 import entrada.Entrada;
+import jogo.Partida;
 import jogo.Regras;
 import md2.Animador;
 import mundo.ConsultaAltura;
@@ -44,6 +46,7 @@ import render.Camera;
 import render.CameraLivre;
 import render.DesenhoEscopeta;
 import render.DesenhoMonstro;
+import render.DesenhoProvas;
 import render.FiltroPs1;
 import render.Lanterna;
 import render.Overlay2D;
@@ -64,7 +67,10 @@ import Model.VboCube;
  * F liga e desliga a lanterna. ESC abre a pausa por cima. F3 mostra o painel de depuração; F4 troca para a câmera livre
  * (voa e atravessa o chão, para inspecionar o mapa). V e X forçam vitória e derrota, e T liga
  * um som 3D de teste: são atalhos provisórios até existirem as regras do jogo. Com o F3 ligado,
- * G faz o Dragon Knight surgir e K o mata; as setas e Page Up/Down ajustam a posição da arma.
+ * G faz o Dragon Knight surgir e K o mata, P leva até a próxima prova; as setas e Page Up/Down ajustam a posição da arma.
+ *
+ * As provas M1, M2 e M3: folhas brilhando e sussurrando pela floresta; E pega. Cada uma deixa o
+ * monstro mais frequente; a terceira faz tocar o sinal de aula, vindo da direção da Univali.
  *
  * A escopeta: clique esquerdo atira, R recarrega, E pega uma caixa de cartuchos. A lógica fica
  * em entidades.Escopeta (e os bagos em entidades.Tiro), o desenho em render.DesenhoEscopeta.
@@ -133,6 +139,14 @@ public class TelaJogo implements Tela {
 	private Efeito somTiro, somTelha, somCartucho, somVazia;
 	/** Segundos de fumaça que ainda saem do cano. */
 	private float fumacaRestante = 0;
+	// as provas
+	private final Partida partida;
+	private DesenhoProvas desenhoProvas;
+	private final java.util.Map<Prova, SomTocando> sussurros = new java.util.HashMap<>();
+	private Efeito somSussurro, somPegarProva, somSinal;
+	/** Segundos desde que cada prova foi pega (para o pulso no HUD); negativo = ainda não. */
+	private final java.util.Map<Prova, Float> pulsoProva = new java.util.HashMap<>();
+
 	/** Mensagem curta no meio da tela ("+6 cartuchos", "Sem munição!") e por quanto tempo. */
 	private String mensagem = null;
 	private float tempoMensagem = 0;
@@ -163,6 +177,12 @@ public class TelaJogo implements Tela {
 		Animador animador = mundo.monstro != null ? new Animador(mundo.monstro.animacoes()) : null;
 		float[] caixa = mundo.monstro != null ? mundo.monstro.malhaCorpo().limites(0) : null;
 		this.monstro = new DragonKnight(mundo.chao, mundo.colisao, animador, caixa, System.nanoTime());
+		java.util.List<Prova> provas = new java.util.ArrayList<>();
+		for (int i = 0; i < mundo.provas.size(); i++) {
+			float[] lugar = mundo.provas.get(i);
+			provas.add(new Prova("M" + (i + 1), lugar[0], lugar[1], mundo.chao));
+		}
+		this.partida = new Partida(mundo.seed, provas);
 	}
 
 	@Override
@@ -216,6 +236,15 @@ public class TelaJogo implements Tela {
 				mostrarMensagem(escopeta.reserva() == 0 ? "Sem munição!" : "Vazia! R para recarregar");
 			}
 		});
+		desenhoProvas = new DesenhoProvas();
+		somSussurro = efeitoOuSintetizado("audio/sussurro.ogg", () -> Sintetizador.sussurro(44100, 13));
+		somPegarProva = efeitoOuSintetizado("audio/pegar_prova.ogg", () -> Sintetizador.ping(44100, 660, 600, 900));
+		somSinal = efeitoOuSintetizado("audio/sinal_aula.ogg", () -> Sintetizador.sinal(44100));
+		for (Prova p : partida.provas()) {
+			// referência de 3 m: o sussurro ainda se ouve a uns 20 m, vindo da direção da folha
+			sussurros.put(p, gerenciador.audio().tocar3D(somSussurro, p.x, p.y, p.z, 0.9f, true, 3f));
+		}
+
 		caixas = CaixaMunicao.sortear(mundo.chao, mundo.colisao, mundo.inicio, Regras.CAIXAS_MUNICAO, random);
 		cuboCaixa = new VboCube();
 		cuboCaixa.load();
@@ -262,6 +291,11 @@ public class TelaJogo implements Tela {
 		filtroPs1.liberar();
 		desenhoMonstro.liberar();
 		desenhoEscopeta.liberar();
+		desenhoProvas.liberar();
+		for (SomTocando s : sussurros.values()) {
+			audio.parar(s);
+		}
+		sussurros.clear();
 		particulas.liberar();
 	}
 
@@ -322,6 +356,9 @@ public class TelaJogo implements Tela {
 		if (mostrarDepuracao) {
 			ajustarPoseDaArma(entrada);
 		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_P)) {
+			irParaAProximaProva();
+		}
 
 		if (cameraLivre != null) {
 			cameraLivre.atualizar(entrada, diftime);
@@ -363,11 +400,47 @@ public class TelaJogo implements Tela {
 			escopeta.recarregar();
 		}
 		if (entrada.foiPressionada(GLFW_KEY_E)) {
+			Prova prova = partida.provaAlcancavel(jogador.x, jogador.z);
 			CaixaMunicao perto = caixaAlcancavel();
-			if (perto != null) {
+			if (prova != null) {
+				coletar(prova);
+			} else if (perto != null) {
 				escopeta.adicionarReserva(perto.pegar());
 				gerenciador.audio().tocar(somCartucho, 1f);
 				mostrarMensagem("+" + Regras.CARTUCHOS_POR_CAIXA + " cartuchos");
+			}
+		}
+	}
+
+	/**
+	 * Pegou uma prova: o sussurro dela para, o HUD acende, e o monstro reage (fica mais
+	 * frequente e vem em no máximo 15 s). Na terceira, o sinal de aula toca na Univali.
+	 */
+	private void coletar(Prova prova) {
+		if (!prova.coletar()) return;
+		Audio audio = gerenciador.audio();
+		audio.parar(sussurros.remove(prova));
+		audio.tocar(somPegarProva, 1f);
+		pulsoProva.put(prova, 0f);
+		monstro.provasColetadas = partida.provasColetadas();
+		monstro.apressarProximaAparicao(Regras.APARICAO_DEPOIS_DA_PROVA);
+		if (partida.todasColetadas()) {
+			float[] u = mundo.univali;
+			// de longe (referência de 25 m), para o jogador saber para que lado ir
+			audio.tocar3D(somSinal, u[0], mundo.chao.alturaEm(u[0], u[1]) + 6, u[1], 1f, false, 25f);
+			mostrarMensagem(prova.nome + " encontrada. Leve as provas à Univali", 5f);
+		} else {
+			mostrarMensagem(prova.nome + " encontrada", 2.5f);
+		}
+	}
+
+	/** Depuração: põe o jogador a 3 m da próxima prova que falta. */
+	private void irParaAProximaProva() {
+		for (Prova p : partida.provas()) {
+			if (!p.coletada()) {
+				jogador.x = p.x - 3;
+				jogador.z = p.z;
+				return;
 			}
 		}
 	}
@@ -421,6 +494,10 @@ public class TelaJogo implements Tela {
 		desenhoEscopeta.atualizar(dt);
 		particulas.atualizar(dt);
 		tempoMensagem = Math.max(0, tempoMensagem - dt);
+		for (Prova p : partida.provas()) {
+			p.SimulaSe(Math.round(dt * 1000));
+		}
+		pulsoProva.replaceAll((p, t) -> t + dt);
 
 		// o clarão: uma luz forte na boca do cano por ~80 ms, que ilumina a arma e as árvores
 		float t = escopeta.tempoDesdeOTiro();
@@ -457,8 +534,12 @@ public class TelaJogo implements Tela {
 	}
 
 	private void mostrarMensagem(String texto) {
+		mostrarMensagem(texto, 2f);
+	}
+
+	private void mostrarMensagem(String texto, float segundos) {
 		mensagem = texto;
-		tempoMensagem = 2f;
+		tempoMensagem = segundos;
 	}
 
 	/** O monstro, o batimento, a lanterna em pânico e, no fim do ataque, o susto. */
@@ -617,6 +698,7 @@ public class TelaJogo implements Tela {
 		int alturaImagem = ps1 ? filtroPs1.altura() : gerenciador.altura();
 		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, alturaImagem);
 		desenharCaixas();
+		desenhoProvas.desenhar(partida.provas(), bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		if (tempoSusto < 0) { // no susto, só a cara dele
 			desenhoEscopeta.desenhar(escopeta, ambiente, gerenciador.proporcao(), alturaImagem);
@@ -727,7 +809,11 @@ public class TelaJogo implements Tela {
 					new Color(170, 160, 150), Texto.Alinhamento.DIREITA);
 		}
 
-		if (caixaAlcancavel() != null) {
+		desenharHudProvas(o, escala);
+		if (partida.provaAlcancavel(jogador.x, jogador.z) != null) {
+			Texto.desenhar(o, "E: pegar a prova", cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200),
+					Texto.Alinhamento.CENTRO);
+		} else if (caixaAlcancavel() != null) {
 			Texto.desenhar(o, "E: pegar cartuchos", cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200),
 					Texto.Alinhamento.CENTRO);
 		}
@@ -735,6 +821,23 @@ public class TelaJogo implements Tela {
 			int alfa = Math.round(255 * Math.min(1, tempoMensagem / 0.5f));
 			Texto.desenhar(o, mensagem, cx, h * 0.68f, Math.round(24 * escala), new Color(235, 215, 190, alfa),
 					Texto.Alinhamento.CENTRO);
+		}
+	}
+
+	/** "M1 M2 M3" no canto superior esquerdo: apagadas até serem pegas; ao pegar, acendem com um pulso. */
+	private void desenharHudProvas(Overlay2D o, float escala) {
+		float x = 22 * escala, y = 18 * escala;
+		for (Prova p : partida.provas()) {
+			Color cor = p.coletada() ? new Color(235, 222, 190) : new Color(110, 104, 98);
+			TextoTextura.Imagem img = Recursos.textos().obter(p.nome, Recursos.fonteTitulo(), 30, cor, true, true);
+			if (img == null) continue;
+			Float t = pulsoProva.get(p);
+			float pulso = t != null && t < 0.6f ? 1 + 0.6f * (1 - t / 0.6f) : 1;
+			float lw = img.largura() * escala * pulso, lh = img.altura() * escala * pulso;
+			float base = img.largura() * escala;
+			o.imagem(img.textura(), x + base / 2 - lw / 2, y + img.altura() * escala / 2 - lh / 2, lw, lh,
+					new Color(1f, 1f, 1f, p.coletada() ? 1f : 0.55f));
+			x += base + 14 * escala;
 		}
 	}
 
@@ -796,7 +899,7 @@ public class TelaJogo implements Tela {
 		float progresso = progressoContagem();
 		o.imagem(texturaVinheta(), 0, 0, w, h, new Color(1f, 1f, 1f, Math.min(1f, 0.35f + 0.65f * progresso)));
 
-		// "3", "2", "1": cada número começa grande e encolhe até o próximo segundo (o pulso)
+		// "5", "4"... "1": cada número começa grande e encolhe até o próximo segundo (o pulso)
 		float restante = monstro.contagem();
 		int numero = Math.max(1, (int) Math.ceil(restante));
 		float fracao = restante - (numero - 1); // 1 quando o número aparece, 0 quando vai trocar
@@ -908,6 +1011,18 @@ public class TelaJogo implements Tela {
 		shader.stop();
 	}
 
+	/** A linha das provas no painel F3: a distância até cada uma e até a Univali. */
+	private String textoProvas() {
+		StringBuilder sb = new StringBuilder("provas");
+		Camera c = jogador.camera();
+		for (Prova p : partida.provas()) {
+			sb.append("   ").append(p.nome).append(p.coletada() ? " pega"
+					: String.format(" %.0f m", Math.hypot(p.x - c.x, p.z - c.z)));
+		}
+		float[] u = mundo.univali;
+		return sb.append(String.format("   Univali %.0f m", Math.hypot(u[0] - c.x, u[1] - c.z))).toString();
+	}
+
 	/** A linha do monstro no painel F3. */
 	private String textoMonstro() {
 		String base = "monstro " + monstro.estado().name().toLowerCase();
@@ -940,11 +1055,12 @@ public class TelaJogo implements Tela {
 				(cameraLivre != null ? "câmera livre (F4 volta ao jogador)" : "F4: câmera livre")
 						+ (ps1 ? String.format("   modo PS1 %dx%d", filtroPs1.largura(), filtroPs1.altura()) : ""),
 				textoMonstro(),
+				textoProvas(),
 				String.format("arma %s   cano %d   reserva %d   partículas %d   caixas %d", escopeta.estado().name().toLowerCase(),
 						escopeta.cano(), escopeta.reserva(), particulas.quantidade(),
 						caixas.stream().filter(cx -> !cx.pega()).count()),
 				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata",
-				"clique atira   R recarrega   E pega caixa   setas e PgUp/PgDn: posição da arma",
+				"clique atira   R recarrega   E pega   P vai até a próxima prova   setas e PgUp/PgDn: posição da arma",
 		};
 		int tamanho = 16;
 		float linha = tamanho * 1.45f;

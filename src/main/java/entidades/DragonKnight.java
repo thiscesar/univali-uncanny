@@ -11,13 +11,13 @@ import obj.Object3D;
 
 /**
  * O Dragon Knight: um cavaleiro montado num dragão que surge perto do jogador, encara,
- * e ataca se não morrer em 3 segundos. Só lógica (não usa OpenGL): o desenho fica em
+ * e ataca se não morrer em 5 segundos. Só lógica (não usa OpenGL): o desenho fica em
  * render.DesenhoMonstro, e os sons e efeitos de tela na TelaJogo, avisada pelos Eventos.
  *
  * Máquina de estados:
  *   AUSENTE   invisível; o cronômetro conta até a próxima aparição.
  *   SURGINDO  0,4 s: aparece num lugar sorteado em volta do jogador, gritando.
- *   ENCARANDO parado, sempre virado para o jogador; a contagem de 3 s corre. Ao levar um tiro,
+ *   ENCARANDO parado, sempre virado para o jogador; a contagem de 5 s corre. Ao levar um tiro,
  *             toca a animação de dor por cima ("ferido"), mas a contagem NÃO para.
  *   MORRENDO  animação de morte; depois dela e de mais 2 s, volta a AUSENTE.
  *   ATACANDO  vai para a frente do jogador e ataca; no fim da animação, a partida está perdida.
@@ -66,6 +66,8 @@ public class DragonKnight extends Object3D {
 	private boolean ataqueTerminou = false;
 	private float marcaDano = 0;
 	private int aparicoesSobrevividas = 0;
+	/** Limite para a próxima aparição, pedido por uma prova coletada enquanto ele estava em cena. */
+	private float limiteProximaAparicao = Float.MAX_VALUE;
 
 	/** Rotação do modelo em volta do eixo y, em radianos (0 = olhando para +x). */
 	public float guinada = 0;
@@ -268,7 +270,20 @@ public class DragonKnight extends Object3D {
 	private void sumir() {
 		mudarPara(Estado.AUSENTE);
 		vivo = false;
-		cronometro = Regras.intervaloAparicao(provasColetadas, random.nextFloat());
+		cronometro = Math.min(Regras.intervaloAparicao(provasColetadas, random.nextFloat()), limiteProximaAparicao);
+		limiteProximaAparicao = Float.MAX_VALUE;
+	}
+
+	/**
+	 * Uma prova foi coletada: a floresta reage e a próxima aparição vem em no máximo "segundos".
+	 * Se ele já está em cena, vale para a aparição seguinte.
+	 */
+	public void apressarProximaAparicao(float segundos) {
+		if (estado == Estado.AUSENTE) {
+			cronometro = Math.min(cronometro, segundos);
+		} else {
+			limiteProximaAparicao = Math.min(limiteProximaAparicao, segundos);
+		}
 	}
 
 	/** O tempo acabou: vai para a frente do jogador (a frente do dragão a 1,5 m dos olhos) e ataca. */

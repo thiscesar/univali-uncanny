@@ -28,6 +28,8 @@ public final class Regras {
 	public static final float FOLGA_LINHA_DE_VISAO = 1.2f;
 	/** Não surge a menos disso do prédio da Univali, em metros. */
 	public static final float RAIO_ZONA_SEGURA = 25f;
+	/** Depois de cada prova coletada, a próxima aparição vem em no máximo isto (a floresta reage). */
+	public static final float APARICAO_DEPOIS_DA_PROVA = 15f;
 	/** Margem da borda do mapa onde ele não surge (a muralha de árvores). */
 	public static final float MARGEM_BORDA_APARICAO = 20f;
 
@@ -36,7 +38,7 @@ public final class Regras {
 	/** Duração do surgimento (tremor e tela escurecendo), em segundos. */
 	public static final float DURACAO_SURGIMENTO = 0.4f;
 	/** Segundos para matar o Dragon Knight depois que ele surge. */
-	public static final float TEMPO_CONTAGEM = 3f;
+	public static final float TEMPO_CONTAGEM = 5f;
 	/** Dano total para matá-lo (8 bagos de 1,5 de dano: um tiro de perto mata). */
 	public static final float VIDA_MONSTRO = 10f;
 	/** Depois da animação de morte, quanto tempo o corpo fica no chão antes de sumir. */

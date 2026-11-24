@@ -3,8 +3,6 @@ package render;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
-import static org.lwjgl.opengl.GL20.GL_POINT_SPRITE;
-import static org.lwjgl.opengl.GL32.GL_PROGRAM_POINT_SIZE;
 
 import java.awt.image.BufferedImage;
 import java.nio.FloatBuffer;
@@ -20,7 +18,6 @@ import md2.Animador;
 import md2.MalhaMd2;
 import md2.PersonagemMd2;
 import md2.PontoMd2;
-import shaders.ShaderBrilho;
 import shaders.ShaderMd2;
 import shaders.ShaderObjeto;
 
@@ -32,7 +29,7 @@ import shaders.ShaderObjeto;
  * Os olhos: o olho amarelo do dragão está pintado na skin, no pixel (54, 122) da skin.png de
  * 256 x 256. O PontoMd2 acha os triângulos do modelo que cobrem esse pixel (um de cada lado da
  * cabeça) e, a cada quadro, a posição deles na animação. Ali se desenha um ponto que brilha
- * (GL_POINTS com o shader "brilho"), somado à cena.
+ * (PontosBrilhantes), somado à cena.
  *
  * Sem o MD2, desenha o substituto: um retângulo vermelho em pé, sempre de frente para a
  * câmera (billboard), com dois olhos no alto.
@@ -51,18 +48,15 @@ public class DesenhoMonstro {
 	private final PersonagemMd2 personagem;
 	private final List<PontoMd2> olhos;
 	private final FloatBuffer bufferMatriz = BufferUtils.createFloatBuffer(16);
-	private final FloatBuffer bufferOlhos = BufferUtils.createFloatBuffer(4 * 3);
-	private int vboOlhos, vboSubstituto;
-	private int quantidadeOlhos;
+	private final PontosBrilhantes pontosOlhos;
+	private int vboSubstituto;
 
 	/** O personagem já carregado, ou null para usar o substituto. Só na thread principal. */
 	public DesenhoMonstro(PersonagemMd2 personagem) {
 		this.personagem = personagem;
 		olhos = personagem != null ? PontoMd2.naSkin(personagem.malhaCorpo(), OLHO_U, OLHO_V) : List.of();
 
-		vboOlhos = glGenBuffers();
-		glBindBuffer(GL_ARRAY_BUFFER, vboOlhos);
-		glBufferData(GL_ARRAY_BUFFER, 4 * 3 * 4, GL_STREAM_DRAW);
+		pontosOlhos = new PontosBrilhantes(4);
 
 		if (personagem == null) {
 			// retângulo em pé no plano xy, com a base no chão: posição 3, cor 3, normal 3 (zero), uv 2
@@ -90,14 +84,14 @@ public class DesenhoMonstro {
 		if (!m.visivel()) {
 			return;
 		}
-		quantidadeOlhos = 0;
+		pontosOlhos.limpar();
 		if (personagem != null) {
 			desenharMd2(m, projecao, visao, ambiente);
 		} else {
 			desenharSubstituto(m, projecao, visao, ambiente, cameraX, cameraZ);
 		}
 		if (m.estado() != DragonKnight.Estado.MORRENDO) { // morto, os olhos apagam
-			desenharOlhos(projecao, visao, ambiente, alturaImagem);
+			pontosOlhos.desenhar(TAMANHO_OLHO, COR_OLHO, projecao, visao, ambiente, alturaImagem);
 		}
 	}
 
@@ -118,19 +112,15 @@ public class DesenhoMonstro {
 		// os olhos acompanham a animação: a mesma mistura de quadros que o vertex shader faz
 		MalhaMd2 malha = personagem.malhaCorpo();
 		float c = (float) Math.cos(m.guinada), s = (float) Math.sin(m.guinada);
-		bufferOlhos.clear();
 		for (PontoMd2 olho : olhos) {
-			if (quantidadeOlhos == 4) break;
 			float[] l = olho.posicao(malha, a.quadroA(), a.quadroB(), a.fator());
 			float[] n = olho.normal(malha, a.quadroA(), a.quadroB(), a.fator());
 			for (int k = 0; k < 3; k++) {
 				l[k] += n[k] * 0.03f; // um pouco para fora da pele, para não ficar escondido nela
 			}
 			// o mesmo giro do modelo (rotação em y), depois a posição
-			bufferOlhos.put(m.x + c * l[0] + s * l[2]).put(m.y + l[1]).put(m.z - s * l[0] + c * l[2]);
-			quantidadeOlhos++;
+			pontosOlhos.adicionar(m.x + c * l[0] + s * l[2], m.y + l[1], m.z - s * l[0] + c * l[2]);
 		}
-		bufferOlhos.flip();
 	}
 
 	private void desenharSubstituto(DragonKnight m, FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente,
@@ -169,51 +159,10 @@ public class DesenhoMonstro {
 
 		// dois olhos no alto do retângulo, um pouco à frente dele
 		float c = (float) Math.cos(virar), s = (float) Math.sin(virar);
-		bufferOlhos.clear();
 		for (float lado : new float[] { -0.22f, 0.22f }) {
 			float lx = lado, lz = 0.05f;
-			bufferOlhos.put(m.x + c * lx + s * lz).put(m.y + ALTURA_SUBSTITUTO * 0.85f).put(m.z - s * lx + c * lz);
+			pontosOlhos.adicionar(m.x + c * lx + s * lz, m.y + ALTURA_SUBSTITUTO * 0.85f, m.z - s * lx + c * lz);
 		}
-		bufferOlhos.flip();
-		quantidadeOlhos = 2;
-	}
-
-	private void desenharOlhos(FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente, int alturaImagem) {
-		if (quantidadeOlhos == 0) return;
-		glBindBuffer(GL_ARRAY_BUFFER, vboOlhos);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, bufferOlhos);
-
-		ShaderBrilho shader = Recursos.shaderBrilho();
-		shader.start();
-		int p = shader.programID;
-		glUniformMatrix4fv(glGetUniformLocation(p, "projection"), false, projecao);
-		glUniformMatrix4fv(glGetUniformLocation(p, "view"), false, visao);
-		glUniform1f(glGetUniformLocation(p, "tamanho"), TAMANHO_OLHO);
-		glUniform1f(glGetUniformLocation(p, "alturaTela"), alturaImagem);
-		glUniform3f(glGetUniformLocation(p, "corBrilho"), COR_OLHO[0], COR_OLHO[1], COR_OLHO[2]);
-		ambiente.enviar(shader);
-
-		// somado à cena (GL_ONE, GL_ONE), sem gravar profundidade: troncos na frente ainda escondem
-		boolean tinhaBlend = glIsEnabled(GL_BLEND);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE);
-		glDepthMask(false);
-		glEnable(GL_PROGRAM_POINT_SIZE); // o tamanho vem do gl_PointSize do shader
-		// o projeto cria o contexto OpenGL no perfil de compatibilidade (o padrão do GLFW): nele,
-		// o gl_PointCoord (a posição dentro do ponto, usada para fazer o círculo) só existe com isto
-		glEnable(GL_POINT_SPRITE);
-
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
-		glDrawArrays(GL_POINTS, 0, quantidadeOlhos);
-
-		glDisable(GL_POINT_SPRITE);
-		glDisable(GL_PROGRAM_POINT_SIZE);
-		glDepthMask(true);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		if (!tinhaBlend) glDisable(GL_BLEND);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		shader.stop();
 	}
 
 	/**
@@ -244,7 +193,7 @@ public class DesenhoMonstro {
 	}
 
 	public void liberar() {
-		glDeleteBuffers(vboOlhos);
+		pontosOlhos.liberar();
 		if (vboSubstituto != 0) glDeleteBuffers(vboSubstituto);
 	}
 }

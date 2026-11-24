@@ -181,7 +181,7 @@ public class Audio {
 
 	/** O mesmo, podendo repetir sem parar (som ambiente, respiração). */
 	public SomTocando tocar(Efeito efeito, float volume, boolean loop) {
-		return tocarEm(efeito, volume, true, 0, 0, 0, loop);
+		return tocarEm(efeito, volume, true, 0, 0, 0, loop, DISTANCIA_REFERENCIA);
 	}
 
 	/** Som num ponto do mundo, em metros. Para sons em loop, guarde o retorno para parar depois. */
@@ -189,10 +189,19 @@ public class Audio {
 		if (efeito.canais() == 2 && avisadosEstereo.add(efeito.nome())) {
 			System.out.println("[Audio] " + efeito.nome() + " é estéreo: não será posicionado em 3D (converta para mono)");
 		}
-		return tocarEm(efeito, volume, false, x, y, z, loop);
+		return tocarEm(efeito, volume, false, x, y, z, loop, DISTANCIA_REFERENCIA);
 	}
 
-	private SomTocando tocarEm(Efeito efeito, float volume, boolean relativo, float x, float y, float z, boolean loop) {
+	/**
+	 * Som 3D que se ouve de longe: "referencia" é a distância em que ele ainda toca no volume
+	 * cheio (o normal é 2 m). Com 25 m, um sino a 150 m ainda soa claro, e vem da direção certa.
+	 */
+	public SomTocando tocar3D(Efeito efeito, float x, float y, float z, float volume, boolean loop, float referencia) {
+		return tocarEm(efeito, volume, false, x, y, z, loop, referencia);
+	}
+
+	private SomTocando tocarEm(Efeito efeito, float volume, boolean relativo, float x, float y, float z, boolean loop,
+			float referencia) {
 		if (!disponivel || efeito.buffer() == 0) {
 			return null;
 		}
@@ -206,6 +215,7 @@ public class Audio {
 		alSourcei(f, AL_BUFFER, efeito.buffer());
 		alSourcei(f, AL_SOURCE_RELATIVE, relativo ? AL_TRUE : AL_FALSE);
 		alSource3f(f, AL_POSITION, x, y, z);
+		alSourcef(f, AL_REFERENCE_DISTANCE, referencia); // a fonte pode ter sido usada por um som "de longe"
 		alSourcef(f, AL_GAIN, volume * volumeEfeitos);
 		alSourcei(f, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
 		alSourcePlay(f);

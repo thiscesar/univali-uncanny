@@ -21,6 +21,7 @@ import mundo.ConsultaAltura;
 import mundo.DistribuidorArvores;
 import mundo.GradeColisao;
 import mundo.LeitorObj;
+import mundo.SorteioLugares;
 import mundo.Mundo;
 import mundo.TexturasFloresta;
 import md2.PersonagemMd2;
@@ -57,8 +58,10 @@ public class TelaCarregando implements Tela {
 	/** O que a thread de geração entrega: só dados, nada de OpenGL. */
 	private record DadosTerreno(int[][] alturas, ConsultaAltura chao, GradeColisao colisao,
 			List<DistribuidorArvores.Arvore> arvores, List<LeitorObj.ModeloObj> modelosArvores,
-			PersonagemMd2.Dados monstro, float[] inicio) {}
+			PersonagemMd2.Dados monstro, float[] inicio, List<float[]> provas, float[] univali) {}
 
+	/** Raio, em metros, da clareira sem árvores em volta de cada prova. */
+	private static final float CLAREIRA_PROVA = 4f;
 	/** Raio, em metros, da clareira sem árvores em volta do início do jogador. */
 	private static final float CLAREIRA_INICIO = 6f;
 	/** Quantas etapas rodam na thread separada (as primeiras da lista de progresso). */
@@ -173,16 +176,25 @@ public class TelaCarregando implements Tela {
 			float centro = chao.tamanho() / 2;
 			float[] inicio = Jogador.pontoDeInicio(chao, colisao, centro, centro);
 
-			// árvores, com uma clareira no início, e os troncos na grade de colisão
-			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed,
-					List.of(new DistribuidorArvores.Clareira(inicio[0], inicio[1], CLAREIRA_INICIO)));
+			// a Univali e as provas (antes das árvores: cada prova pede uma clareira)
+			Random sorteio = new Random(seed * 17 + 3);
+			float[] univali = SorteioLugares.univali(chao, inicio, sorteio);
+			List<float[]> provas = SorteioLugares.provas(chao, inicio, univali, 3, sorteio);
+			List<DistribuidorArvores.Clareira> clareiras = new java.util.ArrayList<>();
+			clareiras.add(new DistribuidorArvores.Clareira(inicio[0], inicio[1], CLAREIRA_INICIO));
+			for (float[] p : provas) {
+				clareiras.add(new DistribuidorArvores.Clareira(p[0], p[1], CLAREIRA_PROVA));
+			}
+
+			// árvores, com as clareiras, e os troncos na grade de colisão
+			List<DistribuidorArvores.Arvore> arvores = DistribuidorArvores.distribuir(chao, seed, clareiras);
 			DistribuidorArvores.registrarTroncos(arvores, colisao);
 
 			// os modelos 3D das árvores, se estiverem na pasta (senão, null: árvores planas)
 			List<LeitorObj.ModeloObj> modelos = Arvores3D.arquivosPresentes() ? Arvores3D.lerModelos() : null;
 			// o Dragon Knight (só leitura dos arquivos; null se o MD2 não estiver na pasta)
 			PersonagemMd2.Dados monstro = PersonagemMd2.ler(TelaJogo.PASTA_MONSTRO, TelaJogo.ALTURA_MONSTRO);
-			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, inicio);
+			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, inicio, provas, univali);
 		});
 		estado = Estado.GERANDO;
 	}
@@ -304,7 +316,7 @@ public class TelaCarregando implements Tela {
 		// o monstro vai para a placa de vídeo aqui também (sem o MD2, o jogo usa o substituto)
 		PersonagemMd2 monstro = dados.monstro() != null ? new PersonagemMd2(dados.monstro()) : null;
 		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, arvores3d,
-				monstro, dados.inicio());
+				monstro, dados.inicio(), dados.provas(), dados.univali());
 		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo
 		terrenoNovo = null;
 	}

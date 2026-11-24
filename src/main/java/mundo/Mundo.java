@@ -6,7 +6,8 @@ import terreno.PerfilTerreno;
 
 /**
  * Tudo o que forma o lugar da partida: o terreno (malha do OpenGL), as perguntas sobre
- * o chão, as árvores, a grade de colisão com os troncos, o modelo do monstro e o ponto de início do jogador.
+ * o chão, as árvores, a grade de colisão com os troncos, o modelo do monstro, o ponto de início do
+ * jogador e os lugares das provas e da Univali.
  * É o que a tela de carregamento entrega pronto para a tela de jogo.
  */
 public class Mundo {
@@ -25,9 +26,14 @@ public class Mundo {
 	public final PersonagemMd2 monstro;
 	/** Onde o jogador começa (x, z), já com a clareira em volta. */
 	public final float[] inicio;
+	/** Onde ficam as provas M1, M2 e M3 (x, z), cada uma numa clareira. */
+	public final java.util.List<float[]> provas;
+	/** Onde fica a Univali (x, z). */
+	public final float[] univali;
 
 	public Mundo(long seed, PerfilTerreno perfil, Mapa3D terreno, ConsultaAltura chao, GradeColisao colisao,
-			Arvores arvores, Arvores3D arvores3d, PersonagemMd2 monstro, float[] inicio) {
+			Arvores arvores, Arvores3D arvores3d, PersonagemMd2 monstro, float[] inicio, java.util.List<float[]> provas,
+			float[] univali) {
 		this.seed = seed;
 		this.perfil = perfil;
 		this.terreno = terreno;
@@ -37,6 +43,8 @@ public class Mundo {
 		this.arvores3d = arvores3d;
 		this.monstro = monstro;
 		this.inicio = inicio;
+		this.provas = provas;
+		this.univali = univali;
 	}
 
 	/** Quantas árvores a floresta tem, planas ou 3D. */

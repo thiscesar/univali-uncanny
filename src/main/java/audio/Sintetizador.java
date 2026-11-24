@@ -139,6 +139,59 @@ public final class Sintetizador {
 		return pcm;
 	}
 
+	/**
+	 * Um sussurro: ruído "soprado" (agudo, sem tom), em sílabas que crescem e somem em ritmo
+	 * irregular, com pausas. Em loop, parece alguém murmurando sem parar. Bom para localizar
+	 * a direção (o ouvido se guia pelo agudo).
+	 */
+	public static short[] sussurro(int taxa, long semente) {
+		int total = taxa * 4;
+		short[] pcm = new short[total];
+		Random r = new Random(semente);
+		// sílabas: início (s) e duração, com pausas entre elas
+		double[] inicio = new double[12], duracao = new double[12];
+		double t0 = 0.1;
+		for (int k = 0; k < inicio.length; k++) {
+			inicio[k] = t0;
+			duracao[k] = 0.12 + r.nextDouble() * 0.25;
+			t0 += duracao[k] + 0.04 + r.nextDouble() * (k % 4 == 3 ? 0.6 : 0.12);
+		}
+		double anterior = 0, grave = 0;
+		for (int i = 0; i < total; i++) {
+			double t = (double) i / taxa;
+			double branco = r.nextDouble() * 2 - 1;
+			double agudo = branco - anterior * 0.6; // tira o grave: soa como "ssss" e "hhhh"
+			anterior = branco;
+			grave += (branco - grave) * 0.2;
+			double envelope = 0;
+			for (int k = 0; k < inicio.length; k++) {
+				double s = (t - inicio[k]) / duracao[k];
+				if (s > 0 && s < 1) envelope = Math.max(envelope, Math.sin(Math.PI * s));
+			}
+			double onda = (agudo * 0.55 + grave * 0.8) * envelope;
+			pcm[i] = (short) Math.round(Math.max(-1, Math.min(1, onda)) * 26000);
+		}
+		return pcm;
+	}
+
+	/**
+	 * O sinal de fim de aula: uma campainha elétrica (o martelinho batendo no sino muito rápido),
+	 * ~2,5 s, com a nota e as harmônicas de um sino e um tremolo de 18 Hz.
+	 */
+	public static short[] sinal(int taxa) {
+		int total = taxa * 2800 / 1000;
+		short[] pcm = new short[total];
+		for (int i = 0; i < total; i++) {
+			double t = (double) i / taxa;
+			double sino = Math.sin(2 * Math.PI * 950 * t) + 0.5 * Math.sin(2 * Math.PI * 2380 * t)
+					+ 0.3 * Math.sin(2 * Math.PI * 3720 * t);
+			double martelo = 0.6 + 0.4 * Math.abs(Math.sin(Math.PI * 18 * t));
+			double envelope = Math.min(1, t * 30) * (t < 2.5 ? 1 : Math.max(0, 1 - (t - 2.5) / 0.3));
+			pcm[i] = (short) Math.round(Math.max(-1, Math.min(1, sino * 0.45 * martelo * envelope)) * 28000);
+		}
+		return pcm;
+	}
+
 	/** Um baque grave: senoide que cai de 80 para 40 Hz e some em ~0,12 s. */
 	private static double baque(double t, double inicio, double volume) {
 		double s = t - inicio;

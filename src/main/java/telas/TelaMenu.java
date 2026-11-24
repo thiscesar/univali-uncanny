@@ -23,7 +23,7 @@ import render.Texto;
 public class TelaMenu implements Tela {
 
 	private static final String TITULO = "UNIVALI UNCANNY";
-	private static final String SUBTITULO = "Três provas. Uma floresta. Três segundos.";
+	private static final String SUBTITULO = "Três provas. Uma floresta. Cinco segundos.";
 	private static final Color COR_SUBTITULO = new Color(150, 140, 130);
 	private static final Color COR_DICA = new Color(95, 90, 88);
 
