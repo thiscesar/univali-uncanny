@@ -24,6 +24,8 @@ public class Lanterna {
 
 	private boolean ligada = true;
 	private float tempo = 0;
+	/** De 0 a 1: o quanto a luz falha de medo (o monstro encarando). */
+	private float panico = 0;
 
 	/** Direção da luz no mundo (suavizada) e se ela já foi iniciada. */
 	private final float[] direcaoMundo = new float[3];
@@ -38,6 +40,11 @@ public class Lanterna {
 
 	public boolean ligada() {
 		return ligada;
+	}
+
+	/** Liga a tremulação forte: 0 = normal, 1 = falhando muito (a contagem quase no fim). */
+	public void definirPanico(float panico) {
+		this.panico = Math.max(0, Math.min(1, panico));
 	}
 
 	/** Atualiza a direção (com atraso) e o tremor. dt em segundos. */
@@ -71,7 +78,14 @@ public class Lanterna {
 			return 0;
 		}
 		float tremor = (float) (Math.sin(tempo * 13.1) * Math.sin(tempo * 7.7 + 1.3));
-		return INTENSIDADE * (0.97f + 0.03f * tremor);
+		float intensidade = INTENSIDADE * (0.97f + 0.03f * tremor);
+		if (panico > 0) {
+			// ondas rápidas fora de compasso: a luz pisca e às vezes quase apaga
+			float piscada = (float) (Math.sin(tempo * 41.0) * Math.sin(tempo * 23.3 + 0.7));
+			float queda = Math.sin(tempo * 5.3) > 0.85 - 0.25 * panico ? 0.85f : 0f;
+			intensidade *= 1 - panico * (0.45f * Math.max(0, piscada) + queda);
+		}
+		return Math.max(0, intensidade);
 	}
 
 	public float[] posicaoVista() {

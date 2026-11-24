@@ -81,12 +81,20 @@ public class GradeColisao {
 	 * Usado para saber se o monstro enxerga o jogador e se um tiro passa entre os troncos.
 	 */
 	public boolean linhaLivre(float x1, float z1, float x2, float z2) {
+		return linhaLivre(x1, z1, x2, z2, 0);
+	}
+
+	/**
+	 * O mesmo, exigindo que a linha passe a pelo menos "folga" metros além do raio de cada
+	 * obstáculo (o tronco desenhado é mais grosso que o círculo de colisão, e a copa mais ainda).
+	 */
+	public boolean linhaLivre(float x1, float z1, float x2, float z2, float folga) {
 		int i0 = celula(Math.min(x1, x2)) - 1, i1 = celula(Math.max(x1, x2)) + 1;
 		int j0 = celula(Math.min(z1, z2)) - 1, j1 = celula(Math.max(z1, z2)) + 1;
 		for (int j = Math.max(0, j0); j <= Math.min(celulas - 1, j1); j++) {
 			for (int i = Math.max(0, i0); i <= Math.min(celulas - 1, i1); i++) {
 				for (Circulo c : grade.get(indice(i, j))) {
-					if (distanciaAoSegmento(c.x(), c.z(), x1, z1, x2, z2) < c.raio()) {
+					if (distanciaAoSegmento(c.x(), c.z(), x1, z1, x2, z2) < c.raio() + folga) {
 						return false;
 					}
 				}

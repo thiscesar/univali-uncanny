@@ -23,6 +23,7 @@ import mundo.GradeColisao;
 import mundo.LeitorObj;
 import mundo.Mundo;
 import mundo.TexturasFloresta;
+import md2.PersonagemMd2;
 import obj.Mapa3D;
 import obj.ObjHTGsrtm;
 import render.AtmosferaMenu;
@@ -55,7 +56,8 @@ public class TelaCarregando implements Tela {
 
 	/** O que a thread de geração entrega: só dados, nada de OpenGL. */
 	private record DadosTerreno(int[][] alturas, ConsultaAltura chao, GradeColisao colisao,
-			List<DistribuidorArvores.Arvore> arvores, List<LeitorObj.ModeloObj> modelosArvores, float[] inicio) {}
+			List<DistribuidorArvores.Arvore> arvores, List<LeitorObj.ModeloObj> modelosArvores,
+			PersonagemMd2.Dados monstro, float[] inicio) {}
 
 	/** Raio, em metros, da clareira sem árvores em volta do início do jogador. */
 	private static final float CLAREIRA_INICIO = 6f;
@@ -95,7 +97,7 @@ public class TelaCarregando implements Tela {
 			.adicionar("planejando a fase", 0.02f)       // thread separada (ainda não existe)
 			.adicionar("espalhando as árvores", 0.04f)   // thread separada
 			.adicionar("montando a malha", 0.10f)        // thread principal (OpenGL)
-			.adicionar("plantando as árvores", 0.06f)    // thread principal (OpenGL)
+			.adicionar("plantando as árvores e o monstro", 0.06f) // thread principal (OpenGL)
 			.adicionar("carregando texturas e sons", 0.12f); // thread principal (OpenGL)
 
 	/** As etapas da thread principal, na ordem, uma por quadro. */
@@ -178,7 +180,9 @@ public class TelaCarregando implements Tela {
 
 			// os modelos 3D das árvores, se estiverem na pasta (senão, null: árvores planas)
 			List<LeitorObj.ModeloObj> modelos = Arvores3D.arquivosPresentes() ? Arvores3D.lerModelos() : null;
-			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, inicio);
+			// o Dragon Knight (só leitura dos arquivos; null se o MD2 não estiver na pasta)
+			PersonagemMd2.Dados monstro = PersonagemMd2.ler(TelaJogo.PASTA_MONSTRO, TelaJogo.ALTURA_MONSTRO);
+			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, inicio);
 		});
 		estado = Estado.GERANDO;
 	}
@@ -297,8 +301,10 @@ public class TelaCarregando implements Tela {
 			arvores = new Arvores(dados.arvores());
 			arvores.load();
 		}
+		// o monstro vai para a placa de vídeo aqui também (sem o MD2, o jogo usa o substituto)
+		PersonagemMd2 monstro = dados.monstro() != null ? new PersonagemMd2(dados.monstro()) : null;
 		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, arvores3d,
-				dados.inicio());
+				monstro, dados.inicio());
 		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo
 		terrenoNovo = null;
 	}
@@ -307,6 +313,8 @@ public class TelaCarregando implements Tela {
 		Recursos.shaderFloresta();
 		Recursos.shaderObjeto();
 		Recursos.shaderArvore();
+		Recursos.shaderMd2();
+		Recursos.shaderBrilho();
 		TexturasFloresta.carregar();
 		if (Arvores3D.arquivosPresentes()) {
 			Recursos.shaderArvore3D();

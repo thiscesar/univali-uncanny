@@ -77,6 +77,20 @@ public final class MalhaMd2 {
 		return posicoes.size();
 	}
 
+	/** A caixa que envolve o modelo num quadro: {xMin, yMin, zMin, xMax, yMax, zMax}, em metros. */
+	public float[] limites(int quadro) {
+		float[] p = posicoes.get(quadro);
+		float[] caixa = { Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE,
+				-Float.MAX_VALUE };
+		for (int i = 0; i < p.length; i += 3) {
+			for (int k = 0; k < 3; k++) {
+				caixa[k] = Math.min(caixa[k], p[i + k]);
+				caixa[k + 3] = Math.max(caixa[k + 3], p[i + k]);
+			}
+		}
+		return caixa;
+	}
+
 	/** Procura uma animação pelo nome exato. */
 	public Animacao animacao(String nome) {
 		for (Animacao a : animacoes) {

@@ -1,0 +1,25 @@
+#version 330 core
+
+// Pontos que brilham sozinhos (os olhos do Dragon Knight): cada vértice vira um quadradinho
+// na tela (GL_POINTS), com o tamanho calculado aqui para encolher com a distância.
+
+#include "ps1Vertice.glsl"
+
+in vec3 position;   // att 0: centro do brilho, já no mundo
+
+uniform mat4 view;
+uniform mat4 projection;
+uniform float tamanho;     // diâmetro do brilho em metros
+uniform float alturaTela;  // altura, em pixels, da imagem onde a cena é desenhada
+
+out float distancia;
+
+void main(void){
+	vec4 pv = vec4(position, 1.0) * view;
+	gl_Position = tremerPs1(pv * projection);
+	distancia = length(pv.xyz);
+	// projection[1][1] é cot(campo de visão / 2): metros a 1 m de distância -> fração da tela.
+	// Dividir por w (a distância à frente) faz o ponto diminuir de longe, como um objeto 3D.
+	float pixels = tamanho * projection[1][1] * alturaTela * 0.5 / max(gl_Position.w, 0.1);
+	gl_PointSize = max(pixels, 2.0); // de longe, nunca menos que 2 pixels: ainda dá para ver
+}

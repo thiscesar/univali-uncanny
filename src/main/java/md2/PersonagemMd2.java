@@ -89,6 +89,11 @@ public class PersonagemMd2 {
 		return dados.corpo().animacoes;
 	}
 
+	/** A malha do corpo (posições de todos os quadros), para achar pontos nela e medir o tamanho. */
+	public MalhaMd2 malhaCorpo() {
+		return dados.corpo();
+	}
+
 	public boolean temArma() {
 		return arma != null;
 	}
