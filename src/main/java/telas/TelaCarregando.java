@@ -182,20 +182,19 @@ public class TelaCarregando implements Tela {
 				fracaoNaThread = (float) geracao / GeradorFase.GERACOES;
 			});
 
-			// 3. o prédio da Univali, na chegada da trilha, com o chão aplainado embaixo dele
+			// 3. o prédio da Univali (onde a partida começa), com o chão aplainado embaixo dele
 			etapaNaThread = 2;
 			fracaoNaThread = 0;
 			fase.Ponto univali = fase.layout().univali();
-			List<fase.Ponto> chegada = trilhaQueChega(fase.trilhas(), univali);
-			PredioUnivali rascunho = PredioUnivali.naChegada(univali, chegada, 0, seed);
+			PredioUnivali rascunho = new PredioUnivali(univali.x(), 0, univali.z(), fase.giroPredio(), seed);
 			float piso = PredioUnivali.aplainar(alturas, METROS_ENTRE_PONTOS, rascunho.retangulo());
-			PredioUnivali predio = PredioUnivali.naChegada(univali, chegada, piso, seed);
+			PredioUnivali predio = new PredioUnivali(univali.x(), piso, univali.z(), fase.giroPredio(), seed);
 			chao = new ConsultaAltura(alturas, METROS_ENTRE_PONTOS, METROS_POR_UNIDADE); // o chão já aplainado
 
 			// 4. regiões, pedras e árvores, longe das trilhas, das clareiras da fase e do prédio
 			Regioes regioes = new Regioes(seed);
 			List<DistribuidorArvores.Clareira> clareiras = new java.util.ArrayList<>(fase.clareiras());
-			clareiras.add(new DistribuidorArvores.Clareira(predio.x, predio.z, 28));
+			clareiras.add(new DistribuidorArvores.Clareira(predio.x, predio.z, 31)); // meia diagonal do prédio + folga
 			List<LeitorObj.ModeloObj> modelosPedras = Pedras.arquivosPresentes() ? Pedras.lerModelos() : null;
 			float[] larguras = modelosPedras != null ? Pedras.larguras(modelosPedras) : null;
 			List<DistribuidorPedras.Pedra> pedras = modelosPedras != null
@@ -210,8 +209,10 @@ public class TelaCarregando implements Tela {
 				DistribuidorPedras.registrar(pedras, larguras, colisao);
 			}
 			registrarPlacas(fase.placas(), colisao);
-			GradeColisao.Retangulo paredes = predio.retangulo();
-			colisao.adicionarRetangulo(paredes.xMin(), paredes.zMin(), paredes.xMax(), paredes.zMax());
+			// as paredes do prédio (a casca, as salas e os móveis); as portas trancadas entram e saem durante o jogo
+			for (GradeColisao.Retangulo parede : predio.paredes()) {
+				colisao.adicionarRetangulo(parede.xMin(), parede.zMin(), parede.xMax(), parede.zMax());
+			}
 			for (float[] poste : predio.postes()) {
 				colisao.adicionar(poste[0], poste[1], 0.15f);
 			}
@@ -329,20 +330,6 @@ public class TelaCarregando implements Tela {
 		terrenoNovo = new Mapa3D(0, 0, 0, 1); // na origem, escala 1: o mapa vai de 0 a 300 m em x e z
 		terrenoNovo.model = malha;
 		Constantes.mapa = terrenoNovo; // o campo global do projeto original continua apontando para o terreno
-	}
-
-	/** A trilha que termina mais perto da Univali (a que chega ao prédio). */
-	private static List<fase.Ponto> trilhaQueChega(List<List<fase.Ponto>> trilhas, fase.Ponto univali) {
-		List<fase.Ponto> melhor = List.of();
-		float menor = Float.MAX_VALUE;
-		for (List<fase.Ponto> t : trilhas) {
-			float d = t.get(t.size() - 1).distancia(univali);
-			if (d < menor) {
-				menor = d;
-				melhor = t;
-			}
-		}
-		return melhor;
 	}
 
 	/** A thread de geração para quando a tela pede (ESC ou fechar o jogo). */

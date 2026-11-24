@@ -45,15 +45,28 @@ class GeradorFaseTest {
 	}
 
 	@Test
-	void provasEspalhadasEUnivaliLonge() {
+	void provasEspalhadasELongeDaUnivali() {
 		ConsultaAltura chao = terreno(42);
-		Layout l = GeradorFase.gerar(chao, 42, null).layout();
-		ProblemaLayout p = new ProblemaLayout(new GradeCaminhada(chao, 4), chao);
-		assertTrue(p.caminho(l.inicio(), l.univali()) > 120, "Univali a " + p.caminho(l.inicio(), l.univali()) + " m");
+		GeradorFase.Fase f = GeradorFase.gerar(chao, 42, null);
+		Layout l = f.layout();
 		for (int a = 0; a < 3; a++) {
+			assertTrue(l.provas().get(a).distancia(l.univali()) > 40, "prova " + a + " perto da Univali");
 			for (int b = a + 1; b < 3; b++) {
 				assertTrue(l.provas().get(a).distancia(l.provas().get(b)) > 40);
 			}
+		}
+	}
+
+	@Test
+	void trilhasSaemDaFrenteDaUnivaliESemAtravessarOPredio() {
+		ConsultaAltura chao = terreno(8);
+		GeradorFase.Fase f = GeradorFase.gerar(chao, 8, null);
+		mundo.GradeColisao.Retangulo predio = new entidades.PredioUnivali(f.layout().univali().x(), 0,
+				f.layout().univali().z(), f.giroPredio(), 8).retangulo();
+		for (int i = 0; i < 3; i++) {
+			List<Ponto> t = f.trilhas().get(i);
+			assertTrue(t.get(0).distancia(f.saida()) < 3, "a trilha da prova " + i + " começa na saída");
+			for (Ponto p : t) assertTrue(predio.distancia(p.x(), p.z()) > 1, "trilha dentro do prédio");
 		}
 	}
 

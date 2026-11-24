@@ -18,7 +18,8 @@ import mundo.Mundo;
 /**
  * O mapa da fase visto de cima, para o relatório: o relevo (água em azul, terra do verde ao
  * marrom conforme a altura, com sombra pela inclinação), as trilhas (os caminhos do A*) e os
- * pontos do AG da fase: início (verde), provas (amarelo), caixas (vermelho), Univali (azul) e
+ * pontos do AG da fase: Univali (azul, onde a partida começa e termina), a saída dela (verde),
+ * provas (amarelo), caixas (vermelho) e
  * placas (branco). Não usa OpenGL.
  */
 public final class ImagemFase {
@@ -61,8 +62,8 @@ public final class ImagemFase {
 		for (int i = 0; i < l.provas().size(); i++) {
 			ponto(g, l.provas().get(i).x(), l.provas().get(i).z(), 9, new Color(250, 220, 60), "M" + (i + 1));
 		}
-		ponto(g, l.univali().x(), l.univali().z(), 12, new Color(70, 140, 255), "Univali");
-		ponto(g, l.inicio().x(), l.inicio().z(), 10, new Color(60, 230, 90), "início");
+		ponto(g, l.univali().x(), l.univali().z(), 12, new Color(70, 140, 255), "Univali (início e fim)");
+		ponto(g, fase.saida().x(), fase.saida().z(), 7, new Color(60, 230, 90), "saída");
 		g.setColor(Color.WHITE);
 		g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
 		g.drawString(String.format("fitness da fase %.3f", fase.fitness()), 10, 22);

@@ -16,12 +16,13 @@ import mundo.DistribuidorArvores;
 /**
  * Gera a fase: o segundo algoritmo genético do jogo (o primeiro faz o terreno). Com o terreno
  * pronto, o AG procura o melhor Layout (ProblemaLayout); depois o A* refaz, numa grade mais fina
- * (2 m), os caminhos do início até cada prova e até a Univali. Esses caminhos viram as TRILHAS do
- * jogo: terra batida no chão, sem árvores. Para não ficar óbvio:
+ * (2 m), os caminhos da porta da Univali (de onde o jogador sai para a floresta) até cada prova.
+ * Esses caminhos viram as TRILHAS do jogo: terra batida no chão, sem árvores, que também levam de
+ * volta à Univali. Para não ficar óbvio:
  *  - a trilha de cada prova termina uns 12 m antes dela (o resto é com o sussurro e o feixe);
  *  - há dois becos sem saída, saindo das trilhas para lugar nenhum.
  * As placas de trilha ficam onde o caminho de uma prova se separa dos outros (a bifurcação) e
- * perto do fim; as do evento, uma perto do início e duas na beira da trilha da Univali.
+ * perto do fim; as do evento, uma na frente da Univali e duas na beira da trilha mais longa.
  *
  * Roda na thread de carregamento: só dados, nada de OpenGL.
  */
@@ -32,13 +33,17 @@ public final class GeradorFase {
 	public static final float FIM_ANTES_DA_PROVA = 12f;
 
 	/** A fase pronta. As trilhas são linhas (pontos a cada ~1 m); as clareiras vão para o distribuidor de árvores. */
-	public record Fase(Layout layout, double fitness, List<List<Ponto>> trilhas, List<Placa> placas) {
+	/**
+	 * A fase pronta: o layout, o fitness, o giro do prédio (a frente virada para o centro do mapa),
+	 * a saída (na frente da porta), as trilhas (pontos a cada ~1 m) e as placas.
+	 */
+	public record Fase(Layout layout, double fitness, float giroPredio, Ponto saida, List<List<Ponto>> trilhas,
+			List<Placa> placas) {
 
-		/** Lugares sem árvores: o início, as provas, a Univali, as caixas, as placas e as trilhas. */
+		/** Lugares sem árvores: a frente da Univali, as provas, as caixas, as placas e as trilhas (o prédio pede a sua). */
 		public List<DistribuidorArvores.Clareira> clareiras() {
 			List<DistribuidorArvores.Clareira> c = new ArrayList<>();
-			c.add(new DistribuidorArvores.Clareira(layout.inicio().x(), layout.inicio().z(), 6));
-			c.add(new DistribuidorArvores.Clareira(layout.univali().x(), layout.univali().z(), 12)); // a chegada; o prédio pede a sua
+			c.add(new DistribuidorArvores.Clareira(saida.x(), saida.z(), 8));
 			for (Ponto p : layout.provas()) c.add(new DistribuidorArvores.Clareira(p.x(), p.z(), 4));
 			for (Ponto p : layout.caixas()) c.add(new DistribuidorArvores.Clareira(p.x(), p.z(), 1.5f));
 			for (Placa p : placas) c.add(new DistribuidorArvores.Clareira(p.x(), p.z(), p.evento() ? 3f : 1.5f));
@@ -63,27 +68,39 @@ public final class GeradorFase {
 			melhorFitness[0] = fitness;
 			if (ouvinte != null) ouvinte.aoFimDaGeracao(g, melhor, fitness);
 		});
-		System.out.printf("AG da fase: fitness %.3f, Univali a %.0f m de caminho%n", melhorFitness[0],
-				problema.caminho(layout.inicio(), layout.univali()));
+		System.out.printf("AG da fase: fitness %.3f, provas a %.0f, %.0f e %.0f m de caminho da Univali%n", melhorFitness[0],
+				problema.caminho(layout.univali(), layout.provas().get(0)), problema.caminho(layout.univali(), layout.provas().get(1)),
+				problema.caminho(layout.univali(), layout.provas().get(2)));
 
 		// a validação final, na grade de 2 m: um ponto pode ter caído num pedaço que, visto com
 		// mais detalhe, ficou isolado; ele vai para a célula ligada ao início mais próxima
 		GradeCaminhada fina = new GradeCaminhada(chao, 2);
 		fina.adicionarIrregularidade(seed + 5, 3f); // trilhas com curvas (só nos caminhos finais)
 		layout = ajustarNaGradeFina(fina, layout);
+		float giro = entidades.PredioUnivali.giroParaOCentro(layout.univali(), chao.tamanho());
+		Ponto saida = entidades.PredioUnivali.saida(layout.univali(), giro);
+		// o prédio (com 3 m de folga) vira obstáculo: nenhuma trilha passa por dentro dele
+		mundo.GradeColisao.Retangulo predio = new entidades.PredioUnivali(layout.univali().x(), 0, layout.univali().z(), giro,
+				seed).retangulo();
+		fina.bloquear(predio.xMin() - 3, predio.zMin() - 3, predio.xMax() + 3, predio.zMax() + 3);
+		Ponto prova = layout.provas().get(0);
+		if (!fina.ligados(saida.x(), saida.z(), prova.x(), prova.z())) {
+			// a frente caiu na água ou num pedaço isolado: a célula ligada às provas mais perto dela
+			saida = maisProximaNaComponente(fina, saida, fina.componenteEm(prova.x(), prova.z()));
+		}
 		List<List<Ponto>> caminhosProvas = new ArrayList<>();
 		for (Ponto p : layout.provas()) {
-			caminhosProvas.add(cortarFim(caminho(fina, layout.inicio(), p), FIM_ANTES_DA_PROVA));
+			caminhosProvas.add(cortarFim(caminho(fina, saida, p), FIM_ANTES_DA_PROVA));
 		}
-		List<Ponto> caminhoUnivali = caminho(fina, layout.inicio(), layout.univali());
+		List<Ponto> maisLonga = caminhosProvas.stream().max((a, b) -> Float.compare(comprimento(a), comprimento(b)))
+				.orElse(List.of());
 
 		List<List<Ponto>> trilhas = new ArrayList<>(caminhosProvas);
-		trilhas.add(caminhoUnivali);
 		trilhas.addAll(becos(fina, caminhosProvas, random));
 		trilhas.removeIf(t -> t.size() < 2);
 
-		List<Placa> placas = placas(chao, layout, caminhosProvas, caminhoUnivali, random);
-		return new Fase(layout, melhorFitness[0], trilhas, placas);
+		List<Placa> placas = placas(chao, saida, caminhosProvas, maisLonga, random);
+		return new Fase(layout, melhorFitness[0], giro, saida, trilhas, placas);
 	}
 
 	/** Cada ponto ligado ao início na grade fina (o início, na maior componente dela). */
@@ -221,12 +238,11 @@ public final class GeradorFase {
 	/**
 	 * Placas de trilha: onde o caminho de cada prova se separa dos outros (se for a mais de 15 m do
 	 * início) e uns 30 m antes do fim, ao lado da trilha, com a seta apontando para onde ela segue.
-	 * Placas do evento: uma a 10 m do início, virada para ele, e duas na beira da trilha da Univali.
+	 * Placas do evento: uma a 10 m da saída da Univali, virada para ela, e duas na beira da trilha mais longa.
 	 */
-	static List<Placa> placas(ConsultaAltura chao, Layout layout, List<List<Ponto>> provas, List<Ponto> univali,
+	static List<Placa> placas(ConsultaAltura chao, Ponto inicio, List<List<Ponto>> provas, List<Ponto> univali,
 			Random random) {
 		List<Placa> placas = new ArrayList<>();
-		Ponto inicio = layout.inicio();
 		for (int tentativa = 0; tentativa < 100; tentativa++) {
 			double a = random.nextDouble() * 2 * Math.PI;
 			Ponto p = new Ponto(inicio.x() + 10 * (float) Math.cos(a), inicio.z() + 10 * (float) Math.sin(a));
@@ -251,7 +267,6 @@ public final class GeradorFase {
 			String nome = "M" + (k + 1);
 			List<List<Ponto>> outras = new ArrayList<>(provas);
 			outras.remove(k);
-			outras.add(univali);
 			int bifurcacao = -1;
 			float andado = 0;
 			for (int i = 1; i < t.size(); i++) {

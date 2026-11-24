@@ -55,6 +55,15 @@ public class GradeColisao {
 		quantidade++;
 	}
 
+	public void adicionarRetangulo(Retangulo r) {
+		adicionarRetangulo(r.xMin(), r.zMin(), r.xMax(), r.zMax());
+	}
+
+	/** Tira um retângulo (uma porta que foi aberta). */
+	public void removerRetangulo(Retangulo r) {
+		if (retangulos.remove(r)) quantidade--;
+	}
+
 	public int quantidade() {
 		return quantidade;
 	}

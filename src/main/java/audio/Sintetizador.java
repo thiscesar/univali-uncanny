@@ -192,6 +192,24 @@ public final class Sintetizador {
 		return pcm;
 	}
 
+	/**
+	 * O zumbido de lâmpada fluorescente velha: 120 Hz com harmônicas (o reator), um chiado fraco
+	 * e, de vez em quando, um estalo. 2 s, para tocar em loop.
+	 */
+	public static short[] zumbido(int taxa) {
+		int total = taxa * 2;
+		short[] pcm = new short[total];
+		Random r = new Random(71);
+		for (int i = 0; i < total; i++) {
+			double t = (double) i / taxa;
+			double onda = 0.5 * Math.sin(2 * Math.PI * 120 * t) + 0.25 * Math.sin(2 * Math.PI * 240 * t)
+					+ 0.12 * Math.sin(2 * Math.PI * 360 * t) + 0.05 * (r.nextDouble() * 2 - 1);
+			if (i % (taxa / 3) < taxa / 200 && r.nextDouble() < 0.6) onda += (r.nextDouble() * 2 - 1) * 0.6; // estalo
+			pcm[i] = (short) Math.round(Math.max(-1, Math.min(1, onda * 0.5)) * 30000);
+		}
+		return pcm;
+	}
+
 	/** Um baque grave: senoide que cai de 80 para 40 Hz e some em ~0,12 s. */
 	private static double baque(double t, double inicio, double volume) {
 		double s = t - inicio;

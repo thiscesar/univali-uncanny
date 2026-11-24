@@ -31,7 +31,7 @@ public class Mundo {
 	public final PersonagemMd2 monstro;
 	/** A fase decidida pelo AG da fase: início, Univali, provas, caixas, trilhas, placas e o fitness. */
 	public final GeradorFase.Fase fase;
-	/** Onde o jogador começa (x, z), já com a clareira em volta. */
+	/** Onde o jogador começa (x, z): dentro da Univali, numa sala de aula da frente. */
 	public final float[] inicio;
 	/** Onde ficam as provas M1, M2 e M3 (x, z), cada uma numa clareira. */
 	public final List<float[]> provas;
@@ -60,7 +60,8 @@ public class Mundo {
 		this.arvores3d = arvores3d;
 		this.monstro = monstro;
 		this.fase = fase;
-		this.inicio = xz(fase.layout().inicio());
+		float[] dentro = predio.inicioJogador();
+		this.inicio = new float[] { dentro[0], dentro[2] };
 		this.provas = fase.layout().provas().stream().map(Mundo::xz).toList();
 		this.caixas = fase.layout().caixas().stream().map(Mundo::xz).toList();
 		this.univali = xz(fase.layout().univali());

@@ -84,6 +84,17 @@ public class GradeCaminhada {
 		}
 	}
 
+	/** Marca como obstáculo as células com o centro dentro do retângulo (um prédio) e refaz as componentes. */
+	public void bloquear(float xMin, float zMin, float xMax, float zMax) {
+		for (int j = 0; j < lado; j++) {
+			for (int i = 0; i < lado; i++) {
+				float x = centro(i), z = centro(j);
+				if (x >= xMin && x <= xMax && z >= zMin && z <= zMax) caminhavel[j * lado + i] = false;
+			}
+		}
+		rotularComponentes();
+	}
+
 	public float custoExtra(int i, int j) {
 		return custoExtra[j * lado + i];
 	}

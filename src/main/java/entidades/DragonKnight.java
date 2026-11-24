@@ -74,6 +74,8 @@ public class DragonKnight extends Object3D {
 
 	/** Quantas provas o jogador já tem: as aparições ficam mais frequentes (as provas vêm depois). */
 	public int provasColetadas = 0;
+	/** Enquanto falso, ele nem conta o tempo (a partida começa dentro da Univali, onde ele não entra). */
+	public boolean ativo = true;
 	/** As paredes da Univali: ele não surge a menos de 25 m delas (null = sem zona segura). */
 	public GradeColisao.Retangulo zonaSegura = null;
 
@@ -110,6 +112,7 @@ public class DragonKnight extends Object3D {
 
 	@Override
 	public void SimulaSe(long diftime) {
+		if (!ativo) return;
 		float dt = diftime / 1000f;
 		tempoNoEstado += dt;
 		tempoDor += dt;

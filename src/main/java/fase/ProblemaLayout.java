@@ -13,18 +13,18 @@ import jogo.Regras;
 import mundo.ConsultaAltura;
 
 /**
- * O problema que o AG da fase resolve: onde pôr início, Univali, provas e caixas para a
- * partida ter um bom percurso. O mesmo motor do AG do terreno resolve este problema: só
+ * O problema que o AG da fase resolve: onde pôr a Univali (onde a partida começa e termina),
+ * as provas e as caixas para a partida ter um bom percurso. O mesmo motor do AG do terreno resolve este problema: só
  * mudam o indivíduo (um Layout) e os quatro métodos abaixo.
  *
  * O fitness é uma soma ponderada de termos de 0 a 1 (pesos em Regras):
- *  - caminho do início à Univali longo (medido pelo A*, não em linha reta);
- *  - provas espalhadas (longe entre si, do início e da Univali);
- *  - progressão: uma prova perto, uma no meio, uma longe (em distância de caminho);
+ *  - provas espalhadas (longe entre si e da Univali);
+ *  - progressão: saindo da Univali, uma prova perto, uma no meio, uma longe (em distância de
+ *    caminho, medida pelo A*, não em linha reta);
  *  - Univali longe da borda;
  *  - caixas de munição a 20–50 m de alguma prova.
- * Um layout com ponto inválido (fora da grade, na água, num pedaço isolado do mapa) leva uma
- * penalidade forte. Só dados (dá para testar).
+ * Um layout com ponto inválido (fora da grade, na água, num pedaço do mapa sem caminho até a
+ * Univali) leva uma penalidade forte. Só dados (dá para testar).
  */
 public class ProblemaLayout implements Problema<Layout> {
 
@@ -81,7 +81,7 @@ public class ProblemaLayout implements Problema<Layout> {
 
 	/** Um ponto novo qualquer para o gene i (a Univali só em lugar bom para o prédio). */
 	private Ponto sortear(int i, Random random) {
-		List<Ponto> lista = i == 1 ? lugaresUnivali : caminhaveis;
+		List<Ponto> lista = i == 0 ? lugaresUnivali : caminhaveis;
 		return lista.get(random.nextInt(lista.size()));
 	}
 
@@ -109,7 +109,7 @@ public class ProblemaLayout implements Problema<Layout> {
 		float passo = 10 + random.nextFloat() * 20;
 		double angulo = random.nextDouble() * 2 * Math.PI;
 		Ponto alvo = new Ponto(atual.x() + passo * (float) Math.cos(angulo), atual.z() + passo * (float) Math.sin(angulo));
-		return layout.com(i, maisProximo(i == 1 ? lugaresUnivali : caminhaveis, alvo));
+		return layout.com(i, maisProximo(i == 0 ? lugaresUnivali : caminhaveis, alvo));
 	}
 
 	private static Ponto maisProximo(List<Ponto> lista, Ponto alvo) {
@@ -127,17 +127,16 @@ public class ProblemaLayout implements Problema<Layout> {
 
 	@Override
 	public double fitness(Layout l) {
-		// penalidade forte: algum ponto fora do caminhável ou sem caminho até o início
+		// penalidade forte: algum ponto fora do caminhável ou sem caminho até a Univali
 		int validos = 0;
 		for (int i = 0; i < Layout.PONTOS; i++) {
 			Ponto p = l.ponto(i);
-			if (grade.ligados(l.inicio().x(), l.inicio().z(), p.x(), p.z())) validos++;
+			if (grade.ligados(l.univali().x(), l.univali().z(), p.x(), p.z())) validos++;
 		}
 		if (validos < Layout.PONTOS) {
 			return 0.1 * validos / Layout.PONTOS;
 		}
-		return Regras.PESO_CAMINHO_UNIVALI * termoCaminhoUnivali(l)
-				+ Regras.PESO_PROVAS_ESPALHADAS * termoProvasEspalhadas(l)
+		return Regras.PESO_PROVAS_ESPALHADAS * termoProvasEspalhadas(l)
 				+ Regras.PESO_PROGRESSAO * termoProgressao(l)
 				+ Regras.PESO_UNIVALI_BORDA * Math.min(1, distanciaBorda(l.univali()) / Regras.UNIVALI_BORDA)
 				+ Regras.PESO_CAIXAS * termoCaixas(l);
@@ -145,31 +144,23 @@ public class ProblemaLayout implements Problema<Layout> {
 
 	// ---------- os termos do fitness, cada um de 0 a 1 ----------
 
-	/** O caminho (A*) do início à Univali, em relação à meta de 180 m. */
-	double termoCaminhoUnivali(Layout l) {
-		return Math.min(1, caminho(l.inicio(), l.univali()) / Regras.META_CAMINHO_UNIVALI);
-	}
-
-	/** A menor das distâncias entre provas e início (meta 60 m) e entre provas e Univali (meta 40 m). */
+	/** A menor das distâncias entre as provas e delas até a Univali, em relação à meta de 60 m. */
 	double termoProvasEspalhadas(Layout l) {
 		double pior = 1;
 		List<Ponto> pontos = new ArrayList<>(l.provas());
-		pontos.add(l.inicio());
+		pontos.add(l.univali());
 		for (int a = 0; a < pontos.size(); a++) {
 			for (int b = a + 1; b < pontos.size(); b++) {
 				pior = Math.min(pior, pontos.get(a).distancia(pontos.get(b)) / Regras.DISTANCIA_PROVAS);
 			}
 		}
-		for (Ponto p : l.provas()) {
-			pior = Math.min(pior, p.distancia(l.univali()) / Regras.DISTANCIA_PROVA_UNIVALI);
-		}
 		return pior;
 	}
 
-	/** Distâncias de caminho até as provas, em ordem, perto das metas (70, 130 e 190 m). */
+	/** Distâncias de caminho da Univali até as provas, em ordem, perto das metas (70, 130 e 190 m). */
 	double termoProgressao(Layout l) {
 		float[] d = new float[3];
-		for (int i = 0; i < 3; i++) d[i] = caminho(l.inicio(), l.provas().get(i));
+		for (int i = 0; i < 3; i++) d[i] = caminho(l.univali(), l.provas().get(i));
 		java.util.Arrays.sort(d);
 		double soma = 0;
 		for (int i = 0; i < 3; i++) {

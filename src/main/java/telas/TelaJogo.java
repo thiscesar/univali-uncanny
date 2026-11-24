@@ -14,6 +14,7 @@ import static org.lwjgl.opengl.GL20.glVertexAttrib3f;
 
 import java.awt.Color;
 import java.nio.FloatBuffer;
+import java.util.List;
 import java.util.Random;
 
 import org.lwjgl.BufferUtils;
@@ -34,6 +35,7 @@ import entidades.Prova;
 import entidades.Tiro;
 import entidades.Jogador;
 import entrada.Entrada;
+import jogo.Objetivos;
 import jogo.Partida;
 import jogo.Regras;
 import md2.Animador;
@@ -71,9 +73,10 @@ import Model.VboCube;
  * um som 3D de teste: são atalhos provisórios até existirem as regras do jogo. Com o F3 ligado,
  * G faz o Dragon Knight surgir e K o mata, P leva até a próxima prova, I salva a imagem do mapa da fase; as setas e Page Up/Down ajustam a posição da arma.
  *
- * A Univali: o prédio com janelas acesas, postes iluminando a entrada e o professor numa janela.
- * Com E na frente da porta: sem as 3 provas, ele diz o que falta; com as 3, a cena final e o APROVADO.
- * Em volta do prédio, o Dragon Knight não aparece.
+ * A partida começa dentro da Univali, à noite: o térreo é um corredor com salas dos dois lados. A sala do
+ * professor está trancada (é preciso achar o crachá); ele nega sem as provas e abre a porta da
+ * frente; o jogador sai para a floresta, acha as 3 provas e volta para entregá-las na mesa dele.
+ * O Dragon Knight só começa a contar quando o jogador sai do prédio, e não surge perto dele.
  *
  * As provas M1, M2 e M3: folhas brilhando e sussurrando pela floresta; E pega. Cada uma deixa o
  * monstro mais frequente; a terceira faz tocar o sinal de aula, vindo da direção da Univali.
@@ -155,8 +158,13 @@ public class TelaJogo implements Tela {
 	private float tempoEntrega = -1;
 	/** Segunda linha da mensagem (a fala do professor), com o mesmo tempo da primeira. */
 	private String mensagem2 = null;
+	/** A sequência da partida (crachá, professor, provas) e as falas esperando a vez de aparecer. */
+	private final Objetivos objetivos = new Objetivos();
+	private final java.util.ArrayDeque<String> falas = new java.util.ArrayDeque<>();
+	private float tempoFala = 0;
 	private final java.util.Map<Prova, SomTocando> sussurros = new java.util.HashMap<>();
 	private Efeito somSussurro, somPegarProva, somSinal;
+	private SomTocando somZumbido;
 	/** Segundos desde que cada prova foi pega (para o pulso no HUD); negativo = ainda não. */
 	private final java.util.Map<Prova, Float> pulsoProva = new java.util.HashMap<>();
 
@@ -191,6 +199,12 @@ public class TelaJogo implements Tela {
 		this.gerenciador = gerenciador;
 		this.mundo = mundo;
 		this.jogador = new Jogador(mundo.inicio[0], mundo.inicio[1], mundo.chao, mundo.colisao);
+		// começa olhando para a saída da sala de início (a única passagem dela)
+		float[] saidaDaSala = mundo.predio.andar.inicio().porta();
+		float[] alvo = mundo.predio.noMundo(saidaDaSala[0], 0, saidaDaSala[1]);
+		// a câmera olha para (sen g, -cos g): para olhar na direção (dx, dz), g = atan2(dx, -dz)
+		float guinada = (float) Math.atan2(alvo[0] - mundo.inicio[0], -(alvo[2] - mundo.inicio[1]));
+		jogador.girar(guinada - jogador.camera().guinada, 0);
 		// as animações e o tamanho vêm do MD2; sem ele, o monstro usa tempos e a caixa padrão
 		Animador animador = mundo.monstro != null ? new Animador(mundo.monstro.animacoes()) : null;
 		float[] caixa = mundo.monstro != null ? mundo.monstro.malhaCorpo().limites(0) : null;
@@ -258,9 +272,18 @@ public class TelaJogo implements Tela {
 		desenhoPlacas = new DesenhoPlacas();
 		desenhoPredio = new DesenhoPredio(mundo.predio);
 		monstro.zonaSegura = mundo.predio.retangulo(); // perto da Univali, ele não surge
+		monstro.ativo = false;                         // e só começa quando o jogador sair dela
+		// as duas portas começam trancadas: um retângulo no vão de cada uma
+		mundo.colisao.adicionarRetangulo(mundo.predio.portaEntrada());
+		mundo.colisao.adicionarRetangulo(mundo.predio.portaProfessor());
+		mostrarMensagem("Encontre a sala do professor.", 4f);
 		somSussurro = efeitoOuSintetizado("audio/sussurro.ogg", () -> Sintetizador.sussurro(44100, 13));
 		somPegarProva = efeitoOuSintetizado("audio/pegar_prova.ogg", () -> Sintetizador.ping(44100, 660, 600, 900));
 		somSinal = efeitoOuSintetizado("audio/sinal_aula.ogg", () -> Sintetizador.sinal(44100));
+		// o zumbido das lâmpadas no saguão, em loop
+		float[] saguao = mundo.predio.noMundo(0, 3, 8);
+		somZumbido = gerenciador.audio().tocar3D(gerenciador.audio().criarEfeito("zumbido das lampadas",
+				Sintetizador.zumbido(44100), 44100), saguao[0], saguao[1], saguao[2], 0.5f, true, 4f);
 		for (Prova p : partida.provas()) {
 			// referência de 3 m: o sussurro ainda se ouve a uns 20 m, vindo da direção da folha
 			sussurros.put(p, gerenciador.audio().tocar3D(somSussurro, p.x, p.y, p.z, 0.9f, true, 3f));
@@ -321,6 +344,7 @@ public class TelaJogo implements Tela {
 			audio.parar(s);
 		}
 		sussurros.clear();
+		audio.parar(somZumbido);
 		particulas.liberar();
 	}
 
@@ -391,7 +415,7 @@ public class TelaJogo implements Tela {
 			ajustarPoseDaArma(entrada);
 		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_P)) {
-			irParaAProximaProva();
+			irParaOProximoObjetivo();
 		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_I)) {
 			String arquivo = "fase_" + mundo.seed + ".png";
@@ -448,22 +472,77 @@ public class TelaJogo implements Tela {
 				escopeta.adicionarReserva(perto.pegar());
 				gerenciador.audio().tocar(somCartucho, 1f);
 				mostrarMensagem("+" + Regras.CARTUCHOS_POR_CAIXA + " cartuchos");
-			} else if (mundo.predio.naEntrega(jogador.x, jogador.z)) {
-				entregar();
+			} else {
+				usarNoPredio();
 			}
 		}
 	}
 
-	/** Na porta da Univali: sem as 3 provas, o que falta; com as 3, começa a cena final. */
-	private void entregar() {
-		if (!partida.todasColetadas()) {
-			mostrarMensagem("Faltam: " + String.join(", ", partida.faltando()), 3.5f);
-			mensagem2 = "Professor: \"Sem as provas eu não posso fazer nada.\"";
+	/** O que dá para usar com E dentro da Univali, do mais perto ao mais longe. */
+	private enum Uso { CRACHA, PORTA_PROFESSOR, PROFESSOR, PORTA_ENTRADA, PORTA_TRANCADA }
+
+	private Uso usoPerto() {
+		var p = mundo.predio;
+		if (!objetivos.temCracha() && p.perto(jogador.x, jogador.z, p.chaveNoModelo())) return Uso.CRACHA;
+		float[] prof = p.professorNoModelo();
+		if (objetivos.portaProfessorAberta() && p.perto(jogador.x, jogador.z, new float[] { prof[0], prof[1] })) return Uso.PROFESSOR;
+		if (!objetivos.portaProfessorAberta() && p.perto(jogador.x, jogador.z, p.centroPortaProfessor())) return Uso.PORTA_PROFESSOR;
+		if (!objetivos.portaEntradaAberta() && p.dentro(jogador.x, jogador.z)
+				&& p.perto(jogador.x, jogador.z, p.centroPortaEntrada())) return Uso.PORTA_ENTRADA;
+		if (p.salaTrancadaPerto(jogador.x, jogador.z) != null) return Uso.PORTA_TRANCADA;
+		return null;
+	}
+
+	/** O crachá, as portas e o professor. */
+	private void usarNoPredio() {
+		Uso uso = usoPerto();
+		if (uso == null) return;
+		switch (uso) {
+		case CRACHA -> {
+			objetivos.pegarCracha();
+			desenhoPredio.crachaPego = true;
+			gerenciador.audio().tocar(somPegarProva, 1f);
+			mostrarMensagem("Crachá do professor", 2.5f);
+		}
+		case PORTA_PROFESSOR -> {
+			if (objetivos.abrirPortaProfessor()) {
+				mundo.colisao.removerRetangulo(mundo.predio.portaProfessor());
+				desenhoPredio.portaProfessorAberta = true;
+				gerenciador.audio().tocar(somTelha, 1f);
+				mostrarMensagem("A porta abriu.", 2f);
+			} else {
+				gerenciador.audio().tocar(somVazia, 1f);
+				mostrarMensagem("Trancada. Deve haver um crachá em alguma sala.", 3f);
+			}
+		}
+		case PROFESSOR -> falarComProfessor();
+		case PORTA_ENTRADA -> {
+			gerenciador.audio().tocar(somVazia, 1f);
+			mostrarMensagem("A porta da frente está trancada.", 2.5f);
+		}
+		case PORTA_TRANCADA -> {
+			gerenciador.audio().tocar(somVazia, 1f);
+			mostrarMensagem(mundo.predio.salaTrancadaPerto(jogador.x, jogador.z).nome() + ": trancada.", 2.5f);
+		}
+		}
+	}
+
+	/** Sem as 3 provas, ele nega (e a porta da frente abre na primeira vez); com as 3, a cena final. */
+	private void falarComProfessor() {
+		if (partida.todasColetadas()) {
+			tempoEntrega = 0;
+			lanterna.definirPanico(0);
+			for (SomTocando s : sussurros.values()) gerenciador.audio().parar(s);
 			return;
 		}
-		tempoEntrega = 0;
-		lanterna.definirPanico(0);
-		for (SomTocando s : sussurros.values()) gerenciador.audio().parar(s);
+		boolean primeira = !objetivos.falouComProfessor();
+		falas.clear();
+		falas.addAll(objetivos.falarSemAsProvas(partida.faltando()));
+		tempoFala = 0;
+		if (primeira) {
+			mundo.colisao.removerRetangulo(mundo.predio.portaEntrada());
+			desenhoPredio.portaEntradaAberta = true;
+		}
 	}
 
 	/**
@@ -482,7 +561,7 @@ public class TelaJogo implements Tela {
 			float[] u = mundo.univali;
 			// de longe (referência de 25 m), para o jogador saber para que lado ir
 			audio.tocar3D(somSinal, u[0], mundo.chao.alturaEm(u[0], u[1]) + 6, u[1], 1f, false, 25f);
-			mostrarMensagem(prova.nome + " encontrada. Leve as provas à Univali", 5f);
+			mostrarMensagem(prova.nome + " encontrada. Leve as provas ao professor", 5f);
 		} else {
 			mostrarMensagem(prova.nome + " encontrada", 2.5f);
 		}
@@ -497,10 +576,31 @@ public class TelaJogo implements Tela {
 				return;
 			}
 		}
-		// todas pegas: vai para a frente da porta da Univali
-		float[] porta = mundo.predio.porta();
-		jogador.x = porta[0] + mundo.predio.frenteX() * 4;
-		jogador.z = porta[2] + mundo.predio.frenteZ() * 4;
+		// todas pegas: vai para a frente da mesa do professor
+		irPara(mundo.predio.professorNoModelo(), 1.9f);
+	}
+
+	/** Depuração (F3 + P): o crachá, depois a porta da sala, o professor, as provas e o professor de novo. */
+	private void irParaOProximoObjetivo() {
+		var p = mundo.predio;
+		if (!objetivos.temCracha()) {
+			irPara(p.chaveNoModelo(), 1.2f);
+		} else if (!objetivos.portaProfessorAberta()) {
+			irPara(fase.AndarUnivali.noCorredor(p.andar.professores()), 0);
+		} else if (!objetivos.falouComProfessor()) {
+			irPara(p.professorNoModelo(), 1.9f);
+		} else {
+			irParaAProximaProva();
+		}
+	}
+
+	/** Põe o jogador a "frente" metros de um ponto do modelo do prédio, na direção da porta da sala dele. */
+	private void irPara(float[] noModelo, float frente) {
+		float[] prof = mundo.predio.professorNoModelo();
+		float dx = (float) Math.sin(prof[2]), dz = (float) Math.cos(prof[2]);
+		float[] w = mundo.predio.noMundo(noModelo[0] + dx * frente, 0, noModelo[1] + dz * frente);
+		jogador.x = w[0];
+		jogador.z = w[2];
 	}
 
 	private CaixaMunicao caixaAlcancavel() {
@@ -556,7 +656,19 @@ public class TelaJogo implements Tela {
 		desenhoEscopeta.atualizar(dt);
 		particulas.atualizar(dt);
 		mundo.predio.SimulaSe(Math.round(dt * 1000));
-		desenhoPredio.atualizar(dt);
+		desenhoPredio.atualizar(dt, jogador.x, jogador.z);
+		// as falas do professor, uma de cada vez
+		if (!falas.isEmpty()) {
+			tempoFala += dt;
+			if (tempoFala >= 3.2f) {
+				falas.poll();
+				tempoFala = 0;
+			}
+		}
+		// o Dragon Knight acorda na primeira vez que o jogador põe os pés fora do prédio
+		if (!monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z)) {
+			monstro.ativo = true;
+		}
 		tempoMensagem = Math.max(0, tempoMensagem - dt);
 		for (Prova p : partida.provas()) {
 			p.SimulaSe(Math.round(dt * 1000));
@@ -884,10 +996,23 @@ public class TelaJogo implements Tela {
 		}
 
 		desenharHudProvas(o, escala);
-		if (mundo.predio.naEntrega(jogador.x, jogador.z) && partida.provaAlcancavel(jogador.x, jogador.z) == null
-				&& caixaAlcancavel() == null) {
-			Texto.desenhar(o, "E: entregar as provas", cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200),
-					Texto.Alinhamento.CENTRO);
+		Uso uso = usoPerto();
+		if (uso != null && partida.provaAlcancavel(jogador.x, jogador.z) == null && caixaAlcancavel() == null) {
+			String dica = switch (uso) {
+			case CRACHA -> "E: pegar o crachá";
+			case PORTA_PROFESSOR -> "E: abrir a porta";
+			case PROFESSOR -> partida.todasColetadas() ? "E: entregar as provas" : "E: falar com o professor";
+			case PORTA_ENTRADA, PORTA_TRANCADA -> "E: abrir a porta";
+			};
+			Texto.desenhar(o, dica, cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200), Texto.Alinhamento.CENTRO);
+		}
+		// o objetivo, discreto, no alto da tela
+		Texto.desenhar(o, objetivos.texto(partida.provasColetadas(), partida.provas().size()), cx, 18 * escala,
+				Math.round(16 * escala), new Color(190, 180, 165, 200), Texto.Alinhamento.CENTRO);
+		if (!falas.isEmpty()) {
+			float alfa = Math.min(1, Math.min(tempoFala, 3.2f - tempoFala) / 0.3f);
+			Texto.desenhar(o, falas.peek(), cx, h * 0.76f, Math.round(22 * escala),
+					new Color(235, 225, 205, Math.round(Math.max(0, alfa) * 255)), Texto.Alinhamento.CENTRO);
 		}
 		if (partida.provaAlcancavel(jogador.x, jogador.z) != null) {
 			Texto.desenhar(o, "E: pegar a prova", cx, h * 0.62f, Math.round(20 * escala), new Color(230, 220, 200),
@@ -1128,23 +1253,45 @@ public class TelaJogo implements Tela {
 	}
 
 	/**
-	 * As luzes dos dois postes da Univali: a posição das lâmpadas vai para o espaço da câmera
+	 * As luzes pontuais (o shader aceita 4): das candidatas (os dois postes, a luminária do professor e as
+	 * lâmpadas do teto que funcionam), as 4 mais perto da câmera. A posição vai para o espaço da câmera a posição das lâmpadas vai para o espaço da câmera
 	 * (a matriz de visão vezes o ponto), porque é nesse espaço que o comum.glsl calcula a luz.
 	 */
 	private void luzesDosPostes(Matrix4f visao) {
-		float[][] postes = mundo.predio.postes();
-		ambiente.numLuzes = postes.length;
-		for (int i = 0; i < postes.length; i++) {
-			org.lwjgl.util.vector.Vector4f p = Matrix4f.transform(visao,
-					new org.lwjgl.util.vector.Vector4f(postes[i][0], mundo.predio.y + 5.0f, postes[i][1], 1), null);
+		// as candidatas: os postes, a luminária do professor e as lâmpadas do teto que funcionam
+		List<float[]> luzes = new java.util.ArrayList<>(); // {x, y, z, r, g, b, alcance}
+		for (float[] poste : mundo.predio.postes()) {
+			luzes.add(new float[] { poste[0], mundo.predio.y + 5.0f, poste[1], 1.3f, 1.0f, 0.65f, 16f });
+		}
+		float[] l = desenhoPredio.luminariaNoMundo();
+		luzes.add(new float[] { l[0], l[1], l[2], 1.1f, 0.95f, 0.6f, 6f });
+		boolean falhaAcesa = desenhoPredio.lampadaPiscandoAcesa();
+		for (fase.AndarUnivali.Lampada lamp : mundo.predio.andar.lampadas()) {
+			if (lamp.estado() == fase.AndarUnivali.Lampada.Estado.QUEIMADA) continue;
+			if (lamp.estado() == fase.AndarUnivali.Lampada.Estado.PISCANDO && !falhaAcesa) continue;
+			float[] w = mundo.predio.noMundo(lamp.x(), entidades.PredioUnivali.PE_DIREITO - 0.2f, lamp.z());
+			luzes.add(new float[] { w[0], w[1], w[2], 0.75f, 0.82f, 0.9f, 7f });
+		}
+		// as 4 mais perto da câmera (o shader aceita 4)
+		Camera c = cameraAtual();
+		luzes.sort((a, b) -> Float.compare(dist2(a, c), dist2(b, c)));
+		ambiente.numLuzes = Math.min(Ambiente.MAX_LUZES, luzes.size());
+		for (int i = 0; i < ambiente.numLuzes; i++) {
+			float[] luz = luzes.get(i);
+			org.lwjgl.util.vector.Vector4f p = Matrix4f.transform(visao, new org.lwjgl.util.vector.Vector4f(luz[0], luz[1], luz[2], 1), null);
 			ambiente.posLuz[i * 3] = p.x;
 			ambiente.posLuz[i * 3 + 1] = p.y;
 			ambiente.posLuz[i * 3 + 2] = p.z;
-			ambiente.corLuz[i * 3] = 1.3f;
-			ambiente.corLuz[i * 3 + 1] = 1.0f;
-			ambiente.corLuz[i * 3 + 2] = 0.65f;
-			ambiente.alcanceLuz[i] = 16f;
+			ambiente.corLuz[i * 3] = luz[3];
+			ambiente.corLuz[i * 3 + 1] = luz[4];
+			ambiente.corLuz[i * 3 + 2] = luz[5];
+			ambiente.alcanceLuz[i] = luz[6];
 		}
+	}
+
+	private static float dist2(float[] luz, Camera c) {
+		float dx = luz[0] - c.x, dy = luz[1] - c.y, dz = luz[2] - c.z;
+		return dx * dx + dy * dy + dz * dz;
 	}
 
 	/** A cena final: a tela escurece em 1,5 s e as falas aparecem uma de cada vez. */

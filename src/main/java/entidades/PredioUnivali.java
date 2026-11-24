@@ -4,44 +4,46 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import fase.AndarUnivali;
 import fase.Ponto;
 import mundo.GradeColisao;
 import obj.Object3D;
 
 /**
- * O prédio da Univali, escondido na floresta: um bloco de 40 x 12 x 15 m com marquise, colunas,
- * porta, letreiro e uma grade de janelas, umas acesas, outras apagadas, uma piscando, e a
- * silhueta do professor mudando de janela de vez em quando. Só dados (dá para testar); o
- * desenho fica em render.DesenhoPredio.
+ * O prédio da Univali, onde a partida começa e termina: um bloco de 48 x 12 x 28 m com marquise,
+ * colunas, letreiro, uma grade de janelas na fachada (umas acesas, outras apagadas, uma piscando,
+ * e um vulto que muda de janela) e, dentro, o térreo (AndarUnivali): saguão, corredor e 12 salas,
+ * com a Sala dos Professores trancada até o jogador achar o crachá. Só dados (dá para testar); o desenho fica em render.DesenhoPredio.
  *
  * O prédio fica sempre alinhado aos eixos (gira só em múltiplos de 90°), com a frente (a porta,
- * o +z do modelo) virada para a trilha que chega até ele. Assim, a colisão das paredes é um
+ * o +z do modelo) virada para o centro do mapa, onde fica a floresta. Assim, cada parede é um
  * retângulo simples na GradeColisao.
  */
 public class PredioUnivali extends Object3D {
 
-	public static final float LARGURA = 40f, PROFUNDIDADE = 15f, ALTURA = 12f;
-	/** Andares das janelas (centro, em metros do chão), largura e altura de cada janela. */
+	public static final float LARGURA = AndarUnivali.LARGURA;           // 48 m
+	public static final float PROFUNDIDADE = AndarUnivali.PROFUNDIDADE; // 28 m
+	public static final float ALTURA = 12f, PE_DIREITO = 3.8f, ESPESSURA = 0.3f;
+	/** Andares das janelas da fachada (centro, em metros do chão), largura e altura de cada janela. */
 	public static final float[] ANDARES = { 2.2f, 6.0f, 9.8f };
 	public static final float JANELA_LARGURA = 2.0f, JANELA_ALTURA = 1.6f;
-	/** A área da entrega: um círculo de 3 m centrado 2 m na frente da porta. */
-	public static final float RAIO_ENTREGA = 3f;
-	/** Quanto o prédio fica atrás do fim da trilha (o fim da trilha fica na frente da porta). */
-	private static final float RECUO = 10f;
+	/** Distância para usar algo (a porta, a mesa do professor, a chave) com a tecla E. */
+	public static final float ALCANCE_USO = 2.2f;
 
 	/** Uma janela: o centro no modelo (x, y, z), para onde ela olha (a normal, no modelo) e se está acesa. */
 	public record Janela(float x, float y, float z, float nx, float nz, boolean acesa) {}
 
 	/** Rotação em volta do eixo y, múltiplo de 90°: a frente (+z do modelo) aponta para (sen g, cos g). */
 	public final float giro;
+	public final AndarUnivali andar;
 	private final float frenteX, frenteZ;
 	private final List<Janela> janelas = new ArrayList<>();
 	private final int janelaPiscando;
 
-	// o professor
+	// o vulto nas janelas de cima
 	private final Random random;
-	private int janelaProfessor = -1;
-	private float tempoProfessor = 0;
+	private int janelaVulto = -1;
+	private float tempoVulto = 0;
 
 	public PredioUnivali(float x, float y, float z, float giro, long seed) {
 		super(x, y, z);
@@ -49,28 +51,26 @@ public class PredioUnivali extends Object3D {
 		frenteX = Math.round(Math.sin(giro));
 		frenteZ = Math.round(Math.cos(giro));
 		random = new Random(seed);
+		andar = new AndarUnivali(seed);
 		montarJanelas();
 		List<Integer> acesas = acesas();
 		janelaPiscando = acesas.isEmpty() ? -1 : acesas.get(random.nextInt(acesas.size()));
-		janelaProfessor = sortearJanelaProfessor();
-		tempoProfessor = 8 + random.nextFloat() * 7;
+		janelaVulto = sortearJanelaVulto();
+		tempoVulto = 8 + random.nextFloat() * 7;
 	}
 
-	/**
-	 * O prédio para a Univali da fase: a frente virada para quem chega pela trilha (a direção
-	 * do penúltimo ponto da trilha até o último, invertida e arredondada para um dos 4 lados),
-	 * o centro recuado 10 m atrás do fim da trilha.
-	 */
-	public static PredioUnivali naChegada(Ponto univali, List<Ponto> trilha, float y, long seed) {
-		float dx = 0, dz = 1;
-		if (trilha.size() >= 2) {
-			Ponto a = trilha.get(Math.max(0, trilha.size() - 6)), b = trilha.get(trilha.size() - 1);
-			dx = a.x() - b.x();
-			dz = a.z() - b.z(); // do prédio para quem chega
-		}
-		float giro = (float) (Math.round(Math.atan2(dx, dz) / (Math.PI / 2)) * (Math.PI / 2));
+	/** O giro que deixa a frente virada para o centro do mapa (arredondado para um dos 4 lados). */
+	public static float giroParaOCentro(Ponto univali, float tamanhoMapa) {
+		float dx = tamanhoMapa / 2 - univali.x(), dz = tamanhoMapa / 2 - univali.z();
+		if (Math.abs(dx) < 1e-3f && Math.abs(dz) < 1e-3f) dz = 1;
+		return (float) (Math.round(Math.atan2(dx, dz) / (Math.PI / 2)) * (Math.PI / 2));
+	}
+
+	/** O ponto na frente da porta, do lado de fora: de onde saem as trilhas para a floresta. */
+	public static Ponto saida(Ponto univali, float giro) {
 		float fx = Math.round(Math.sin(giro)), fz = Math.round(Math.cos(giro));
-		return new PredioUnivali(univali.x() - fx * RECUO, y, univali.z() - fz * RECUO, giro, seed);
+		float d = PROFUNDIDADE / 2 + 6;
+		return new Ponto(univali.x() + fx * d, univali.z() + fz * d);
 	}
 
 	/** Janelas nas 4 fachadas, em 3 andares; na frente, o térreo fica livre perto da porta. ~45% acesas. */
@@ -78,7 +78,7 @@ public class PredioUnivali extends Object3D {
 		float meiaL = LARGURA / 2, meiaP = PROFUNDIDADE / 2, saliencia = 0.06f;
 		for (float y : ANDARES) {
 			for (float x = -meiaL + 2.5f; x <= meiaL - 2.5f; x += 4.2f) {
-				if (!(y == ANDARES[0] && Math.abs(x) < 5)) {
+				if (!(y == ANDARES[0] && Math.abs(x) < 7)) {
 					janelas.add(new Janela(x, y, meiaP + saliencia, 0, 1, random.nextFloat() < 0.45f));
 				}
 				janelas.add(new Janela(x, y, -meiaP - saliencia, 0, -1, random.nextFloat() < 0.45f));
@@ -98,26 +98,27 @@ public class PredioUnivali extends Object3D {
 		return lista;
 	}
 
-	/** Uma janela acesa qualquer, de frente ou de trás (as maiores fachadas), que não a que pisca. */
-	private int sortearJanelaProfessor() {
+	/** Uma janela acesa dos andares de cima, de frente ou de trás, que não a que pisca. */
+	private int sortearJanelaVulto() {
 		List<Integer> candidatas = new ArrayList<>();
 		for (int i : acesas()) {
-			if (i != janelaPiscando && janelas.get(i).nz() != 0) candidatas.add(i);
+			Janela j = janelas.get(i);
+			if (i != janelaPiscando && j.nz() != 0 && j.y() > ANDARES[0]) candidatas.add(i);
 		}
 		return candidatas.isEmpty() ? -1 : candidatas.get(random.nextInt(candidatas.size()));
 	}
 
-	/** O professor some de vez em quando (1,5 s) e volta noutra janela; fica 8 a 15 s em cada uma. */
+	/** O vulto some de vez em quando (1,5 s) e volta noutra janela; fica 8 a 15 s em cada uma. */
 	@Override
 	public void SimulaSe(long diftime) {
-		tempoProfessor -= diftime / 1000f;
-		if (tempoProfessor <= 0) {
-			if (janelaProfessor >= 0) {
-				janelaProfessor = -1;           // sumiu
-				tempoProfessor = 1.5f;
+		tempoVulto -= diftime / 1000f;
+		if (tempoVulto <= 0) {
+			if (janelaVulto >= 0) {
+				janelaVulto = -1;
+				tempoVulto = 1.5f;
 			} else {
-				janelaProfessor = sortearJanelaProfessor(); // apareceu noutra janela
-				tempoProfessor = 8 + random.nextFloat() * 7;
+				janelaVulto = sortearJanelaVulto();
+				tempoVulto = 8 + random.nextFloat() * 7;
 			}
 		}
 	}
@@ -130,23 +131,145 @@ public class PredioUnivali extends Object3D {
 		return new float[] { x + lx * frenteZ + lz * frenteX, y + ly, z - lx * frenteX + lz * frenteZ };
 	}
 
-	/** O retângulo das paredes no chão (para a colisão). */
-	public GradeColisao.Retangulo retangulo() {
-		float meiaX = frenteZ != 0 ? LARGURA / 2 : PROFUNDIDADE / 2;
-		float meiaZ = frenteZ != 0 ? PROFUNDIDADE / 2 : LARGURA / 2;
-		return new GradeColisao.Retangulo(x - meiaX, z - meiaZ, x + meiaX, z + meiaZ);
+	/** Um retângulo do modelo levado ao mundo (com o giro de 90° em 90°, continua alinhado aos eixos). */
+	public GradeColisao.Retangulo noMundo(AndarUnivali.Caixa c) {
+		float[] a = noMundo(c.xMin(), 0, c.zMin()), b = noMundo(c.xMax(), 0, c.zMax());
+		return new GradeColisao.Retangulo(Math.min(a[0], b[0]), Math.min(a[2], b[2]), Math.max(a[0], b[0]),
+				Math.max(a[2], b[2]));
 	}
 
-	/** O meio da porta, no chão. */
+	/** O retângulo do prédio inteiro no chão (a zona segura e o aplainamento usam este). */
+	public GradeColisao.Retangulo retangulo() {
+		return noMundo(new AndarUnivali.Caixa(-LARGURA / 2, -PROFUNDIDADE / 2, LARGURA / 2, PROFUNDIDADE / 2));
+	}
+
+	/**
+	 * As paredes no modelo: a casca (fundos, laterais e a frente com o vão da porta), as
+	 * paredes internas (corredor, saguão e salas), os móveis e as portas que nunca abrem.
+	 */
+	public List<AndarUnivali.Caixa> paredesNoModelo() {
+		float L = LARGURA / 2, P = PROFUNDIDADE / 2, e = ESPESSURA, vao = AndarUnivali.VAO_ENTRADA / 2;
+		List<AndarUnivali.Caixa> lista = new ArrayList<>();
+		lista.add(new AndarUnivali.Caixa(-L, -P, L, -P + e));            // fundos
+		lista.add(new AndarUnivali.Caixa(-L, -P, -L + e, P));            // esquerda
+		lista.add(new AndarUnivali.Caixa(L - e, -P, L, P));              // direita
+		lista.add(new AndarUnivali.Caixa(-L, P - e, -vao, P));           // frente, à esquerda da porta
+		lista.add(new AndarUnivali.Caixa(vao, P - e, L, P));             // frente, à direita da porta
+		lista.addAll(andar.paredes());
+		lista.addAll(moveis());
+		for (AndarUnivali.Sala sala : andar.salas()) {
+			if (sala.trancada() && sala.tipo() != AndarUnivali.Tipo.PROFESSORES) lista.add(andar.porta(sala)); // nunca abrem
+		}
+		return lista;
+	}
+
+	/** Os móveis que o jogador não atravessa: a mesa do professor, o balcão do saguão e as fileiras de carteiras. */
+	public List<AndarUnivali.Caixa> moveis() {
+		List<AndarUnivali.Caixa> lista = new ArrayList<>();
+		lista.add(mesaEProfessor());
+		lista.add(new AndarUnivali.Caixa(-3, 8.6f, 3, 9.4f)); // o balcão de atendimento
+		for (AndarUnivali.Sala sala : andar.salas()) {
+			if (sala.tipo() != AndarUnivali.Tipo.AULA) continue;
+			List<float[]> c = AndarUnivali.carteiras(sala);
+			for (int fila = 0; fila < 3; fila++) { // cada fileira de 4 carteiras é um bloco só
+				float[] a = c.get(fila * 4), b = c.get(fila * 4 + 3);
+				lista.add(new AndarUnivali.Caixa(a[0] - 0.35f, a[1] - 0.3f, b[0] + 0.35f, b[1] + 0.3f));
+			}
+		}
+		return lista;
+	}
+
+	/** A mesa com o professor e a cadeira (no espaço dele: x de -0,85 a 0,85, z de -0,35 a 1,35), no modelo. */
+	private AndarUnivali.Caixa mesaEProfessor() {
+		float[] p = professorNoModelo();
+		float dx = (float) Math.sin(p[2]), dz = (float) Math.cos(p[2]); // para onde ele olha (um eixo)
+		float[][] cantos = { { -0.85f, -0.35f }, { 0.85f, -0.35f }, { -0.85f, 1.35f }, { 0.85f, 1.35f } };
+		float xMin = Float.MAX_VALUE, zMin = Float.MAX_VALUE, xMax = -Float.MAX_VALUE, zMax = -Float.MAX_VALUE;
+		for (float[] c : cantos) {
+			// lado (x do professor) e frente (z do professor) levados ao modelo do prédio
+			float x = p[0] + c[0] * dz + c[1] * dx, z = p[1] - c[0] * dx + c[1] * dz;
+			xMin = Math.min(xMin, x);
+			xMax = Math.max(xMax, x);
+			zMin = Math.min(zMin, z);
+			zMax = Math.max(zMax, z);
+		}
+		return new AndarUnivali.Caixa(xMin, zMin, xMax, zMax);
+	}
+
+	public List<GradeColisao.Retangulo> paredes() {
+		List<GradeColisao.Retangulo> lista = new ArrayList<>();
+		for (AndarUnivali.Caixa c : paredesNoModelo()) lista.add(noMundo(c));
+		return lista;
+	}
+
+	/** O vão da porta de entrada (bloqueado enquanto ela está trancada). */
+	public AndarUnivali.Caixa portaEntradaNoModelo() {
+		float P = PROFUNDIDADE / 2, vao = AndarUnivali.VAO_ENTRADA / 2;
+		return new AndarUnivali.Caixa(-vao, P - ESPESSURA, vao, P);
+	}
+
+	public GradeColisao.Retangulo portaEntrada() {
+		return noMundo(portaEntradaNoModelo());
+	}
+
+	public GradeColisao.Retangulo portaProfessor() {
+		return noMundo(andar.portaProfessor());
+	}
+
+	/** O ponto do modelo onde o jogador começa: o meio da sala de início. */
+	public float[] inicioJogador() {
+		float[] c = andar.inicio().centro();
+		return noMundo(c[0], 0, c[1]);
+	}
+
+	/** O professor, sentado no fundo da Sala dos Professores, de frente para a porta: {x, z, giro}, no modelo. */
+	public float[] professorNoModelo() {
+		AndarUnivali.Sala s = andar.professores();
+		float[] c = s.centro(), d = s.direcaoDaPorta();
+		float recuo = Math.abs(s.zMax() - s.zMin()) / 2 - 1.6f;
+		return new float[] { c[0] - d[0] * recuo, c[1] - d[1] * recuo, (float) Math.atan2(d[0], d[1]) };
+	}
+
+	/** O crachá, na mesa perto da lousa da sala dele (no fundo dela, longe da porta): {x, z} no modelo. */
+	public float[] chaveNoModelo() {
+		AndarUnivali.Sala s = andar.cracha();
+		float[] c = s.centro(), d = s.direcaoDaPorta();
+		float recuo = Math.abs(s.zMax() - s.zMin()) / 2 - 2.2f;
+		return new float[] { c[0] - d[0] * recuo, c[1] - d[1] * recuo };
+	}
+
+	/** O jogador (os pés em px, pz) está perto o bastante de um ponto do modelo para usar algo ali? */
+	public boolean perto(float px, float pz, float[] noModelo) {
+		float[] w = noMundo(noModelo[0], 0, noModelo[1]);
+		float dx = px - w[0], dz = pz - w[2];
+		return dx * dx + dz * dz <= ALCANCE_USO * ALCANCE_USO;
+	}
+
+	/** O centro do vão da porta de entrada e da sala do professor, no modelo. */
+	public float[] centroPortaEntrada() {
+		return new float[] { 0, PROFUNDIDADE / 2 };
+	}
+
+	public float[] centroPortaProfessor() {
+		return andar.professores().porta();
+	}
+
+	/** A sala trancada para sempre cuja porta está ao alcance (ou null). */
+	public AndarUnivali.Sala salaTrancadaPerto(float px, float pz) {
+		for (AndarUnivali.Sala s : andar.salas()) {
+			if (s.trancada() && s.tipo() != AndarUnivali.Tipo.PROFESSORES && perto(px, pz, s.porta())) return s;
+		}
+		return null;
+	}
+
+	/** O ponto está dentro do prédio? */
+	public boolean dentro(float px, float pz) {
+		return retangulo().distancia(px, pz) == 0;
+	}
+
+	/** O meio da porta, no chão (do lado de fora). */
 	public float[] porta() {
 		return noMundo(0, 0, PROFUNDIDADE / 2);
-	}
-
-	/** O jogador (os pés em px, pz) está na área da entrega, na frente da porta? */
-	public boolean naEntrega(float px, float pz) {
-		float[] centro = noMundo(0, 0, PROFUNDIDADE / 2 + 2);
-		float dx = px - centro[0], dz = pz - centro[2];
-		return dx * dx + dz * dz <= RAIO_ENTREGA * RAIO_ENTREGA;
 	}
 
 	/** Os dois postes de luz, 4 m na frente da fachada e 6 m para cada lado da porta: {x, z} no mundo. */
@@ -163,9 +286,9 @@ public class PredioUnivali extends Object3D {
 		return janelaPiscando;
 	}
 
-	/** A janela onde o professor está agora (-1 = ele sumiu por um instante). */
-	public int janelaProfessor() {
-		return janelaProfessor;
+	/** A janela onde o vulto está agora (-1 = ele sumiu por um instante). */
+	public int janelaVulto() {
+		return janelaVulto;
 	}
 
 	public float frenteX() {
