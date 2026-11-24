@@ -29,3 +29,4 @@ risada_professor.ogg veio de teacher-laugh.mp3: sem o silêncio do começo e do 
 maquina_tecla_1..8.ogg: as 8 batidas mais fortes recortadas de type-writer.mp3 (100 ms cada). O espaço, o
 sininho com o retorno do carro e a folha continuam sintetizados (maquina_espaco/retorno/folha.ogg substituem).
 lampada_falhando.ogg: de flicker.mp3, só as rajadas (1,25 s a 3,6 s), mono (toca em 3D na lâmpada que falha).
+porta_abrindo.ogg: de door-opening.mp3, só o rangido (1,6 s a 4,4 s), mono (toca em 3D na porta).

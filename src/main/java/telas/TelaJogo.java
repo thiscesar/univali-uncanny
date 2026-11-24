@@ -173,6 +173,12 @@ public class TelaJogo implements Tela {
 	/** As lâmpadas da Univali falhando (cada uma no seu tempo, e às vezes todas juntas) e o som disso. */
 	private jogo.FalhasDeLuz falhasDeLuz;
 	private Efeito somLampada;
+	/** As portas de sala que abrem sozinhas (a primeira é a do início), a colisão de cada uma enquanto fechada e o rangido. */
+	private jogo.PortasSozinhas portasSozinhas;
+	private final List<mundo.GradeColisao.Retangulo> colisaoPortas = new java.util.ArrayList<>();
+	private Efeito somPorta;
+	/** Com as 3 provas, a Univali deixa de ser segura: ele vem logo na primeira entrada. */
+	private boolean voltouComAsProvas = false;
 	private int ultimaFalaEntrega = -1;
 	/** audio/risada.ogg (null = sem o arquivo: a risada vira galho). */
 	private Efeito somRisada;
@@ -315,6 +321,16 @@ public class TelaJogo implements Tela {
 			pisca[i] = lampadas.get(i).estado() == fase.AndarUnivali.Lampada.Estado.PISCANDO;
 		}
 		falhasDeLuz = new jogo.FalhasDeLuz(funciona, pisca, mundo.seed + 11);
+		somPorta = efeitoOuSintetizado("audio/porta_abrindo.ogg", () -> Sintetizador.estalos(44100, new int[] { 0, 400, 900 },
+				new double[] { 0.6, 0.4, 0.8 }));
+		List<float[]> centros = new java.util.ArrayList<>();
+		for (fase.AndarUnivali.Sala s : mundo.predio.andar.portasQueAbremSozinhas()) {
+			centros.add(s.porta());
+			mundo.GradeColisao.Retangulo r = mundo.predio.noMundo(mundo.predio.andar.porta(s));
+			colisaoPortas.add(r);
+			mundo.colisao.adicionarRetangulo(r); // fechada: ninguém passa
+		}
+		portasSozinhas = new jogo.PortasSozinhas(centros);
 		sustos = new SustosFalsos(mundo.seed + 5);
 		desenhoSilhueta = new DesenhoSilhueta();
 		desenhoFantasma = new DesenhoFantasma();
@@ -386,6 +402,7 @@ public class TelaJogo implements Tela {
 			@Override
 			public void surgiu(DragonKnight m) {
 				tremor = 1;
+				if (mundo.predio.dentro(m.x, m.z)) falhasDeLuz.forcarFalhaGeral(); // dentro da Univali, as luzes falham
 				gerenciador.audio().musica().tocar(MUSICA_MONSTRO, true, segundosMetal);
 				gerenciador.audio().musica().fadeIn(ENTRADA_METAL_MS);
 				metalRestante = Float.MAX_VALUE;
@@ -717,6 +734,19 @@ public class TelaJogo implements Tela {
 		for (int i = 0; i < falhasDeLuz.quantidade(); i++) desenhoPredio.brilhoLampadas[i] = falhasDeLuz.brilho(i);
 	}
 
+	/** As portas que abrem sozinhas: quando uma começa a abrir, a colisão sai e o rangido sai dela. */
+	private void atualizarPortas(float dt) {
+		float[] m = mundo.predio.paraModelo(jogador.x, jogador.z);
+		List<fase.AndarUnivali.Sala> salas = mundo.predio.andar.portasQueAbremSozinhas();
+		for (int i : portasSozinhas.atualizar(dt, tempo, m[0], m[1])) {
+			mundo.colisao.removerRetangulo(colisaoPortas.get(i));
+			float[] c = salas.get(i).porta();
+			float[] w = mundo.predio.noMundo(c[0], 1.2f, c[1]);
+			gerenciador.audio().tocar3D(somPorta, w[0], w[1], w[2], 1f, false, 3f);
+		}
+		for (int i = 0; i < portasSozinhas.quantidade(); i++) desenhoPredio.anguloPortas[i] = portasSozinhas.angulo(i);
+	}
+
 	/** A lâmpada acesa mais perto do jogador (-1 se nenhuma). */
 	private int lampadaMaisPerto() {
 		List<fase.AndarUnivali.Lampada> lampadas = mundo.predio.andar.lampadas();
@@ -751,6 +781,10 @@ public class TelaJogo implements Tela {
 
 	/** Sem as 3 provas, ele nega (e a porta da frente abre na primeira vez); com as 3, a cena final. */
 	private void falarComProfessor() {
+		if (partida.todasColetadas() && monstro.estado() != DragonKnight.Estado.AUSENTE) {
+			mostrarMensagem("Agora não! Ele está aqui.", 2f); // primeiro, sobreviver
+			return;
+		}
 		if (partida.todasColetadas()) {
 			tempoEntrega = 0;
 			lanterna.definirPanico(0);
@@ -883,6 +917,7 @@ public class TelaJogo implements Tela {
 		mundo.predio.SimulaSe(Math.round(dt * 1000));
 		desenhoPredio.atualizar(dt, jogador.x, jogador.z);
 		atualizarLuzes(dt);
+		atualizarPortas(dt);
 		// depois da negativa, quando o jogador sai da sala do professor, ele ri (lá da mesa)
 		fase.AndarUnivali.Sala sala = mundo.predio.andar.professores();
 		float[] noModelo = mundo.predio.paraModelo(jogador.x, jogador.z);
@@ -908,6 +943,12 @@ public class TelaJogo implements Tela {
 			}
 		}
 		// o Dragon Knight acorda na primeira vez que o jogador põe os pés fora do prédio
+		// com as 3 provas, a Univali deixa de ser segura: ele pode surgir lá dentro, e vem logo na entrada
+		if (partida.todasColetadas() && !voltouComAsProvas && mundo.predio.dentro(jogador.x, jogador.z)) {
+			voltouComAsProvas = true;
+			monstro.zonaSegura = null;
+			monstro.apressarProximaAparicao(6);
+		}
 		if (!monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z)) {
 			monstro.ativo = true;
 			tutorial.registrar(Tutorial.Acao.SAIU);

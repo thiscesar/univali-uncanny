@@ -87,4 +87,16 @@ class AndarUnivaliTest {
 			assertTrue(c.zMin() >= AndarUnivali.Z0 - 0.2f && c.zMax() <= -AndarUnivali.Z0 + 0.2f);
 		}
 	}
+
+	@Test
+	void portasQueAbremSozinhasComecamPelaDoInicioESoEmSalasAbertas() {
+		for (long seed = 1; seed <= 30; seed++) {
+			AndarUnivali a = new AndarUnivali(seed);
+			List<Sala> portas = a.portasQueAbremSozinhas();
+			assertEquals(4, portas.size());
+			assertSame(a.inicio(), portas.get(0));
+			assertEquals(4, portas.stream().distinct().count());
+			assertTrue(portas.stream().noneMatch(Sala::trancada), "seed " + seed);
+		}
+	}
 }

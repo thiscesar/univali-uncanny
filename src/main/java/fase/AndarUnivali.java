@@ -66,6 +66,8 @@ public class AndarUnivali {
 
 	private final List<Sala> salas = new ArrayList<>();
 	private final Sala professores, cracha, inicio;
+	/** As salas com porta fechada que abre sozinha: a do início (sempre a primeira) e mais três. */
+	private final List<Sala> portasSozinhas = new ArrayList<>();
 
 	public AndarUnivali(long seed) {
 		Random random = new Random(seed * 3 + 1);
@@ -141,6 +143,20 @@ public class AndarUnivali {
 				lampadas.add(new Lampada(c[0], c[1] + dz, e));
 			}
 		}
+
+		// as portas que abrem sozinhas: a da sala do início e mais três salas abertas (sorteadas)
+		portasSozinhas.add(inicio);
+		List<Sala> outras = new ArrayList<>();
+		for (Sala s : salas) {
+			if (!s.trancada() && s != inicio) outras.add(s);
+		}
+		Collections.shuffle(outras, random);
+		portasSozinhas.addAll(outras.subList(0, Math.min(3, outras.size())));
+	}
+
+	/** As salas cuja porta começa fechada e abre sozinha (a primeira é a do início). */
+	public List<Sala> portasQueAbremSozinhas() {
+		return portasSozinhas;
 	}
 
 	private static Lampada.Estado sortearEstado(Random random) {

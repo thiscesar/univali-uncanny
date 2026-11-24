@@ -181,8 +181,9 @@ public class DragonKnight extends Object3D {
 	/**
 	 * Sorteia até 30 lugares em volta do jogador (8 a 15 m, qualquer ângulo, inclusive atrás)
 	 * e devolve o primeiro que serve: dentro do mapa, longe da borda, em terra firme, sem
-	 * declive forte, longe da zona segura e com linha livre (nenhum tronco a menos de 1,2 m
-	 * da reta) até o jogador.
+	 * declive forte, longe da zona segura, sem nada no lugar e com linha livre (nenhum tronco,
+	 * parede ou móvel a menos de 1,2 m da reta) até o jogador. Sem zona segura (na volta com as
+	 * provas), isso vale dentro da Univali também: ele surge no corredor ou numa sala à vista.
 	 */
 	float[] sortearLugar() {
 		for (int i = 0; i < Regras.TENTATIVAS_APARICAO; i++) {
@@ -203,6 +204,7 @@ public class DragonKnight extends Object3D {
 		if (chao.ehAgua(x, z)) return false;
 		if (chao.anguloEm(x, z) > Jogador.DECLIVE_MAXIMO) return false;
 		if (zonaSegura != null && zonaSegura.distancia(x, z) < Regras.RAIO_ZONA_SEGURA) return false;
+		if (colisao.colide(x, z, 0.6f)) return false; // não surge dentro de um tronco, parede ou móvel
 		return colisao.linhaLivre(x, z, alvoX, alvoZ, Regras.FOLGA_LINHA_DE_VISAO);
 	}
 

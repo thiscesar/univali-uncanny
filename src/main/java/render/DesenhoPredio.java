@@ -60,6 +60,9 @@ public class DesenhoPredio {
 	public final float[] brilhoLampadas;
 	private final MalhaCaixas portasTrancadas, madeira, metalInterno, lousas, monitores, telas, louca, armarios, murais;
 	private final MalhaCaixas logoSaguao;
+	/** A folha de uma porta de sala (dobradiça em x = 0, abre girando em volta dela) e o ângulo de cada porta que abre sozinha. */
+	private final MalhaCaixas folhaPorta;
+	public final float[] anguloPortas;
 	/** A frase escrita com sangue na parede do fim do corredor, do lado da sala do professor. */
 	private final MalhaCaixas escritaSangue;
 	private final List<MalhaCaixas> placas = new ArrayList<>();
@@ -170,6 +173,9 @@ public class DesenhoPredio {
 			}
 		}
 		portasTrancadas.enviar();
+		// a folha das portas que abrem sozinhas: do tamanho do vão, com a dobradiça na origem
+		folhaPorta = new MalhaCaixas().caixa(0, AndarUnivali.VAO_PORTA, 0, 2.3f, -0.03f, 0.03f, TUDO, TUDO, TUDO).enviar();
+		anguloPortas = new float[p.andar.portasQueAbremSozinhas().size()];
 
 		// os móveis de cada sala, conforme o tipo
 		madeira = new MalhaCaixas();
@@ -454,6 +460,20 @@ public class DesenhoPredio {
 		if (!portaEntradaAberta) desenhar(p, portaEntrada, "predio: porta", DesenhoPredio::porta, 0.05f, false);
 		if (!portaProfessorAberta) desenhar(p, portaProfessor, "predio: porta de madeira", DesenhoPredio::portaMadeira, 0f, false);
 		desenhar(p, portasTrancadas, "predio: porta de madeira", DesenhoPredio::portaMadeira, 0f, false);
+		// as portas que abrem sozinhas: cada uma girada em volta da dobradiça (no canto do vão), para dentro da sala
+		java.util.List<AndarUnivali.Sala> sozinhas = predio.andar.portasQueAbremSozinhas();
+		for (int i = 0; i < sozinhas.size(); i++) {
+			AndarUnivali.Sala s = sozinhas.get(i);
+			AndarUnivali.Caixa vao = predio.andar.porta(s);
+			Matrix4f m = new Matrix4f(doPredio);
+			m.translate(new Vector3f(vao.xMin(), 0, (vao.zMin() + vao.zMax()) / 2));
+			// girar +x para +z pede ângulo negativo (em y, +x vai para (cos, 0, -sen)); a sala da frente fica em +z
+			float ang = (float) Math.toRadians(anguloPortas[i]);
+			m.rotate(s.naFrente() ? -ang : ang, new Vector3f(0, 1, 0));
+			modelo(p, m);
+			desenhar(p, folhaPorta, "predio: porta de madeira", DesenhoPredio::portaMadeira, 0f, false);
+		}
+		modelo(p, doPredio);
 		desenhar(p, madeira, "predio: madeira", DesenhoPredio::madeira, 0f, false);
 		desenhar(p, metalInterno, "predio: metal", () -> liso(new Color(40, 42, 45)), 0f, false);
 		desenhar(p, lousas, "predio: lousa", DesenhoPredio::lousa, 0.03f, false);
@@ -529,7 +549,7 @@ public class DesenhoPredio {
 
 	public void liberar() {
 		for (MalhaCaixas m : new MalhaCaixas[] { casca, concreto, letreiro, metal, lampadasPoste, acesas, apagadas, piscando,
-				vulto, pintura, piso, forro, saida, escritaSangue, portaEntrada, portaProfessor, portasTrancadas,
+				vulto, pintura, piso, forro, saida, escritaSangue, folhaPorta, portaEntrada, portaProfessor, portasTrancadas,
 				madeira, metalInterno, lousas, monitores, telas, louca, armarios, murais, logoSaguao, cracha, mesa, papeis,
 				luminaria, cadeira, corpoProfessor, cabecaProfessor }) {
 			m.liberar();
