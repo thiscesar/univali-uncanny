@@ -17,7 +17,8 @@ import render.Camera;
  *
  * Regras do movimento:
  *  - anda a 3,5 m/s e corre a 6 m/s, com aceleração e frenagem suaves;
- *  - correr gasta estamina (5 s de corrida); ela volta em 8 s depois de 1 s sem correr;
+ *  - corre sem limite (estaminaInfinita); com ela desligada, correr gasta estamina (5 s de
+ *    corrida) e ela volta em 8 s depois de 1 s sem correr;
  *  - não entra em água com mais de 0,4 m de fundo nem sobe declives acima de 40 graus:
  *    nesses casos tenta andar só em x ou só em z, e assim desliza ao longo do obstáculo;
  *  - fica a pelo menos 10 m da borda do mapa;
@@ -37,6 +38,12 @@ public class Jogador extends Object3D {
 	public static final float PROFUNDIDADE_MAXIMA = 0.4f;  // m de água
 	public static final float DECLIVE_MAXIMO = 40f;        // graus
 	public static final float MARGEM_BORDA = 10f;          // m
+
+	/**
+	 * Corrida sem limite: a estamina fica sempre cheia. Com false, volta a regra da estamina
+	 * abaixo (5 s de corrida, recuperação em 8 s, respiração ofegante quando acaba).
+	 */
+	static boolean estaminaInfinita = true;
 
 	public static final float DURACAO_ESTAMINA = 5f;       // s de corrida com estamina cheia
 	public static final float RECUPERACAO_ESTAMINA = 8f;   // s para encher de novo
@@ -123,6 +130,11 @@ public class Jogador extends Object3D {
 
 	private void atualizarEstamina(float dt) {
 		boolean movendo = comandoFrente != 0 || comandoLado != 0;
+		if (estaminaInfinita) {
+			correndo = querCorrer && movendo;
+			estamina = 1;
+			return;
+		}
 		if (esgotado && estamina >= ESTAMINA_PARA_VOLTAR) {
 			esgotado = false;
 		}

@@ -65,7 +65,28 @@ class JogadorTest {
 	}
 
 	@Test
+	void correSemLimiteComEstaminaInfinita() {
+		ConsultaAltura c = chao(plano(100));
+		Jogador j = new Jogador(50, 90, c, new GradeColisao(100));
+		j.girar((float) Math.PI / 2, 0);
+		j.comandar(1, 0, true);
+		simular(j, 20); // bem mais que os 5 s da estamina antiga (bate na borda, mas segue "correndo")
+		assertTrue(j.correndo());
+		assertEquals(1, j.estamina(), 0.001);
+		assertFalse(j.ofegante());
+	}
+
+	@Test
 	void correrGastaEstaminaEDepoisElaVolta() {
+		Jogador.estaminaInfinita = false; // a regra antiga continua no código: testa ela também
+		try {
+			correrGastaEstaminaEDepoisElaVoltaSemInfinita();
+		} finally {
+			Jogador.estaminaInfinita = true;
+		}
+	}
+
+	private void correrGastaEstaminaEDepoisElaVoltaSemInfinita() {
 		ConsultaAltura c = chao(plano(100));
 		Jogador j = new Jogador(50, 90, c, new GradeColisao(100));
 		j.girar((float) Math.PI / 2, 0); // olha para +x: espaço para correr
