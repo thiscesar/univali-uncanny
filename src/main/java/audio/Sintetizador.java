@@ -557,6 +557,24 @@ public final class Sintetizador {
 	}
 
 	/**
+	 * A pisada do Jubilado: um baque grave e pesado (algo grande pisando) com folhas secas e um
+	 * galhinho estalando por cima. 300 ms.
+	 */
+	public static short[] pisadaPesada(int taxa, long semente) {
+		double[] s = new double[taxa * 300 / 1000];
+		Random r = new Random(semente);
+		baque(s, taxa, 58, 1.0, 16);
+		double[] folhas = filtro(1800, 1.2, taxa), mf = new double[4];
+		for (int i = 0; i < s.length; i++) {
+			double t = (double) i / taxa;
+			s[i] += aplicar(folhas, mf, r.nextDouble() * 2 - 1) * Math.exp(-t * 30) * 1.4;
+		}
+		estalo(s, taxa, taxa * 25 / 1000, 0.5, 0.4, r);
+		esmaecerFim(s, taxa, 30);
+		return normalizar(s, 0.9);
+	}
+
+	/**
 	 * Passar de um botão para outro no menu: um "toc" curto e abafado, como bater de leve numa
 	 * madeira. Uma nota que some rápido, um estalinho de ruído no ataque e um corpo grave. 90 ms.
 	 */

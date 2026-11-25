@@ -25,7 +25,7 @@ import obj.Object3D;
  * Herda de Object3D (do projeto original): x, y, z, vivo, life e levaDano são reaproveitados.
  * A frente do modelo MD2 é o eixo +x; "guinada" gira o modelo em volta do eixo y.
  */
-public class DragonKnight extends Object3D {
+public class DragonKnight extends Object3D implements Atingivel {
 
 	public enum Estado { AUSENTE, SURGINDO, ENCARANDO, MORRENDO, ATACANDO }
 
@@ -241,6 +241,7 @@ public class DragonKnight extends Object3D {
 	}
 
 	/** Leva dano (só enquanto está surgindo ou encarando). A contagem continua correndo. */
+	@Override
 	public void receberDano(float valor) {
 		if (estado != Estado.SURGINDO && estado != Estado.ENCARANDO) {
 			return;
@@ -327,6 +328,7 @@ public class DragonKnight extends Object3D {
 	 * fica alinhada aos eixos; lá vale o teste das "fatias" (slabs): para cada eixo, o trecho do
 	 * raio entre os dois planos da caixa; o raio acerta se os três trechos se cruzam.
 	 */
+	@Override
 	public float intersectaRaio(float[] origem, float[] direcao) {
 		if (estado != Estado.SURGINDO && estado != Estado.ENCARANDO) {
 			return -1;

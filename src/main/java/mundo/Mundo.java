@@ -29,6 +29,9 @@ public class Mundo {
 	public final Arvores3D arvores3d;
 	/** O Dragon Knight já na placa de vídeo (null sem o MD2: o jogo desenha o substituto). */
 	public final PersonagemMd2 monstro;
+	/** O Jubilado já na placa de vídeo (null sem o MD2: substituto) e a grade por onde ele anda (A*). */
+	public final PersonagemMd2 jubilado;
+	public final grafos.GradeCaminhada caminhada;
 	/** A fase decidida pelo AG da fase: início, Univali, provas, caixas, trilhas, placas e o fitness. */
 	public final GeradorFase.Fase fase;
 	/** Onde o jogador começa (x, z): dentro da Univali, numa sala de aula da frente. */
@@ -49,8 +52,9 @@ public class Mundo {
 	public final entidades.PredioUnivali predio;
 
 	public Mundo(long seed, PerfilTerreno perfil, Mapa3D terreno, ConsultaAltura chao, GradeColisao colisao,
-			Arvores arvores, Arvores3D arvores3d, PersonagemMd2 monstro, GeradorFase.Fase fase, Pedras pedras,
-			int texturaDetalhes, entidades.PredioUnivali predio) {
+			Arvores arvores, Arvores3D arvores3d, PersonagemMd2 monstro, PersonagemMd2 jubilado,
+			grafos.GradeCaminhada caminhada, GeradorFase.Fase fase, Pedras pedras, int texturaDetalhes,
+			entidades.PredioUnivali predio) {
 		this.seed = seed;
 		this.perfil = perfil;
 		this.terreno = terreno;
@@ -59,6 +63,8 @@ public class Mundo {
 		this.arvores = arvores;
 		this.arvores3d = arvores3d;
 		this.monstro = monstro;
+		this.jubilado = jubilado;
+		this.caminhada = caminhada;
 		this.fase = fase;
 		float[] dentro = predio.inicioJogador();
 		this.inicio = new float[] { dentro[0], dentro[2] };
@@ -91,6 +97,7 @@ public class Mundo {
 		if (arvores != null) arvores.liberar();
 		if (arvores3d != null) arvores3d.liberar();
 		if (monstro != null) monstro.liberar();
+		if (jubilado != null) jubilado.liberar();
 		if (pedras != null) pedras.liberar();
 		org.lwjgl.opengl.GL11.glDeleteTextures(texturaDetalhes);
 	}

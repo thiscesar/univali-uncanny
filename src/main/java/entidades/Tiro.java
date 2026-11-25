@@ -49,25 +49,46 @@ public final class Tiro {
 	/** Dispara os bagos, aplica o dano no monstro e devolve o que aconteceu. */
 	public static Resultado disparar(float[] origem, float[] frente, float[] direita, float[] cima, DragonKnight monstro,
 			GradeColisao colisao, ConsultaAltura chao, Random random) {
+		return disparar(origem, frente, direita, cima, monstro != null ? List.of(monstro) : List.of(), colisao, chao, random);
+	}
+
+	/**
+	 * O mesmo, com vários alvos: cada bago fica no primeiro que encontrar (o mais perto), se ele
+	 * vier antes de qualquer tronco ou do chão. Cada alvo recebe o dano dos bagos que acertou.
+	 */
+	public static Resultado disparar(float[] origem, float[] frente, float[] direita, float[] cima,
+			List<? extends Atingivel> alvos, GradeColisao colisao, ConsultaAltura chao, Random random) {
 		List<Impacto> impactos = new ArrayList<>();
 		int acertos = 0;
+		int[] acertosPorAlvo = new int[alvos.size()];
 		for (int i = 0; i < Regras.BAGOS; i++) {
 			float[] d = direcaoBago(frente, direita, cima, random);
 			Impacto cenario = impactoNoCenario(origem, d, colisao, chao);
 			float distanciaCenario = cenario == null ? Regras.ALCANCE_TIRO : distancia(origem, cenario);
 
-			float distanciaMonstro = monstro != null ? monstro.intersectaRaio(origem, d) : -1;
-			if (distanciaMonstro >= 0 && distanciaMonstro <= distanciaCenario) {
-				// acertou o monstro antes de qualquer tronco ou do chão
+			int atingido = -1;
+			float distanciaMonstro = Float.MAX_VALUE;
+			for (int a = 0; a < alvos.size(); a++) {
+				float dist = alvos.get(a).intersectaRaio(origem, d);
+				if (dist >= 0 && dist < distanciaMonstro) {
+					distanciaMonstro = dist;
+					atingido = a;
+				}
+			}
+			if (atingido >= 0 && distanciaMonstro <= distanciaCenario) {
+				// acertou um monstro antes de qualquer tronco ou do chão
 				acertos++;
+				acertosPorAlvo[atingido]++;
 				impactos.add(new Impacto(Alvo.MONSTRO, origem[0] + d[0] * distanciaMonstro,
 						origem[1] + d[1] * distanciaMonstro, origem[2] + d[2] * distanciaMonstro));
 			} else if (cenario != null) {
 				impactos.add(cenario);
 			}
 		}
-		if (monstro != null && acertos > 0) {
-			monstro.receberDano(acertos * Regras.DANO_BAGO);
+		for (int a = 0; a < alvos.size(); a++) {
+			if (acertosPorAlvo[a] > 0) {
+				alvos.get(a).receberDano(acertosPorAlvo[a] * Regras.DANO_BAGO);
+			}
 		}
 		return new Resultado(acertos, impactos);
 	}

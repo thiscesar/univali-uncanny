@@ -87,7 +87,7 @@ class TiroTest {
 	void atirandoNoChaoOImpactoFicaNoChao() {
 		float[] baixo = { 0.6f, -0.8f, 0 };
 		Tiro.Resultado r = Tiro.disparar(new float[] { 50, 2.7f, 100 }, baixo, DIREITA, new float[] { 0.8f, 0.6f, 0 },
-				null, new GradeColisao(201), chao(), new Random(4));
+				(DragonKnight) null, new GradeColisao(201), chao(), new Random(4));
 		assertEquals(Regras.BAGOS, r.impactos().size());
 		for (Tiro.Impacto i : r.impactos()) {
 			assertEquals(Tiro.Alvo.CHAO, i.alvo());

@@ -20,6 +20,7 @@ lwjgl_util 2.9.1 (matrizes e vetores) · equipe LWJGL · BSD 3 cláusulas · lwj
 # Modelos
 Dragon Knight (MD2) · Magarnigal, 1998 · magarn.3dpalette.com
 Skin vermelha do Dragon Knight · Deranged · 3dpalette.com/deranged
+Jubilado: Ratamahatta (MD2), skin "dead" · Brian "EvilBastard" Collins, 1998 · uso não comercial, com crédito
 Formato MD2 · Quake II, id Software (marca registrada)
 Árvores 3D e pedras · geradas por código (gerador próprio em estilo PS1)
 Escopeta, prédio da Univali e professor · montados por código

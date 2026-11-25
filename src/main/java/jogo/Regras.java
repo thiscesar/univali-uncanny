@@ -50,6 +50,36 @@ public final class Regras {
 	/** Duração do susto em tela cheia antes da derrota, em segundos. */
 	public static final float DURACAO_SUSTO = 0.8f;
 
+	// ---------- o Jubilado (o monstro que anda pela floresta) ----------
+
+	/** Velocidades em m/s: vagando, indo ver um barulho e caçando (o jogador anda a 3,5 e corre a 6). */
+	public static final float JUBILADO_VAGANDO = 1.4f, JUBILADO_DESCONFIADO = 2.4f, JUBILADO_CACANDO = 5.2f;
+	/** Até onde ele enxerga, em metros: normal, com a lanterna ligada (a luz denuncia) e "sente" atrás de si. */
+	public static final float JUBILADO_VISAO = 16f, JUBILADO_VISAO_LANTERNA = 30f, JUBILADO_SENTE = 4f;
+	/** Metade do ângulo de visão, em graus (70 = enxerga 140° à frente). */
+	public static final float JUBILADO_ANGULO_VISAO = 70f;
+	/** Até onde ele ouve, em metros: o jogador correndo, andando e um tiro. */
+	public static final float JUBILADO_OUVE_CORRIDA = 28f, JUBILADO_OUVE_PASSOS = 7f, JUBILADO_OUVE_TIRO = 70f;
+	/** Segundos sem ver o jogador até desistir da caçada, e procurando no último lugar antes de voltar a vagar. */
+	public static final float JUBILADO_PERDE = 4f, JUBILADO_PROCURA = 7f;
+	/** A que distância ele pega o jogador (e a partida está perdida), em metros. */
+	public static final float JUBILADO_PEGA = 1.3f;
+	/** Segundos caído depois de levar um tiro (a escopeta não o mata: só derruba). */
+	public static final float JUBILADO_CAIDO = 12f;
+	/**
+	 * O "diretor": longe do jogador (mais que JUBILADO_LONGE metros, onde a neblina já o esconde),
+	 * ele se aproxima rápido; perto, volta a vagar devagar, rondando (a chance de cada destino ser
+	 * perto do jogador). Depois de uma caçada, um respiro em segundos, em que ele deixa o jogador em paz.
+	 */
+	public static final float JUBILADO_LONGE = 50f, JUBILADO_APROXIMANDO = 5.5f, JUBILADO_CHANCE_RONDAR = 0.75f,
+			JUBILADO_RESPIRO = 35f;
+	/** Rondando, a chance de o destino ser perto da prova que falta mais perto do jogador (uma emboscada). */
+	public static final float JUBILADO_CHANCE_EMBOSCADA = 0.35f;
+	/** No começo (depois que o jogador sai da Univali), segundos em que ele só vaga, sem vir atrás. */
+	public static final float JUBILADO_CARENCIA = 25f;
+	/** Distância mínima do jogador onde ele começa, e da Univali (ele não chega perto do prédio), em metros. */
+	public static final float JUBILADO_INICIO = 70f, JUBILADO_LONGE_UNIVALI = 12f;
+
 	// ---------- escopeta ----------
 
 	/** Bagos por tiro, dano de cada um e o espalhamento (ângulo entre o centro e a borda do cone). */

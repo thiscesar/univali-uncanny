@@ -25,6 +25,7 @@ import mundo.Arvores;
 import mundo.Arvores3D;
 import mundo.ConsultaAltura;
 import mundo.DistribuidorArvores;
+import grafos.GradeCaminhada;
 import mundo.GradeColisao;
 import mundo.DistribuidorPedras;
 import mundo.LeitorObj;
@@ -71,8 +72,9 @@ public class TelaCarregando implements Tela {
 	/** O que a thread de geração entrega: só dados, nada de OpenGL. */
 	private record DadosTerreno(int[][] alturas, ConsultaAltura chao, GradeColisao colisao,
 			List<DistribuidorArvores.Arvore> arvores, List<LeitorObj.ModeloObj> modelosArvores,
-			PersonagemMd2.Dados monstro, GeradorFase.Fase fase, List<DistribuidorPedras.Pedra> pedras,
-			List<LeitorObj.ModeloObj> modelosPedras, byte[] detalhes, PredioUnivali predio) {}
+			PersonagemMd2.Dados monstro, PersonagemMd2.Dados jubilado, GradeCaminhada caminhada, GeradorFase.Fase fase,
+			List<DistribuidorPedras.Pedra> pedras, List<LeitorObj.ModeloObj> modelosPedras, byte[] detalhes,
+			PredioUnivali predio) {}
 
 	/** Quantas etapas rodam na thread separada (as primeiras da lista de progresso). */
 	private static final int ETAPAS_NA_THREAD = 3;
@@ -266,8 +268,14 @@ public class TelaCarregando implements Tela {
 			List<LeitorObj.ModeloObj> modelos = Arvores3D.arquivosPresentes() ? Arvores3D.lerModelos() : null;
 			// o Dragon Knight (só leitura dos arquivos; null se o MD2 não estiver na pasta)
 			PersonagemMd2.Dados monstro = PersonagemMd2.ler(TelaJogo.PASTA_MONSTRO, TelaJogo.ALTURA_MONSTRO);
-			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, fase, pedras, modelosPedras, detalhes,
-					predio);
+			// o Jubilado: o modelo e a grade por onde ele anda (2 m por célula, sem a Univali e a volta dela)
+			PersonagemMd2.Dados jubilado = PersonagemMd2.ler(TelaJogo.PASTA_JUBILADO, TelaJogo.ALTURA_JUBILADO);
+			GradeCaminhada caminhada = new GradeCaminhada(chao, 2);
+			GradeColisao.Retangulo r = predio.retangulo();
+			float folga = jogo.Regras.JUBILADO_LONGE_UNIVALI;
+			caminhada.bloquear(r.xMin() - folga, r.zMin() - folga, r.xMax() + folga, r.zMax() + folga);
+			return new DadosTerreno(alturas, chao, colisao, arvores, modelos, monstro, jubilado, caminhada, fase, pedras,
+					modelosPedras, detalhes, predio);
 		});
 		estado = Estado.GERANDO;
 	}
@@ -461,6 +469,7 @@ public class TelaCarregando implements Tela {
 		}
 		// o monstro vai para a placa de vídeo aqui também (sem o MD2, o jogo usa o substituto)
 		PersonagemMd2 monstro = dados.monstro() != null ? new PersonagemMd2(dados.monstro()) : null;
+		PersonagemMd2 jubilado = dados.jubilado() != null ? new PersonagemMd2(dados.jubilado()) : null;
 		Pedras pedras = null;
 		if (dados.modelosPedras() != null) {
 			pedras = new Pedras(dados.pedras(), dados.modelosPedras());
@@ -469,7 +478,7 @@ public class TelaCarregando implements Tela {
 		int texturaDetalhes = enviarDetalhes(dados.detalhes());
 		densidadeCarregada = densidade;
 		mundoCarregado = new Mundo(seed, PERFIL, terrenoNovo, dados.chao(), dados.colisao(), arvores, arvores3d,
-				monstro, dados.fase(), pedras, texturaDetalhes, dados.predio());
+				monstro, jubilado, dados.caminhada(), dados.fase(), pedras, texturaDetalhes, dados.predio());
 		dados = null; // tudo já foi para a placa de vídeo ou para o Mundo
 		terrenoNovo = null;
 	}

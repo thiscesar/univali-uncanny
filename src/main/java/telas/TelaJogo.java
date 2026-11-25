@@ -30,6 +30,7 @@ import dados.Opcoes;
 import dados.Recursos;
 import entidades.CaixaMunicao;
 import entidades.DragonKnight;
+import entidades.Jubilado;
 import entidades.Escopeta;
 import entidades.Prova;
 import entidades.Tiro;
@@ -99,6 +100,8 @@ public class TelaJogo implements Tela {
 	/** Onde estão os arquivos do Dragon Knight e a altura dele em metros (o cavaleiro montado). */
 	static final String PASTA_MONSTRO = "modelos/dragonknight";
 	static final float ALTURA_MONSTRO = 2.2f;
+	static final String PASTA_JUBILADO = "modelos/jubilado";
+	static final float ALTURA_JUBILADO = 2.0f;
 
 	private static final float PERTO = 0.1f;
 	// a neblina esconde tudo antes de ~50 m; só os feixes das provas (neblina mais fraca) vão além
@@ -194,6 +197,15 @@ public class TelaJogo implements Tela {
 	private float metalRestante = 0;
 	/** Com a música do monstro, o batimento da contagem sai (os dois ritmos brigavam). */
 	private boolean temMusicaMonstro;
+	/** Quem quer a música agora: o Dragon Knight em cena e/ou o Jubilado caçando. Ela só sai quando os dois param. */
+	private boolean metalDragon, metalJubilado;
+
+	// o Jubilado: o monstro que anda pela floresta (lógica em entidades.Jubilado)
+	private final Jubilado jubilado;
+	private DesenhoMonstro desenhoJubilado;
+	private Efeito somPisadaJubilado, somGrunhido, somGritoJubilado, somQuedaJubilado;
+	/** O susto final é do Jubilado (e não do Dragon Knight): é ele que aparece na frente da câmera. */
+	private boolean sustoDoJubilado;
 
 	// a escopeta, os efeitos dela e as caixas de munição
 	private final Escopeta escopeta = new Escopeta();
@@ -276,12 +288,20 @@ public class TelaJogo implements Tela {
 		Animador animador = mundo.monstro != null ? new Animador(mundo.monstro.animacoes()) : null;
 		float[] caixa = mundo.monstro != null ? mundo.monstro.malhaCorpo().limites(0) : null;
 		this.monstro = new DragonKnight(mundo.chao, mundo.colisao, animador, caixa, System.nanoTime());
+		Animador animadorJubilado = mundo.jubilado != null ? new Animador(mundo.jubilado.animacoes()) : null;
+		float[] caixaJubilado = mundo.jubilado != null ? mundo.jubilado.malhaCorpo().limites(0) : null;
+		this.jubilado = new Jubilado(mundo.chao, mundo.colisao, mundo.caminhada, animadorJubilado, caixaJubilado,
+				System.nanoTime() + 1);
+		jubilado.univali = mundo.predio.retangulo();
+		jubilado.posicionarLongeDe(mundo.inicio[0], mundo.inicio[1]);
+		jubilado.ativo = false; // como o Dragon Knight, só começa quando o jogador sair da Univali
 		java.util.List<Prova> provas = new java.util.ArrayList<>();
 		for (int i = 0; i < mundo.provas.size(); i++) {
 			float[] lugar = mundo.provas.get(i);
 			provas.add(new Prova("M" + (i + 1), lugar[0], lugar[1], mundo.chao));
 		}
 		this.partida = new Partida(mundo.seed, provas);
+		avisarProvasAoJubilado();
 	}
 
 	@Override
@@ -345,6 +365,7 @@ public class TelaJogo implements Tela {
 		somMorte = efeitoOuSintetizado("audio/monstro_morte.ogg", () -> Sintetizador.rugido(44100, 1800, 85, 28, 0.45, 5));
 		somBatida = efeitoOuSintetizado("audio/batimento.ogg", () -> Sintetizador.batimento(44100));
 		somSusto = efeitoOuSintetizado("audio/susto.ogg", () -> Sintetizador.rugido(44100, 900, 240, 90, 0.8, 7));
+		prepararJubilado();
 		if (Caminhos.existe("sprites/susto.png")) {
 			texturaSusto = Recursos.textura("sprites/susto.png");
 		}
@@ -408,9 +429,7 @@ public class TelaJogo implements Tela {
 			public void surgiu(DragonKnight m) {
 				tremor = 1;
 				if (mundo.predio.dentro(m.x, m.z)) falhasDeLuz.forcarFalhaGeral(); // dentro da Univali, as luzes falham
-				gerenciador.audio().musica().tocar(MUSICA_MONSTRO, true, segundosMetal);
-				gerenciador.audio().musica().fadeIn(ENTRADA_METAL_MS);
-				metalRestante = Float.MAX_VALUE;
+				pedirMetal(true, true);
 				// o grito sai de onde ele está: com fone, dá para saber de que lado ele surgiu
 				gerenciador.audio().tocar3D(somGrito, m.x, m.y + 1.6f, m.z, 1f, false);
 			}
@@ -418,8 +437,7 @@ public class TelaJogo implements Tela {
 			@Override
 			public void morreu(DragonKnight m) {
 				gerenciador.audio().tocar3D(somMorte, m.x, m.y + 1.2f, m.z, 1f, false);
-				gerenciador.audio().musica().fadeOut(SAIDA_METAL_MS);
-				metalRestante = SAIDA_METAL_MS / 1000f;
+				pedirMetal(true, false);
 			}
 
 			@Override
@@ -472,6 +490,7 @@ public class TelaJogo implements Tela {
 		filtroPs1.liberar();
 		sombra.liberar();
 		desenhoMonstro.liberar();
+		desenhoJubilado.liberar();
 		desenhoEscopeta.liberar();
 		desenhoProvas.liberar();
 		desenhoPlacas.liberar();
@@ -554,6 +573,12 @@ public class TelaJogo implements Tela {
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_K)) {
 			monstro.matar();
 		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_N)) {
+			Camera c = jogador.camera();
+			jubilado.ativo = true;
+			jubilado.forcarPerto(c.frente.x, c.frente.z);
+			mostrarMensagem("Jubilado a 20 m, atrás de você, vindo ver o barulho");
+		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_H)) {
 			sustos.forcar(SustosFalsos.Tipo.SILHUETA);
 			mostrarMensagem("Susto falso: silhueta (só na floresta, sem o monstro)");
@@ -590,18 +615,20 @@ public class TelaJogo implements Tela {
 		if (cameraLivre != null) {
 			cameraLivre.atualizar(entrada, diftime);
 		} else {
-			if (monstro.estado() == DragonKnight.Estado.ATACANDO) {
+			if (monstro.estado() == DragonKnight.Estado.ATACANDO || jubilado.estado() == Jubilado.Estado.ATACANDO) {
 				jogador.comandar(0, 0, false); // paralisado de medo
 			} else {
 				comandarJogador(entrada);
 			}
 			jogador.SimulaSe(diftime);
 			tocarSonsDoJogador();
-			if (monstro.estado() != DragonKnight.Estado.ATACANDO && despertar.terminou()) {
+			if (monstro.estado() != DragonKnight.Estado.ATACANDO && jubilado.estado() != Jubilado.Estado.ATACANDO
+					&& despertar.terminou()) {
 				comandarArma(entrada);
 			}
 		}
 		atualizarMonstro(diftime);
+		atualizarJubilado(diftime);
 		atualizarArma(entrada, diftime / 1000f);
 
 		tempo += diftime / 1000.0f;
@@ -827,6 +854,7 @@ public class TelaJogo implements Tela {
 		audio.tocar(somPegarProva, 1f);
 		pulsoProva.put(prova, 0f);
 		monstro.provasColetadas = partida.provasColetadas();
+		avisarProvasAoJubilado();
 		monstro.apressarProximaAparicao(Regras.APARICAO_DEPOIS_DA_PROVA);
 		if (partida.todasColetadas()) {
 			float[] u = mundo.univali;
@@ -895,7 +923,10 @@ public class TelaJogo implements Tela {
 		// só vale contar os bagos se ele ainda pode levar dano (não conta o corpo caído)
 		boolean atingivel = monstro.estado() == DragonKnight.Estado.SURGINDO
 				|| monstro.estado() == DragonKnight.Estado.ENCARANDO;
-		Tiro.Resultado r = Tiro.disparar(origem, frente, direita, cima, monstro, mundo.colisao, mundo.chao, random);
+		atingivel |= jubilado.atingivel();
+		Tiro.Resultado r = Tiro.disparar(origem, frente, direita, cima, List.of(monstro, jubilado), mundo.colisao, mundo.chao,
+				random);
+		jubilado.ouvirTiro(c.x, c.z); // o estouro se ouve de longe
 		partida.registrarTiro(Regras.BAGOS, r.acertos());
 		if (atingivel) {
 			System.out.println("[Tiro] " + r.acertos() + " de " + Regras.BAGOS + " chumbos acertaram o monstro");
@@ -967,6 +998,7 @@ public class TelaJogo implements Tela {
 		}
 		if (!monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z)) {
 			monstro.ativo = true;
+			jubilado.ativo = true;
 			tutorial.registrar(Tutorial.Acao.SAIU);
 			gerenciador.audio().parar(somZumbido); // lá fora o zumbido do saguão não faz falta
 			somZumbido = null;
@@ -1115,6 +1147,7 @@ public class TelaJogo implements Tela {
 		case ATACANDO -> 1f;
 		default -> 0f;
 		};
+		presenca = Math.max(presenca, presencaJubilado());
 		presencaMonstro += (presenca - presencaMonstro) * Math.min(1, dt * 4);
 		atualizarSustosFalsos(dt);
 		if (ameacando && !temMusicaMonstro) {
@@ -1130,6 +1163,111 @@ public class TelaJogo implements Tela {
 		if (monstro.ataqueTerminou()) {
 			comecarSusto();
 		}
+	}
+
+	/** O desenho, os sons e os eventos do Jubilado. */
+	private void prepararJubilado() {
+		desenhoJubilado = new DesenhoMonstro(mundo.jubilado, DesenhoMonstro.JUBILADO);
+		somPisadaJubilado = efeitoOuSintetizado("audio/jubilado_passo.ogg", () -> Sintetizador.pisadaPesada(44100, 21));
+		somGrunhido = efeitoOuSintetizado("audio/jubilado_grunhido.ogg", () -> Sintetizador.rugido(44100, 1500, 75, 52, 0.7, 31));
+		somGritoJubilado = efeitoOuSintetizado("audio/jubilado_grito.ogg",
+				() -> Sintetizador.rugido(44100, 1200, 165, 70, 0.75, 33));
+		somQuedaJubilado = efeitoOuSintetizado("audio/jubilado_queda.ogg", () -> Sintetizador.rugido(44100, 1300, 95, 35, 0.5, 35));
+		Audio audio = gerenciador.audio();
+		// todos os sons saem de onde ele está: com fone, dá para saber de que lado ele vem
+		jubilado.definirEventos(new Jubilado.Eventos() {
+			@Override
+			public void passo(Jubilado j) {
+				// caçando, as pisadas ficam mais fortes
+				float volume = j.estado() == Jubilado.Estado.CACANDO ? 1f : 0.7f;
+				audio.tocar3D(somPisadaJubilado, j.x, j.y + 0.1f, j.z, volume, false, 4f);
+			}
+
+			@Override
+			public void grunhiu(Jubilado j) {
+				audio.tocar3D(somGrunhido, j.x, j.y + 1.7f, j.z, 0.8f, false, 6f);
+			}
+
+			@Override
+			public void viu(Jubilado j) {
+				audio.tocar3D(somGritoJubilado, j.x, j.y + 1.7f, j.z, 1f, false, 10f);
+				tremor = Math.max(tremor, 0.5f);
+				pedirMetal(false, true);
+			}
+
+			@Override
+			public void perdeu(Jubilado j) {
+				pedirMetal(false, false);
+			}
+
+			@Override
+			public void caiu(Jubilado j) {
+				audio.tocar3D(somQuedaJubilado, j.x, j.y + 1.2f, j.z, 1f, false, 8f);
+				pedirMetal(false, false);
+			}
+
+			@Override
+			public void levantou(Jubilado j) {
+				audio.tocar3D(somGritoJubilado, j.x, j.y + 1.7f, j.z, 1f, false, 10f);
+				pedirMetal(false, true);
+			}
+
+			@Override
+			public void atacou(Jubilado j) {
+				tremor = 0.7f;
+				audio.tocar(somGritoJubilado, 1f);
+			}
+		});
+	}
+
+	/**
+	 * A música de metal toca enquanto algum monstro está atrás do jogador (o Dragon Knight em cena,
+	 * o Jubilado caçando). Ela entra quando o primeiro pede e só sai quando os dois param.
+	 */
+	private void pedirMetal(boolean dragonKnight, boolean ligar) {
+		boolean antes = metalDragon || metalJubilado;
+		if (dragonKnight) metalDragon = ligar;
+		else metalJubilado = ligar;
+		boolean depois = metalDragon || metalJubilado;
+		if (!antes && depois) {
+			gerenciador.audio().musica().tocar(MUSICA_MONSTRO, true, segundosMetal);
+			gerenciador.audio().musica().fadeIn(ENTRADA_METAL_MS);
+			metalRestante = Float.MAX_VALUE;
+		} else if (antes && !depois) {
+			gerenciador.audio().musica().fadeOut(SAIDA_METAL_MS);
+			metalRestante = SAIDA_METAL_MS / 1000f;
+		}
+	}
+
+	/**
+	 * O Jubilado: ele fica sabendo onde o jogador está só se o vir ou ouvir. Dentro da Univali
+	 * o jogador está escondido; com o Dragon Knight em cena, ele espera.
+	 */
+	private void atualizarJubilado(long diftime) {
+		boolean escondido = mundo.predio.dentro(jogador.x, jogador.z) || tempoEntrega >= 0;
+		boolean andando = jogador.velocidade() > 0.5f;
+		jubilado.definirAlvo(jogador.x, jogador.camera().y, jogador.z, jogador.correndo(), andando, lanterna.ligada(),
+				escondido);
+		jubilado.pausado = monstro.estado() != DragonKnight.Estado.AUSENTE;
+		jubilado.SimulaSe(diftime);
+		if (jubilado.ataqueTerminou()) {
+			sustoDoJubilado = true;
+			comecarSusto();
+		}
+	}
+
+	/** O Jubilado ronda as provas que o jogador ainda não pegou. */
+	private void avisarProvasAoJubilado() {
+		jubilado.provasQueFaltam = partida.provas().stream().filter(p -> !p.coletada()).map(p -> new float[] { p.x, p.z })
+				.toList();
+	}
+
+	/** De 0 (caçando de longe) a 1 (encostado): o quanto o Jubilado caçando "pesa" na imagem. */
+	private float presencaJubilado() {
+		if (jubilado.estado() == Jubilado.Estado.ATACANDO) return 1;
+		if (jubilado.estado() != Jubilado.Estado.CACANDO) return 0;
+		float d = (float) Math.hypot(jubilado.x - jogador.x, jubilado.z - jogador.z);
+		return 0.45f * Math.max(0, 1 - d / 25f);
 	}
 
 	/** De 0 (a contagem acabou de começar) a 1 (acabou). Fora da contagem, 0. */
@@ -1154,13 +1292,25 @@ public class TelaJogo implements Tela {
 		if (t < 1e-4f) { fx = 1; fz = 0; t = 1; }
 		fx /= t;
 		fz /= t;
-		monstro.guinada = DragonKnight.guinadaPara(-fx, -fz); // a frente dele aponta para o jogador
-		float[] olho = desenhoMonstro.olhoLocal(monstro);
-		float cg = (float) Math.cos(monstro.guinada), sg = (float) Math.sin(monstro.guinada);
+		float guinada = DragonKnight.guinadaPara(-fx, -fz); // a frente dele aponta para o jogador
+		float[] olho = sustoDoJubilado ? desenhoJubilado.olhoLocal(jubilado.animador())
+				: desenhoMonstro.olhoLocal(monstro.animador());
+		float cg = (float) Math.cos(guinada), sg = (float) Math.sin(guinada);
 		// onde o olho deve ficar, menos o olho girado (o mesmo giro do modelo) = onde ficam os pés
-		monstro.x = c.x + fx * 0.7f - (cg * olho[0] + sg * olho[2]);
-		monstro.z = c.z + fz * 0.7f - (-sg * olho[0] + cg * olho[2]);
-		monstro.y = c.y - olho[1];
+		float px = c.x + fx * 0.7f - (cg * olho[0] + sg * olho[2]);
+		float pz = c.z + fz * 0.7f - (-sg * olho[0] + cg * olho[2]);
+		float py = c.y - olho[1];
+		if (sustoDoJubilado) {
+			jubilado.guinada = guinada;
+			jubilado.x = px;
+			jubilado.y = py;
+			jubilado.z = pz;
+		} else {
+			monstro.guinada = guinada;
+			monstro.x = px;
+			monstro.y = py;
+			monstro.z = pz;
+		}
 	}
 
 	/** Lê o teclado e o mouse e passa os comandos para o jogador. */
@@ -1315,6 +1465,7 @@ public class TelaJogo implements Tela {
 		Camera camera = cameraAtual();
 		int alturaImagem = filtroPs1.altura();
 		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, alturaImagem);
+		desenhoJubilado.desenhar(jubilado, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, alturaImagem);
 		desenharCaixas();
 		desenhoPlacas.desenhar(mundo.placas, mundo.chao, bufferProjecao, bufferVisao, ambiente);
 		desenhoPredio.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
@@ -1388,6 +1539,7 @@ public class TelaJogo implements Tela {
 		desenharPedras();
 		Camera camera = cameraAtual();
 		desenhoMonstro.desenhar(monstro, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, ladoSombra);
+		desenhoJubilado.desenhar(jubilado, bufferProjecao, bufferVisao, ambiente, camera.x, camera.z, ladoSombra);
 		desenharCaixas();
 		desenhoPlacas.desenhar(mundo.placas, mundo.chao, bufferProjecao, bufferVisao, ambiente);
 		desenhoPredio.desenhar(bufferProjecao, bufferVisao, ambiente, ladoSombra);
@@ -1759,6 +1911,19 @@ public class TelaJogo implements Tela {
 				mundo.fase.fitness())).toString();
 	}
 
+	/** A linha do Jubilado no painel F3. */
+	private String textoJubilado() {
+		float d = (float) Math.hypot(jubilado.x - jogador.x, jubilado.z - jogador.z);
+		String detalhe = switch (jubilado.estado()) {
+		case CACANDO -> String.format(", sem notícia há %.1f s", jubilado.semNoticia());
+		default -> "";
+		};
+		String animacao = jubilado.animador() != null ? "   " + jubilado.animador().nomeAtual() : "   (substituto)";
+		return String.format("jubilado %s%s   a %.0f m   %.1f m/s%s%s", jubilado.estado().name().toLowerCase(), detalhe, d,
+				jubilado.velocidade(), animacao, jubilado.ativo ? (jubilado.pausado ? "   (esperando o Dragon Knight)" : "")
+						: "   (inativo até sair da Univali)");
+	}
+
 	/** A linha do monstro no painel F3. */
 	private String textoMonstro() {
 		String base = "monstro " + monstro.estado().name().toLowerCase();
@@ -1876,11 +2041,12 @@ public class TelaJogo implements Tela {
 				(cameraLivre != null ? "câmera livre (F4 volta ao jogador)" : "F4: câmera livre")
 						+ (ps1 ? String.format("   modo PS1 %dx%d", filtroPs1.largura(), filtroPs1.altura()) : ""),
 				textoMonstro(),
+				textoJubilado(),
 				textoProvas(),
 				String.format("arma %s   cano %d   reserva %d   partículas %d   caixas %d", escopeta.estado().name().toLowerCase(),
 						escopeta.cano(), escopeta.reserva(), particulas.quantidade(),
 						caixas.stream().filter(cx -> !cx.pega()).count()),
-				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata   B luzes   H silhueta   J galho   L risada",
+				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata   N Jubilado perto   B luzes   H silhueta   J galho   L risada",
 				"clique atira   R recarrega   E pega   P vai até a próxima prova   I salva o mapa da fase   setas e PgUp/PgDn: arma",
 		};
 		int tamanho = 16;

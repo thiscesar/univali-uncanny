@@ -6,6 +6,9 @@ Modelos 3D do jogo.
   dragonknight/weapon.md2   arma do monstro (opcional)
   dragonknight/weapon.png   pele da arma
   dragonknight/leiame_original.txt  autores e licença do modelo original
+  jubilado/tris.md2         o Jubilado, o monstro que anda pela floresta (Ratamahatta, MD2)
+  jubilado/skin.png         pele do Jubilado (a skin "dead" do Ratamahatta)
+  jubilado/leiame_original.txt      autor e licença do modelo original
   escopeta/escopeta.obj     escopeta em OBJ, triangulada, exportada com grupos "corpo" e "telha"
   escopeta/cor.png          textura de cor da escopeta
   escopeta/normal.png       normal map da escopeta (opcional)
