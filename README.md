@@ -53,7 +53,9 @@ Requisitos: placa de vídeo com **OpenGL 3.3** e cerca de **1 GB de memória liv
   para o Jubilado andar pela floresta desviando de morros, água e da Univali.
 - **Monstros MD2** (`md2`, `entidades`): leitor do formato do Quake II, com a interpolação entre
   quadros feita no shader. O Jubilado tem uma máquina de estados (vagando, desconfiado, caçando,
-  procurando, caído, atacando, fugindo) com visão em cone bloqueada pelos troncos e audição.
+  procurando, caído, atacando, recuando, fugindo) com visão em cone bloqueada pelos troncos e
+  audição; na caçada ele dá botes e fareja o jogador até o fim, e quem só ronda recua encarando
+  quando é iluminado, mas, provocado, vira caçador.
 - **Diretor de sustos** (`jogo.DiretorDeSustos`): controla o ritmo da floresta — calmaria, caçada,
   calmaria —, com mais caçadas (às vezes dois Jubilados juntos) perto do fim, sem nunca deixar a
   partida muito tempo sem nada acontecer.
@@ -63,10 +65,14 @@ Requisitos: placa de vídeo com **OpenGL 3.3** e cerca de **1 GB de memória liv
 - **Renderização** (`render`, `shaders`): texture splatting no terreno, neblina exponencial,
   lanterna com sombras (shadow mapping com PCF), árvores com instancing, escopeta como viewmodel,
   normal mapping e pós-processamento (vinheta, granulado e um filtro opcional no estilo PS1).
+- **Desempenho**: o terreno usa a malha do professor estendida com índices e dividida em blocos
+  (só os blocos à vista são desenhados), o prédio é desenhado antes do terreno para a placa
+  descartar o chão escondido, há culling de faces traseiras, as árvores vão da frente para trás
+  e o AG do relevo usa todos os núcleos (o mesmo mapa para cada seed, em um terço do tempo).
 - **Som 3D** (`audio`): OpenAL com OGG (stb_vorbis); o que não tem arquivo gravado é sintetizado
   por código.
-- **Telas** (`telas`): menu, carregamento com a história em máquina de escrever, jogo, pausa,
-  vitória e derrota.
+- **Telas** (`telas`): menu, carregamento (música e glitch enquanto o mapa é gerado), jogo, pausa,
+  carta, vitória e derrota.
 
 O código original do professor está em `main`, `obj`, `shaders`, `util`, `dados` e `Model`; cada
 alteração nele está marcada no código com `// ALTERADO`.

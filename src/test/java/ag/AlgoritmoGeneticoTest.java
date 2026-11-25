@@ -89,6 +89,25 @@ class AlgoritmoGeneticoTest {
 	}
 
 	@Test
+	void avaliarEmParaleloDaOMesmoResultadoQueEmSequencia() {
+		Configuracao config = new Configuracao(30, 40, 0.5, 3);
+		List<Double> sequencia = new ArrayList<>(), paralelo = new ArrayList<>();
+		boolean[] a = new AlgoritmoGenetico<>(new ProblemaUns(60), config, new Random(11))
+				.executar((geracao, individuo, fitness) -> sequencia.add(fitness));
+		ProblemaUns emParalelo = new ProblemaUns(60) {
+			@Override
+			public boolean avaliarEmParalelo() {
+				return true;
+			}
+		};
+		boolean[] b = new AlgoritmoGenetico<>(emParalelo, config, new Random(11))
+				.executar((geracao, individuo, fitness) -> paralelo.add(fitness));
+
+		assertArrayEquals(a, b);
+		assertEquals(sequencia, paralelo, "geração a geração, o mesmo melhor");
+	}
+
+	@Test
 	void elitismoNuncaDeixaOMelhorPiorar() {
 		List<Double> historico = new ArrayList<>();
 		new AlgoritmoGenetico<>(new ProblemaUns(30), new Configuracao(20, 50, 0.5, 3), new Random(1))

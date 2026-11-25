@@ -42,4 +42,17 @@ class GeradorTerrenoTest {
 		}));
 		assertEquals(5, ultima.get());
 	}
+
+	/**
+	 * O AG do relevo passou a usar os vários núcleos (as linhas do cruzamento e do morro, e o
+	 * fitness dos filhos). O mapa precisa sair igual ao de antes, bit a bit: este número é o das
+	 * alturas geradas pela versão anterior, de um núcleo só, com a mesma seed.
+	 */
+	@Test
+	void oAGEmParaleloDaOMesmoMapaDaVersaoDeUmNucleo() {
+		ProblemaTerreno problema = new ProblemaTerreno(48, 0.11, 0.0, 0.008, 0.02);
+		Terreno t = new ag.AlgoritmoGenetico<>(problema, new ag.Configuracao(16, 25, 0.5, 3), new java.util.Random(2026))
+				.executar((geracao, terreno, fitness) -> {});
+		assertEquals(1124850324, java.util.Arrays.hashCode(t.copiarAlturas()));
+	}
 }

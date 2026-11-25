@@ -33,9 +33,12 @@ import util.Caminhos;
  * na pasta.
  *
  * Diferenças para as planas:
- *  - Só entram no desenho as árvores perto da câmera (até onde a neblina e o plano "longe"
- *    deixam ver) e que não estão atrás dela. A escolha é refeita a cada quadro, na CPU, e os
- *    dados dessas árvores vão para o VBO de instâncias (algumas centenas, é rápido).
+ *  - Só entram no desenho as árvores perto da câmera (até onde a neblina deixa ver) e que não
+ *    estão atrás dela. A escolha é refeita a cada quadro, na CPU, e os dados dessas árvores vão
+ *    para o VBO de instâncias (algumas centenas, é rápido). No mapa de sombra, o raio é o
+ *    alcance da lanterna, bem menor.
+ *  - Dentro de cada variação, as árvores vão da mais perto para a mais longe: as da frente gravam
+ *    a profundidade primeiro e a placa descarta os pixels das de trás antes de iluminá-los.
  *  - Cada variação é um modelo diferente e cada modelo tem vários materiais (casca, pinho, copa,
  *    folhas), cada um com a sua textura: uma chamada glDrawArraysInstanced por variação e
  *    material, no máximo 6 por quadro. Para cada variação, o ponteiro dos atributos 4 e 5 começa
@@ -52,8 +55,11 @@ public class Arvores3D extends Model {
 	/** Só as folhas recortadas são planos finos, vistos dos dois lados. */
 	private static final String MATERIAL_DUPLA_FACE = "folhas";
 
-	/** Além disso a neblina já escondeu tudo (o plano "longe" é 60 m), com folga para a copa. */
-	public static final float RAIO_DESENHO = 66f;
+	/**
+	 * Além disso a neblina já escondeu tudo: com a densidade 0,05, a 50 m sobra 0,2% da cor da
+	 * árvore. Era 66 m; com 52, cerca de 40% menos árvores no desenho, sem diferença na imagem.
+	 */
+	public static final float RAIO_DESENHO = 52f;
 	/** Mais perto que isso a árvore é sempre desenhada, mesmo de lado ou atrás (a copa é larga e alta). */
 	public static final float RAIO_SEMPRE = 16f;
 	/** Quanto uma árvore pode estar atrás da câmera e ainda ser desenhada (metade da copa mais larga). */
@@ -69,6 +75,8 @@ public class Arvores3D extends Model {
 	private int vboModelo, vboInstancias;
 	private final float[] instancias;
 	private final FloatBuffer bufferInstancias;
+	/** As escolhidas do quadro: distância² e índice juntos num long, para ordenar sem criar objetos. */
+	private final long[] ordem;
 	/** Por variação: onde começa no VBO de instâncias e quantas árvores foram escolhidas. */
 	private final int[] inicioVariacao = new int[DistribuidorArvores.VARIACOES];
 	private final int[] quantidadeVariacao = new int[DistribuidorArvores.VARIACOES];
@@ -78,6 +86,7 @@ public class Arvores3D extends Model {
 		this.modelos = modelos;
 		inicioModelo = new int[modelos.size()];
 		instancias = new float[Math.max(1, arvores.size()) * FLOATS_INSTANCIA];
+		ordem = new long[Math.max(1, arvores.size())];
 		bufferInstancias = BufferUtils.createFloatBuffer(instancias.length);
 	}
 
@@ -141,10 +150,16 @@ public class Arvores3D extends Model {
 	 * (0, 0) quando ela olha reto para cima ou para baixo.
 	 */
 	static boolean visivel(float x, float z, float cameraX, float cameraZ, float frenteX, float frenteZ) {
+		return visivel(x, z, cameraX, cameraZ, frenteX, frenteZ, RAIO_DESENHO, RAIO_SEMPRE);
+	}
+
+	/** O mesmo, com os raios escolhidos (o mapa de sombra usa o alcance da lanterna). */
+	static boolean visivel(float x, float z, float cameraX, float cameraZ, float frenteX, float frenteZ, float raio,
+			float raioSempre) {
 		float dx = x - cameraX, dz = z - cameraZ;
 		float distancia2 = dx * dx + dz * dz;
-		if (distancia2 > RAIO_DESENHO * RAIO_DESENHO) return false;
-		if (distancia2 < RAIO_SEMPRE * RAIO_SEMPRE) return true;
+		if (distancia2 > raio * raio) return false;
+		if (distancia2 < raioSempre * raioSempre) return true;
 		return dx * frenteX + dz * frenteZ > -MARGEM_ATRAS; // projeção na direção do olhar
 	}
 
@@ -153,6 +168,11 @@ public class Arvores3D extends Model {
 	 * (frenteX, frenteZ) é a direção do olhar, não precisa ser unitária.
 	 */
 	public void escolher(float cameraX, float cameraZ, float frenteX, float frenteZ) {
+		escolher(cameraX, cameraZ, frenteX, frenteZ, RAIO_DESENHO, RAIO_SEMPRE);
+	}
+
+	/** O mesmo, com os raios escolhidos (o mapa de sombra usa o alcance da lanterna). */
+	public void escolher(float cameraX, float cameraZ, float frenteX, float frenteZ, float raio, float raioSempre) {
 		float tamanho = (float) Math.sqrt(frenteX * frenteX + frenteZ * frenteZ);
 		if (tamanho < 0.05f) {
 			frenteX = 0; frenteZ = 0; // olhando reto para cima ou para baixo: só a distância conta
@@ -160,19 +180,27 @@ public class Arvores3D extends Model {
 			frenteX /= tamanho; frenteZ /= tamanho;
 		}
 
-		// 1ª passada: quantas de cada variação; 2ª: cada uma no seu trecho
+		// 1ª passada: as que entram, contadas por variação e guardadas com a distância
 		java.util.Arrays.fill(quantidadeVariacao, 0);
-		for (DistribuidorArvores.Arvore a : arvores) {
-			if (visivel(a.x(), a.z(), cameraX, cameraZ, frenteX, frenteZ)) quantidadeVariacao[a.textura()]++;
+		int escolhidas = 0;
+		for (int i = 0; i < arvores.size(); i++) {
+			DistribuidorArvores.Arvore a = arvores.get(i);
+			if (!visivel(a.x(), a.z(), cameraX, cameraZ, frenteX, frenteZ, raio, raioSempre)) continue;
+			quantidadeVariacao[a.textura()]++;
+			float dx = a.x() - cameraX, dz = a.z() - cameraZ;
+			// a distância² é positiva: os bits do float crescem junto com ela, e o long ordena certo
+			ordem[escolhidas++] = ((long) Float.floatToIntBits(dx * dx + dz * dz) << 32) | i;
 		}
+		java.util.Arrays.sort(ordem, 0, escolhidas); // da mais perto para a mais longe
 		int inicio = 0;
 		for (int v = 0; v < inicioVariacao.length; v++) {
 			inicioVariacao[v] = inicio;
 			inicio += quantidadeVariacao[v];
 		}
+		// 2ª passada: cada uma no trecho da sua variação, já em ordem de distância
 		int[] proxima = inicioVariacao.clone();
-		for (DistribuidorArvores.Arvore a : arvores) {
-			if (!visivel(a.x(), a.z(), cameraX, cameraZ, frenteX, frenteZ)) continue;
+		for (int e = 0; e < escolhidas; e++) {
+			DistribuidorArvores.Arvore a = arvores.get((int) ordem[e]);
 			LeitorObj.ModeloObj modelo = modelos.get(a.textura());
 			int k = proxima[a.textura()]++ * FLOATS_INSTANCIA;
 			instancias[k] = a.x();

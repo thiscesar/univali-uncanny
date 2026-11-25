@@ -106,6 +106,8 @@ public class TelaJogo implements Tela {
 	private static final float PERTO = 0.1f;
 	// a neblina esconde tudo antes de ~50 m; só os feixes das provas (neblina mais fraca) vão além
 	private static final float LONGE = 120f;
+	/** Folga para a copa das árvores na escolha do mapa de sombra, em metros. */
+	private static final float RAIO_COPA = 6f;
 
 	private static final Color COR_PAINEL = new Color(0, 0, 0, 160);
 	private static final Color COR_DEPURACAO = new Color(200, 195, 185);
@@ -286,6 +288,9 @@ public class TelaJogo implements Tela {
 
 	/** Tempo da partida em segundos; para quando a partida está pausada (anima a água). */
 	private float tempo = 0;
+	/** Os textos do painel F3 e quando foram montados (refeitos 4 vezes por segundo). */
+	private String[] linhasDepuracao;
+	private float tempoDepuracao;
 	// FPS medido em janelas de meio segundo, para o painel
 	private int quadrosContados = 0;
 	private float tempoContado = 0, fps = 0;
@@ -1666,7 +1671,19 @@ public class TelaJogo implements Tela {
 		guardar(projecao(), bufferProjecao);
 		guardar(visao, bufferVisao);
 		luzesDosPostes(visao);
+		// O prédio vem primeiro: dentro dele, o piso e as paredes gravam a profundidade antes e a placa
+		// descarta o terreno escondido sem calcular a cor (o shader do terreno é o mais caro do jogo).
+		// Culling: as faces viradas para longe da câmera nem viram pixels. As caixas do prédio estão em
+		// sentido anti-horário vistas de fora (o padrão: some a de trás); os triângulos do terreno estão
+		// em sentido horário vistos de cima, por isso nele some a "da frente" (a de baixo do chão).
+		// As árvores, as pedras e os monstros ficam sem culling (as folhas são vistas dos dois lados).
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
+		desenhoPredio.desenharSolido(bufferProjecao, bufferVisao, ambiente, filtroPs1.altura());
+		glCullFace(GL_FRONT);
 		desenharTerreno();
+		glCullFace(GL_BACK);
+		glDisable(GL_CULL_FACE);
 		if (mundo.arvores3d != null) {
 			desenharArvores3D();
 		} else {
@@ -1684,7 +1701,7 @@ public class TelaJogo implements Tela {
 		}
 		desenharCaixas();
 		desenhoPlacas.desenhar(mundo.placas, mundo.chao, bufferProjecao, bufferVisao, ambiente);
-		desenhoPredio.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
+		desenhoPredio.desenharHalos(bufferProjecao, bufferVisao, ambiente, alturaImagem); // transparentes: depois do sólido
 		desenharEscopetaNoBalcao();
 		desenhoProvas.desenhar(partida.provas(), bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
@@ -2070,6 +2087,13 @@ public class TelaJogo implements Tela {
 		glUniform1i(glGetUniformLocation(prog, "texDetalhes"), unidade);
 		glUniform1f(glGetUniformLocation(prog, "tamanhoMapa"), mundo.tamanho());
 
+		if (mundo.terreno.model instanceof obj.ObjHTGsrtmIndexado blocos) {
+			// os blocos do terreno que não aparecem ficam de fora: na cena, o que a câmera alcança;
+			// no mapa de sombra, só o que a lanterna alcança
+			Camera c = cameraAtual();
+			blocos.definirVista(c.x, c.z, c.frente.x, c.frente.z,
+					ambiente.passadaSombra > 0.5f ? ambiente.alcanceLanterna + 2 : LONGE);
+		}
 		mundo.terreno.DesenhaSe(shader);
 
 		glActiveTexture(GL_TEXTURE0);
@@ -2100,7 +2124,12 @@ public class TelaJogo implements Tela {
 	 */
 	private void desenharArvores3D() {
 		Camera c = cameraAtual();
-		mundo.arvores3d.escolher(c.x, c.z, c.frente.x, c.frente.z);
+		if (ambiente.passadaSombra > 0.5f) {
+			// no mapa de sombra, só as árvores que a lanterna alcança (o alcance dela mais a copa)
+			mundo.arvores3d.escolher(c.x, c.z, c.frente.x, c.frente.z, ambiente.alcanceLanterna + RAIO_COPA, RAIO_COPA);
+		} else {
+			mundo.arvores3d.escolher(c.x, c.z, c.frente.x, c.frente.z);
+		}
 
 		ShaderArvore3D shader = Recursos.shaderArvore3D();
 		shader.start();
@@ -2236,10 +2265,29 @@ public class TelaJogo implements Tela {
 	}
 
 	/** Painel F3: números para conferir o que o jogo está calculando. */
+	/**
+	 * O painel do F3. Cada texto diferente vira uma textura nova (Java2D + envio à placa), e várias
+	 * linhas mudam a cada quadro: refeito a cada quadro, o painel custava ~3 ms e derrubava o FPS que
+	 * ele mesmo mostra. Agora os textos são refeitos só 4 vezes por segundo.
+	 */
 	private void desenharDepuracao(Overlay2D overlay) {
+		if (linhasDepuracao == null || tempo - tempoDepuracao >= 0.25f || tempo < tempoDepuracao) {
+			linhasDepuracao = linhasDepuracao();
+			tempoDepuracao = tempo;
+		}
+		String[] linhas = linhasDepuracao;
+		int tamanho = 16;
+		float linha = tamanho * 1.45f;
+		overlay.retangulo(8, 8, 640, linhas.length * linha + 16, COR_PAINEL);
+		for (int i = 0; i < linhas.length; i++) {
+			Texto.desenhar(overlay, linhas[i], 18, 16 + i * linha, tamanho, COR_DEPURACAO, Texto.Alinhamento.ESQUERDA);
+		}
+	}
+
+	private String[] linhasDepuracao() {
 		ConsultaAltura chao = mundo.chao;
 		Camera c = cameraAtual();
-		String[] linhas = {
+		return new String[] {
 				String.format("FPS %.0f    seed %d    árvores %d%s", fps, mundo.seed, mundo.quantidadeArvores(),
 						mundo.arvores3d != null ? String.format(" (3D, %d desenhadas)", mundo.arvores3d.desenhadas())
 								: " (planas)")
@@ -2266,11 +2314,5 @@ public class TelaJogo implements Tela {
 				"F lanterna   ESC pausa   T som de teste   V vitória   X derrota   G monstro surge   K mata   N Jubilado perto   B luzes   H silhueta   J galho   L risada",
 				"clique atira   R recarrega   E pega   P vai até a próxima prova   I salva o mapa da fase   setas e PgUp/PgDn: arma",
 		};
-		int tamanho = 16;
-		float linha = tamanho * 1.45f;
-		overlay.retangulo(8, 8, 640, linhas.length * linha + 16, COR_PAINEL);
-		for (int i = 0; i < linhas.length; i++) {
-			Texto.desenhar(overlay, linhas[i], 18, 16 + i * linha, tamanho, COR_DEPURACAO, Texto.Alinhamento.ESQUERDA);
-		}
 	}
 }

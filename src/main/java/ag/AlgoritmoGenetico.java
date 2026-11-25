@@ -56,14 +56,23 @@ public class AlgoritmoGenetico<T> {
         List<Avaliado<T>> nova = new ArrayList<>();
         nova.add(melhorDe(atual)); // elitismo: o melhor passa direto
 
-        while (nova.size() < config.tamanhoPopulacao()) {
+        // Os filhos são criados em sequência: o sorteio sai sempre na mesma ordem (mesma seed, mesmo
+        // resultado). Só o fitness, que não sorteia nada, pode ser calculado em paralelo, nos vários
+        // núcleos do processador; a ordem da lista não muda, então o resultado também não.
+        List<T> filhos = new ArrayList<>();
+        while (nova.size() + filhos.size() < config.tamanhoPopulacao()) {
             T pai1 = torneio(atual).individuo();
             T pai2 = torneio(atual).individuo();
             T filho = problema.cruzar(pai1, pai2, random);
             if (random.nextDouble() < config.taxaMutacao()) {
                 filho = problema.mutar(filho, random);
             }
-            nova.add(avaliar(filho));
+            filhos.add(filho);
+        }
+        if (problema.avaliarEmParalelo()) {
+            nova.addAll(filhos.parallelStream().map(this::avaliar).toList());
+        } else {
+            for (T filho : filhos) nova.add(avaliar(filho));
         }
         return nova;
     }

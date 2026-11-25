@@ -389,7 +389,9 @@ public class TelaCarregando implements Tela {
 			mundoCarregado.liberar(); // apaga da placa de vídeo a malha do mapa anterior
 			mundoCarregado = null;
 		}
-		ObjHTGsrtm malha = new ObjHTGsrtm(dados.alturas(), METROS_ENTRE_PONTOS, METROS_POR_UNIDADE);
+		// a malha do professor (ObjHTGsrtm) estendida: vértices únicos com índices, em blocos que a
+		// TelaJogo pula quando não aparecem (a mesma imagem, bem menos trabalho para a placa)
+		ObjHTGsrtm malha = new obj.ObjHTGsrtmIndexado(dados.alturas(), METROS_ENTRE_PONTOS, METROS_POR_UNIDADE);
 		malha.load();
 		terrenoNovo = new Mapa3D(0, 0, 0, 1); // na origem, escala 1: o mapa vai de 0 a 300 m em x e z
 		terrenoNovo.model = malha;

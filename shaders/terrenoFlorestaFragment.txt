@@ -97,41 +97,52 @@ void main(void){
 	// manchas de brilho de dezenas de metros: a repetição do ladrilho (a cada 4 m) some
 	cor *= 0.82 + 0.36 * ruido(coordTerreno * 0.035 + vec2(13.1, 7.7));
 
-	vec3 chaoIluminado = iluminar(cor, normalVista, posVista);
+	// a margem: alturaReal é interpolada dentro do triângulo, então a linha da água sai suave
+	float pesoAgua = 1.0 - smoothstep(-0.05, 0.02, h);
 
-	// água escura, mais funda = mais escura, com o detalhe da textura deslizando
-	float profundidade = clamp(-h / 4.0, 0.0, 1.0);
-	vec3 corAgua = mix(vec3(0.07, 0.11, 0.11), vec3(0.01, 0.03, 0.04), profundidade);
+	// as leituras de textura ficam fora dos "if": dentro deles a placa não teria as derivadas
+	// (a escolha do mipmap) nos pixels da borda entre chão e água
 	vec2 c1 = c + vec2(tempo * 0.020, tempo * 0.013);
 	vec2 c2 = c * 0.6 - vec2(tempo * 0.012, -tempo * 0.017);
 	float detalhe = (luminancia(texture(texAgua, c1).rgb) + luminancia(texture(texAgua, c2).rgb)) * 0.5;
-	corAgua *= 0.7 + 0.6 * detalhe;
 
-	// ondinhas: inclinam a normal da água; o reflexo da lanterna treme junto
-	vec2 p = coordTerreno;
-	float dx = 0.06 * cos(p.x * 1.3 + tempo * 1.5) + 0.03 * cos((p.x + p.y) * 2.1 + tempo * 2.3);
-	float dz = 0.06 * cos(p.y * 1.1 + tempo * 1.2) + 0.03 * cos((p.x - p.y) * 1.7 + tempo * 1.9);
-	vec3 normalAgua = normalize((vec4(normalize(vec3(-dx, 1.0, -dz)), 0.0) * view).xyz);
-	vec3 V = normalize(-posVista); // do ponto até a câmera
+	// Só ilumina o que aparece: chão seco não calcula a água (e o fundo do lago não calcula o chão).
+	// Cada iluminação lê o mapa de sombra 9 vezes; antes, todo pixel calculava as duas e jogava uma fora.
+	vec3 chaoIluminado = vec3(0.0);
+	if(pesoAgua < 1.0){
+		chaoIluminado = iluminar(cor, normalVista, posVista);
+	}
+	vec3 aguaIluminada = vec3(0.0);
+	if(pesoAgua > 0.0){
+		// água escura, mais funda = mais escura, com o detalhe da textura deslizando
+		float profundidade = clamp(-h / 4.0, 0.0, 1.0);
+		vec3 corAgua = mix(vec3(0.07, 0.11, 0.11), vec3(0.01, 0.03, 0.04), profundidade);
+		corAgua *= 0.7 + 0.6 * detalhe;
 
-	// reflexo do céu noturno (um pouco mais claro e azulado que a neblina). Efeito de Fresnel:
-	// olhando de cima a água é escura e transparente; olhando rente, ela vira um espelho
-	float fresnel = 0.1 + 0.9 * pow(1.0 - max(dot(normalAgua, V), 0.0), 4.0);
-	vec3 ceu = corNeblina * 1.6 + vec3(0.06, 0.08, 0.12); // o céu enevoado refletido (mais fraco que a névoa: água escura)
-	vec3 aguaIluminada = mix(iluminar(corAgua, normalAgua, posVista), ceu, fresnel);
+		// ondinhas: inclinam a normal da água; o reflexo da lanterna treme junto
+		vec2 p = coordTerreno;
+		float dx = 0.06 * cos(p.x * 1.3 + tempo * 1.5) + 0.03 * cos((p.x + p.y) * 2.1 + tempo * 2.3);
+		float dz = 0.06 * cos(p.y * 1.1 + tempo * 1.2) + 0.03 * cos((p.x - p.y) * 1.7 + tempo * 1.9);
+		vec3 normalAgua = normalize((vec4(normalize(vec3(-dx, 1.0, -dz)), 0.0) * view).xyz);
+		vec3 V = normalize(-posVista); // do ponto até a câmera
 
-	// a lua: uma luz fixa no céu; as ondinhas quebram o reflexo dela em pontos que tremem
-	vec3 lua = normalize((vec4(normalize(vec3(-0.35, 0.45, -0.8)), 0.0) * view).xyz);
-	vec3 meioLua = normalize(lua + V);
-	aguaIluminada += vec3(0.5, 0.58, 0.72) * pow(max(dot(normalAgua, meioLua), 0.0), 50.0) * 1.2;
-	aguaIluminada += brilhoLanterna(normalAgua, posVista, 90.0) * 0.9;
+		// reflexo do céu noturno (um pouco mais claro e azulado que a neblina). Efeito de Fresnel:
+		// olhando de cima a água é escura e transparente; olhando rente, ela vira um espelho
+		float fresnel = 0.1 + 0.9 * pow(1.0 - max(dot(normalAgua, V), 0.0), 4.0);
+		vec3 ceu = corNeblina * 1.6 + vec3(0.06, 0.08, 0.12); // o céu enevoado refletido (mais fraco que a névoa: água escura)
+		aguaIluminada = mix(iluminar(corAgua, normalAgua, posVista), ceu, fresnel);
 
-	// a margem: uma faixa clara e úmida onde a água encontra a terra, ondulando devagar
-	float margem = smoothstep(-0.15, -0.03, h) * (1.0 - smoothstep(-0.03, 0.01, h));
-	aguaIluminada += vec3(0.07, 0.08, 0.08) * margem * (0.5 + 0.5 * sin(tempo * 1.7 + ruido(coordTerreno * 0.8) * 6.0));
+		// a lua: uma luz fixa no céu; as ondinhas quebram o reflexo dela em pontos que tremem
+		vec3 lua = normalize((vec4(normalize(vec3(-0.35, 0.45, -0.8)), 0.0) * view).xyz);
+		vec3 meioLua = normalize(lua + V);
+		aguaIluminada += vec3(0.5, 0.58, 0.72) * pow(max(dot(normalAgua, meioLua), 0.0), 50.0) * 1.2;
+		aguaIluminada += brilhoLanterna(normalAgua, posVista, 90.0) * 0.9;
 
-	// a margem: alturaReal é interpolada dentro do triângulo, então a linha da água sai suave
-	float pesoAgua = 1.0 - smoothstep(-0.05, 0.02, h);
+		// a margem: uma faixa clara e úmida onde a água encontra a terra, ondulando devagar
+		float margem = smoothstep(-0.15, -0.03, h) * (1.0 - smoothstep(-0.03, 0.01, h));
+		aguaIluminada += vec3(0.07, 0.08, 0.08) * margem * (0.5 + 0.5 * sin(tempo * 1.7 + ruido(coordTerreno * 0.8) * 6.0));
+	}
+
 	vec3 corFinal = mix(chaoIluminado, aguaIluminada, pesoAgua);
 
 	out_Color = vec4(aplicarNeblina(corFinal, length(posVista), 0.0), 1.0);

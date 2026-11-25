@@ -21,4 +21,12 @@ public interface Problema<T> {
 
     /** Devolve uma versão levemente modificada do indivíduo. */
     T mutar(T individuo, Random random);
+
+    /**
+     * O fitness pode ser calculado em várias threads ao mesmo tempo? Só se ele não sortear nada
+     * nem mexer em estado compartilhado. Por padrão, não (o da fase guarda caminhos num cache).
+     */
+    default boolean avaliarEmParalelo() {
+        return false;
+    }
 }

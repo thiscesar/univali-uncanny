@@ -4,6 +4,7 @@ import ag.Problema;
 
 import java.util.Arrays;
 import java.util.Random;
+import java.util.stream.IntStream;
 
 /**
  * Ensina o algoritmo genético a lidar com terrenos.
@@ -68,14 +69,22 @@ public class ProblemaTerreno implements Problema<Terreno> {
         float raio = tamanho * random.nextFloat(0.2f, 0.5f);
         float borda = raio * 0.3f; // transição suave, sem "costura" visível
 
-        for (int y = 0; y < tamanho; y++) {
+        // Cada linha só depende dela mesma (o sorteio foi feito antes do laço): as linhas são
+        // divididas entre os núcleos e o resultado é exatamente o mesmo de fazer uma por uma.
+        IntStream.range(0, tamanho).parallel().forEach(y -> {
             for (int x = 0; x < tamanho; x++) {
                 double d = Math.hypot(x - cx, y - cy);
                 float peso = (float) (1 / (1 + Math.exp((d - raio) / borda))); // ~1 dentro, ~0 fora
                 filho[y * tamanho + x] = peso * pai2.alturaEm(x, y) + (1 - peso) * pai1.alturaEm(x, y);
             }
-        }
+        });
         return new Terreno(tamanho, tamanho, filho);
+    }
+
+    /** O fitness só lê o terreno (que é imutável): dá para avaliar vários ao mesmo tempo. */
+    @Override
+    public boolean avaliarEmParalelo() {
+        return true;
     }
 
     @Override
@@ -93,13 +102,14 @@ public class ProblemaTerreno implements Problema<Terreno> {
         float amplitude = random.nextFloat(-0.25f, 0.3f);
         double doisRaio2 = 2.0 * raio * raio;
 
-        for (int y = 0; y < tamanho; y++) {
+        // as linhas em paralelo, como no cruzar (nada é sorteado dentro do laço)
+        IntStream.range(0, tamanho).parallel().forEach(y -> {
             for (int x = 0; x < tamanho; x++) {
                 double d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
                 int i = y * tamanho + x;
                 float nova = alturas[i] + (float) (amplitude * Math.exp(-d2 / doisRaio2));
                 alturas[i] = Math.max(0f, Math.min(1f, nova));
             }
-        }
+        });
     }
 }

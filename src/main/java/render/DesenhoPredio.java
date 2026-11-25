@@ -497,7 +497,18 @@ public class DesenhoPredio {
 		return predio.noMundo(prof[0] + c * lx + s * lz, 1.1f, prof[1] - s * lx + c * lz);
 	}
 
+	/** O prédio inteiro: as partes sólidas e depois os halos (usado no mapa de sombra). */
 	public void desenhar(FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente, int alturaImagem) {
+		desenharSolido(projecao, visao, ambiente, alturaImagem);
+		desenharHalos(projecao, visao, ambiente, alturaImagem);
+	}
+
+	/**
+	 * As partes sólidas (paredes, móveis, janelas, o professor). A TelaJogo desenha isto ANTES do
+	 * terreno: dentro do prédio, o piso já gravou a profundidade e a placa descarta os pixels do
+	 * terreno escondidos embaixo dele sem calcular a cor deles (teste de profundidade antecipado).
+	 */
+	public void desenharSolido(FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente, int alturaImagem) {
 		ShaderObjeto shader = Recursos.shaderObjeto();
 		shader.start();
 		int p = shader.programID;
@@ -612,7 +623,14 @@ public class DesenhoPredio {
 		modelo(p, doPescoco);
 		desenhar(p, cabecaProfessor, "professor: cabeca", DesenhoPredio::cabeca, 0f, false);
 		shader.stop();
+	}
 
+	/**
+	 * Os halos das janelas e lâmpadas: transparentes e sem gravar profundidade, por isso vêm depois
+	 * de tudo o que é sólido (senão o terreno, desenhado depois, os apagaria).
+	 */
+	public void desenharHalos(FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente, int alturaImagem) {
+		float pisca = (float) (Math.sin(tempo * 11.0) * Math.sin(tempo * 3.7 + 1.1)); // a mesma conta das janelas
 		// de longe: um brilho em cada janela acesa e em cada lâmpada, que atravessa a neblina
 		halos.limpar();
 		for (int i = 0; i < predio.janelas().size(); i++) {
