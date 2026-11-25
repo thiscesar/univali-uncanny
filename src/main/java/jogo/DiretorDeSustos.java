@@ -15,12 +15,13 @@ import entidades.Jubilado;
  *
  * O ciclo é calmaria, caçada, calmaria, caçada...
  *  - CALMARIA: ninguém ataca. Os Jubilados só rondam de longe (dá para ver os olhos entre as
- *    árvores). A primeira dura a CARENCIA; as outras encurtam conforme as provas (50 s sem
- *    nenhuma, 30 s com as três): o fim é mais tenso, mas nunca sem respiro.
+ *    árvores). A primeira dura a CARENCIA; as outras encurtam conforme as provas (40 s sem
+ *    nenhuma, 22 s com as três): o fim é mais tenso, mas nunca sem respiro.
  *  - CACADA: o Jubilado mais perto do jogador (às vezes os dois mais perto, com chance que cresce
- *    com as provas) fareja e vem caçar. A caçada acaba quando nenhum caçador está mais atrás do
- *    jogador (perderam o jogador de vista), ou em 60 s se nenhum o achou. Um caçador derrubado
- *    pela segunda vez desiste (levanta e foge).
+ *    com as provas) fareja e vem caçar. Depois que um deles acha o jogador, a caçada dura
+ *    PERSEGUICAO segundos: perder o jogador de vista não basta, o caçador fareja e volta, e ao
+ *    levantar de um tiro vem atrás de onde o jogador está. Acaba antes só se todos os caçadores
+ *    desistirem (derrubados pela segunda vez: levantam e fogem), ou em 60 s se nenhum o achou.
  *  - PROVOCAÇÃO: quem ronda recua quando o jogador chega perto ou o ilumina. Se o jogador insistir
  *    (a lanterna nele por 2 s, chegar a 6 m ou atirar nele), ele vira caçador na hora: começa uma
  *    caçada, ou ele entra na que já está acontecendo.
@@ -63,28 +64,25 @@ public class DiretorDeSustos {
 			if (restante <= 0) comecar(provas, jogadorX, jogadorZ);
 			return;
 		}
-		boolean algumAtras = false;
+		boolean achou = false;
 		for (var it = cacadores.entrySet().iterator(); it.hasNext();) {
 			var e = it.next();
 			Jubilado j = e.getKey();
 			if (j.quedas() - e.getValue() >= Regras.QUEDAS_PARA_DESISTIR) {
 				j.encerrarCaca(); // derrubado de novo: desiste (ainda caído, vira observador e levanta fugindo)
 				it.remove();
-			} else if (ameacando(j)) {
-				algumAtras = true;
+			} else if (j.estado() == Jubilado.Estado.CACANDO || j.estado() == Jubilado.Estado.ATACANDO
+					|| j.quedas() > e.getValue()) {
+				achou = true; // está atrás do jogador, ou o jogador já o derrubou: os dois se encontraram
 			}
 		}
-		if (algumAtras) {
-			comecou = true;
-		} else if (comecou || restante <= 0 || cacadores.isEmpty()) {
-			terminar(provas); // todos perderam o jogador (ou nenhum o achou a tempo)
+		if (achou && !comecou) {
+			comecou = true; // achou o jogador: daqui a perseguição tem hora para acabar
+			restante = Regras.PERSEGUICAO;
 		}
-	}
-
-	/** O Jubilado está atrás do jogador: caçando, caído (vai levantar caçando) ou atacando. */
-	private static boolean ameacando(Jubilado j) {
-		return j.estado() == Jubilado.Estado.CACANDO || j.estado() == Jubilado.Estado.CAIDO
-				|| j.estado() == Jubilado.Estado.ATACANDO;
+		if (restante <= 0 || cacadores.isEmpty()) {
+			terminar(provas); // o tempo da perseguição passou (ou nenhum o achou, ou todos desistiram)
+		}
 	}
 
 	/** Quantos caçam nesta caçada: um, ou às vezes dois (mais provável com mais provas). */

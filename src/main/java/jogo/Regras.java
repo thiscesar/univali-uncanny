@@ -11,7 +11,7 @@ public final class Regras {
 	// ---------- o começo da floresta ----------
 
 	/** Segundos sem nenhuma caçada no começo (depois de sair da Univali), para o jogador se situar. */
-	public static final float CARENCIA = 45f;
+	public static final float CARENCIA = 35f;
 	/** Variação aleatória das calmarias, para mais ou para menos (0,2 = ±20%). */
 	public static final float VARIACAO_INTERVALO = 0.2f;
 
@@ -43,15 +43,20 @@ public final class Regras {
 	 * conforme as provas coletadas (0, 1, 2, 3): o fim é mais tenso, mas nunca sem respiro. A
 	 * primeira calmaria é a CARENCIA. Cada calmaria varia ±VARIACAO_INTERVALO.
 	 */
-	public static final float[] CALMARIA = { 50f, 42f, 36f, 30f };
+	public static final float[] CALMARIA = { 40f, 34f, 28f, 22f };
 	/** A chance de uma caçada ter dois Jubilados caçando juntos, conforme as provas (o resto é um só). */
-	public static final float[] CHANCE_DOIS_CACADORES = { 0f, 0.15f, 0.25f, 0.35f };
+	public static final float[] CHANCE_DOIS_CACADORES = { 0.1f, 0.25f, 0.4f, 0.5f };
 	/** Derrubado essas vezes na mesma vez, o Jubilado desiste (levanta e foge): a caçada não vira um ciclo sem fim. */
 	public static final int QUEDAS_PARA_DESISTIR = 2;
 	/** A vez do Jubilado dura no máximo isso, se ele não achar o jogador (segundos). */
 	public static final float VEZ_JUBILADO = 60f;
+	/**
+	 * Depois que um caçador acha o jogador, a caçada dura isso (segundos), aconteça o que acontecer:
+	 * perdendo o jogador de vista, ele fareja e volta. Só acaba antes se todos desistirem (derrubados).
+	 */
+	public static final float PERSEGUICAO = 35f;
 	/** Uma prova coletada encurta a calmaria: a próxima ameaça vem em no máximo isso (segundos). */
-	public static final float AMEACA_DEPOIS_DA_PROVA = 15f;
+	public static final float AMEACA_DEPOIS_DA_PROVA = 10f;
 
 	// ---------- os Jubilados (os monstros que andam pela floresta) ----------
 
@@ -70,12 +75,12 @@ public final class Regras {
 	 * incômodo baixa pela metade desse ritmo) ou o jogador a menos de OBSERVA_PROVOCA_PERTO metros.
 	 * Provocado, ele vira caçador na hora.
 	 */
-	public static final float JUBILADO_PROVOCA = 2f, OBSERVA_PROVOCA_PERTO = 6f;
+	public static final float JUBILADO_PROVOCA = 1.5f, OBSERVA_PROVOCA_PERTO = 8f;
 	/** Velocidade de quem foge (o derrubado que desistiu), em m/s, e até onde, em metros do jogador. */
 	public static final float JUBILADO_FUGINDO = 5f, FOGE_ATE = 60f;
 
 	/** Velocidades em m/s: vagando, indo ver um barulho e caçando (o jogador anda a 3,5 e corre a 6). */
-	public static final float JUBILADO_VAGANDO = 1.4f, JUBILADO_DESCONFIADO = 2.4f, JUBILADO_CACANDO = 5.2f;
+	public static final float JUBILADO_VAGANDO = 1.4f, JUBILADO_DESCONFIADO = 2.4f, JUBILADO_CACANDO = 5.6f;
 	/** Até onde ele enxerga, em metros: normal, com a lanterna ligada (a luz denuncia) e "sente" atrás de si. */
 	public static final float JUBILADO_VISAO = 16f, JUBILADO_VISAO_LANTERNA = 30f, JUBILADO_SENTE = 4f;
 	/** Metade do ângulo de visão, em graus (70 = enxerga 140° à frente). */
@@ -83,11 +88,17 @@ public final class Regras {
 	/** Até onde ele ouve, em metros: o jogador correndo, andando e um tiro. */
 	public static final float JUBILADO_OUVE_CORRIDA = 28f, JUBILADO_OUVE_PASSOS = 7f, JUBILADO_OUVE_TIRO = 70f;
 	/** Segundos sem ver o jogador até desistir da caçada, e procurando no último lugar antes de voltar a vagar. */
-	public static final float JUBILADO_PERDE = 4f, JUBILADO_PROCURA = 7f;
+	public static final float JUBILADO_PERDE = 6f, JUBILADO_PROCURA = 7f;
 	/** A que distância ele pega o jogador (e a partida está perdida), em metros. */
 	public static final float JUBILADO_PEGA = 1.3f;
 	/** Segundos caído depois de levar um tiro (a escopeta não o mata: só derruba). */
-	public static final float JUBILADO_CAIDO = 12f;
+	public static final float JUBILADO_CAIDO = 9f;
+	/**
+	 * O bote: caçando e vendo o jogador a até INVESTIDA_DE metros, ele arranca a JUBILADO_INVESTIDA m/s
+	 * (mais que o jogador correndo) por INVESTIDA_DURA segundos e espera INVESTIDA_ESPERA para o
+	 * próximo. Com a corrida sem limite, é o que impede que só correr baste para escapar.
+	 */
+	public static final float INVESTIDA_DE = 10f, JUBILADO_INVESTIDA = 8f, INVESTIDA_DURA = 1.2f, INVESTIDA_ESPERA = 2.5f;
 	/**
 	 * O "diretor": longe do jogador (mais que JUBILADO_LONGE metros, onde a neblina já o esconde),
 	 * ele se aproxima rápido; perto, volta a vagar devagar, rondando (a chance de cada destino ser
@@ -101,9 +112,10 @@ public final class Regras {
 	public static final float JUBILADO_CARENCIA = 25f;
 	/**
 	 * Na vez dele, farejando o jogador: vem a essa velocidade (m/s) até chegar a FAREJA_PERTO metros
-	 * (mais rápido que o jogador andando e mais lento que correndo: dá para fugir, mas correr faz barulho).
+	 * (mais rápido que o jogador andando e mais lento que correndo: dá para fugir, mas correr faz barulho);
+	 * mais perto, segue na velocidade do jogador andando (JUBILADO_FAREJANDO_PERTO), até vê-lo ou ouvi-lo.
 	 */
-	public static final float JUBILADO_FAREJANDO = 4.5f, FAREJA_PERTO = 20f;
+	public static final float JUBILADO_FAREJANDO = 4.5f, FAREJA_PERTO = 20f, JUBILADO_FAREJANDO_PERTO = 3.5f;
 	/** Farejando, ele sussurra (dá para ouvir de que lado ele vem) a partir dessa distância, em metros. */
 	public static final float JUBILADO_SUSSURRA_DE = 45f;
 	/** Distância mínima do jogador onde ele começa, e da Univali (ele não chega perto do prédio), em metros. */

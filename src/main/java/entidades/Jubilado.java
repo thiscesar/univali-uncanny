@@ -26,11 +26,13 @@ import obj.Object3D;
  *               Quando ganha a vez (o diretor o solta), fareja: vai até onde o jogador está agora,
  *               refazendo o caminho conforme ele anda, até vê-lo ou ouvi-lo.
  *   CACANDO     viu o jogador: corre atrás dele. Correndo ou à vista, o jogador continua sendo
- *               seguido; sem vê-lo nem ouvi-lo por 4 s, ele desiste.
+ *               seguido; sem vê-lo nem ouvi-lo por 6 s, ele o perde. Sozinho, procura e desiste;
+ *               na caçada do diretor (implacável), volta a farejar até a caçada acabar. Vendo-o
+ *               de perto, dá botes: arranca mais rápido que o jogador correndo, por pouco mais de um segundo.
  *   PROCURANDO  no último lugar onde viu ou ouviu o jogador: para e olha em volta por 7 s.
  *               Depois de uma caçada, dá um respiro de 35 s ao jogador (vaga em volta de si).
- *   CAIDO       levou um tiro de perto: cai e fica 12 s no chão. A escopeta não o mata. Ao
- *               levantar, vai direto para onde o jogador está.
+ *   CAIDO       levou um tiro de perto: cai e fica 9 s no chão. A escopeta não o mata. Ao
+ *               levantar, vai direto para onde o jogador está (implacável: fareja até achá-lo).
  *   ATACANDO    alcançou o jogador: ataca; no fim da animação, a partida está perdida.
  *   RECUANDO    (só quem ronda) o jogador chegou perto ou o iluminou com a lanterna: para, encara e
  *               recua de costas, devagar, deslizando, sem mexer as pernas. Se o jogador insistir
@@ -63,6 +65,7 @@ public class Jubilado extends Object3D implements Atingivel {
 		default void caiu(Jubilado j) {}
 		default void levantou(Jubilado j) {}
 		default void atacou(Jubilado j) {}
+		default void investiu(Jubilado j) {}
 	}
 
 	/** A caixa de acerto sem o modelo MD2: {xMin, yMin, zMin, xMax, yMax, zMax} em metros. */
@@ -128,6 +131,13 @@ public class Jubilado extends Object3D implements Atingivel {
 	private boolean farejando;
 	/** Farejando, segundos até o próximo sussurro. */
 	private float proximoSussurro;
+	/**
+	 * Na caçada do diretor: perder o jogador de vista não encerra nada, ele volta a farejar (vai até
+	 * onde o jogador está agora) até o diretor encerrar a caçada. Sozinho (sem diretor), não.
+	 */
+	private boolean implacavel;
+	/** O bote: segundos que ainda faltam dele, e até poder dar o próximo. */
+	private float investida, esperaInvestida;
 	/** Quem ronda: segundos (somados) com a lanterna nele; em JUBILADO_PROVOCA, é provocado. */
 	private float provocacao;
 	/** Foi provocado e o diretor ainda não ficou sabendo (ver foiProvocado). */
@@ -198,6 +208,7 @@ public class Jubilado extends Object3D implements Atingivel {
 	/** A vez dele: passa a caçar, e vem logo para perto do jogador (sem respiro). */
 	public void liberarCaca() {
 		papel = Papel.CACADOR;
+		implacavel = true;
 		respiro = 0;
 		if (estado != Estado.CAIDO && estado != Estado.ATACANDO) {
 			farejando = true;
@@ -211,6 +222,7 @@ public class Jubilado extends Object3D implements Atingivel {
 	 */
 	public void enfurecer() {
 		papel = Papel.CACADOR;
+		implacavel = true;
 		respiro = 0;
 		provocado = false;
 		provocacao = 0;
@@ -229,6 +241,7 @@ public class Jubilado extends Object3D implements Atingivel {
 	/** Acabou a vez dele: volta a só rondar de longe (caído, termina de levantar e foge). */
 	public void encerrarCaca() {
 		papel = Papel.OBSERVADOR;
+		implacavel = false;
 		farejando = false;
 		provocacao = 0;
 		if (estado == Estado.CACANDO || estado == Estado.DESCONFIADO || estado == Estado.PROCURANDO) {
@@ -287,6 +300,8 @@ public class Jubilado extends Object3D implements Atingivel {
 		tempoNoEstado += dt;
 		replanejar -= dt;
 		respiro = Math.max(0, respiro - dt);
+		investida = Math.max(0, investida - dt);
+		esperaInvestida = Math.max(0, esperaInvestida - dt);
 		if (papel == Papel.OBSERVADOR && estado != Estado.CAIDO && estado != Estado.ATACANDO) {
 			observar(dt);
 			animarAndando();
@@ -332,7 +347,7 @@ public class Jubilado extends Object3D implements Atingivel {
 			else grunhir(dt);
 			float rapidez = !farejando ? Regras.JUBILADO_DESCONFIADO
 					: dist > Regras.JUBILADO_LONGE ? Regras.JUBILADO_APROXIMANDO
-					: dist > Regras.FAREJA_PERTO ? Regras.JUBILADO_FAREJANDO : Regras.JUBILADO_DESCONFIADO;
+					: dist > Regras.FAREJA_PERTO ? Regras.JUBILADO_FAREJANDO : Regras.JUBILADO_FAREJANDO_PERTO;
 			if (caminho == null || seguirCaminho(dt, rapidez) || empacou(dt)) {
 				if (farejando && !alvoEscondido) desconfiar(alvoX, alvoZ); // chegou e ele já foi: continua farejando
 				else procurar();
@@ -347,8 +362,12 @@ public class Jubilado extends Object3D implements Atingivel {
 				semNoticia += dt;
 				if (semNoticia >= Regras.JUBILADO_PERDE) {
 					eventos.perdeu(this);
-					respiro = Regras.JUBILADO_RESPIRO;
-					procurar();
+					if (implacavel) {
+						farejar(); // na caçada do diretor, não desiste: vai atrás do cheiro
+					} else {
+						respiro = Regras.JUBILADO_RESPIRO;
+						procurar();
+					}
 					return;
 				}
 			}
@@ -357,15 +376,16 @@ public class Jubilado extends Object3D implements Atingivel {
 				atacar();
 				return;
 			}
+			float rapidez = rapidezNoBote(ve, dist);
 			if (ve && dist <= PERTO_DIRETO && colisao.linhaLivre(x, z, alvoX, alvoZ, 0.1f)) {
 				caminho = null;
-				andarPara(dt, alvoX, alvoZ, Regras.JUBILADO_CACANDO);
+				andarPara(dt, alvoX, alvoZ, rapidez);
 			} else {
 				if (caminho == null || replanejar <= 0) {
 					replanejar = REPLANEJAR;
 					planejar(ultimoX, ultimoZ);
 				}
-				if (caminho == null || seguirCaminho(dt, Regras.JUBILADO_CACANDO)) {
+				if (caminho == null || seguirCaminho(dt, rapidez)) {
 					frear(dt); // chegou onde o jogador estava e não o vê: os segundos sem notícia correm
 				}
 			}
@@ -375,7 +395,9 @@ public class Jubilado extends Object3D implements Atingivel {
 			if (ouve) { desconfiar(alvoX, alvoZ); return; }
 			frear(dt);
 			guinada += dt * 0.9f * (float) Math.sin(tempoNoEstado * 0.8f); // olha para um lado e para o outro
-			if (tempoNoEstado >= Regras.JUBILADO_PROCURA) {
+			if (tempoNoEstado >= Regras.JUBILADO_PROCURA && implacavel) {
+				farejar();
+			} else if (tempoNoEstado >= Regras.JUBILADO_PROCURA) {
 				mudarPara(Estado.VAGANDO);
 				tocar("run", true);
 				parado = 0.5f;
@@ -385,6 +407,11 @@ public class Jubilado extends Object3D implements Atingivel {
 			velocidade = 0;
 			if (tempoNoEstado >= Regras.JUBILADO_CAIDO && papel == Papel.OBSERVADOR) {
 				fugir(); // quem só ronda levanta e some na neblina
+			} else if (tempoNoEstado >= Regras.JUBILADO_CAIDO && implacavel && !ve()) {
+				// levanta e, sem ver o jogador (ele já correu), vem farejando até achá-lo
+				tocar("run", true);
+				eventos.levantou(this);
+				farejar();
 			} else if (tempoNoEstado >= Regras.JUBILADO_CAIDO) {
 				// levanta e vai direto para onde o jogador está
 				ultimoX = alvoX;
@@ -529,6 +556,19 @@ public class Jubilado extends Object3D implements Atingivel {
 		return colisao.linhaLivre(x, z, alvoX, alvoZ, 0.1f);
 	}
 
+	/**
+	 * A velocidade caçando: vendo o jogador de perto, de tempos em tempos dá um bote, mais rápido que
+	 * ele correndo. O bote vale até o fim, mesmo que o jogador se afaste ou ele passe a seguir o A*.
+	 */
+	private float rapidezNoBote(boolean ve, float dist) {
+		if (ve && investida <= 0 && esperaInvestida <= 0 && dist <= Regras.INVESTIDA_DE) {
+			investida = Regras.INVESTIDA_DURA;
+			esperaInvestida = Regras.INVESTIDA_DURA + Regras.INVESTIDA_ESPERA;
+			eventos.investiu(this);
+		}
+		return investida > 0 ? Regras.JUBILADO_INVESTIDA : Regras.JUBILADO_CACANDO;
+	}
+
 	/** Ouve o jogador: correndo (de longe) ou andando (só de perto). Parado, não faz barulho. */
 	boolean ouve() {
 		if (alvoEscondido) return false;
@@ -570,6 +610,13 @@ public class Jubilado extends Object3D implements Atingivel {
 		ultimoX = px;
 		ultimoZ = pz;
 		if (!planejar(px, pz)) caminho = null;
+	}
+
+	/** Vai atrás do jogador pelo cheiro: até onde ele está agora, refazendo o caminho conforme ele anda. */
+	private void farejar() {
+		farejando = true;
+		if (alvoEscondido) procurar(); // na Univali não dá para segui-lo: espera ali
+		else desconfiar(alvoX, alvoZ);
 	}
 
 	private void procurar() {

@@ -1366,6 +1366,13 @@ public class TelaJogo implements Tela {
 			}
 
 			@Override
+			public void investiu(Jubilado j) {
+				// o bote: um grunhido forte, de perto, e a tela treme um pouco
+				audio.tocar3D(somGrunhido, j.x, j.y + 1.7f, j.z, 1f, false, 8f);
+				tremor = Math.max(tremor, 0.3f);
+			}
+
+			@Override
 			public void caiu(Jubilado j) {
 				audio.tocar3D(somQuedaJubilado, j.x, j.y + 1.2f, j.z, 1f, false, 8f);
 			}

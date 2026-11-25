@@ -91,7 +91,7 @@ class DiretorDeSustosTest {
 	}
 
 	@Test
-	void doisCacadoresSoComProvasEMaisComMaisProvas() {
+	void doisCacadoresMaisProvaveisComMaisProvas() {
 		Cena c = new Cena(11);
 		int[] dois = new int[4];
 		for (int provas = 0; provas < 4; provas++) {
@@ -99,9 +99,9 @@ class DiretorDeSustosTest {
 				if (c.diretor.sortearQuantos(provas) == 2) dois[provas]++;
 			}
 		}
-		assertEquals(0, dois[0], "sem provas, nunca dois");
+		assertEquals(Regras.CHANCE_DOIS_CACADORES[0], dois[0] / 2000f, 0.03f);
 		assertEquals(Regras.CHANCE_DOIS_CACADORES[3], dois[3] / 2000f, 0.04f);
-		assertTrue(dois[1] < dois[3]);
+		assertTrue(dois[0] < dois[1] && dois[1] < dois[3]);
 	}
 
 	@Test
@@ -119,6 +119,26 @@ class DiretorDeSustosTest {
 	}
 
 	@Test
+	void perdendoOJogadorOCacadorFarejaEACacadaSoAcabaNoTempo() {
+		Cena c = new Cena(6);
+		c.diretor.forcar(0, c.jx, c.jz);
+		Jubilado cacador = c.diretor.cacadores().get(0);
+		for (int i = 0; i < 60 * 20 && cacador.estado() != Jubilado.Estado.CACANDO; i++) c.quadro(0);
+		assertEquals(Jubilado.Estado.CACANDO, cacador.estado(), "achou o jogador");
+		c.jx = cacador.x > 100 ? 35 : 165; // o jogador some: longe, do outro lado do mapa
+		c.jz = cacador.z > 100 ? 35 : 165;
+		double antes = Math.hypot(cacador.x - c.jx, cacador.z - c.jz);
+		for (int i = 0; i < 12 * 20; i++) c.quadro(0);
+		assertEquals(Vez.CACADA, c.diretor.vez(), "perder o jogador de vista não acaba a caçada");
+		assertEquals(Jubilado.Papel.CACADOR, cacador.papel());
+		assertNotEquals(Jubilado.Estado.PROCURANDO, cacador.estado());
+		assertNotEquals(Jubilado.Estado.VAGANDO, cacador.estado());
+		assertTrue(Math.hypot(cacador.x - c.jx, cacador.z - c.jz) < antes - 20, "veio atrás pelo cheiro");
+		for (int i = 0; i < Regras.PERSEGUICAO * 20; i++) c.quadro(0);
+		assertEquals(Vez.CALMARIA, c.diretor.vez(), "o tempo da perseguição acabou");
+	}
+
+	@Test
 	void derrubadoDuasVezesOCacadorDesiste() {
 		Cena c = new Cena(9);
 		c.diretor.forcar(0, c.jx, c.jz);
@@ -127,7 +147,8 @@ class DiretorDeSustosTest {
 		c.quadro(0);
 		assertEquals(Vez.CACADA, c.diretor.vez(), "uma queda: a caçada continua");
 		for (int i = 0; i < (Regras.JUBILADO_CAIDO + 0.5f) * 20; i++) c.quadro(0);
-		assertEquals(Jubilado.Estado.CACANDO, cacador.estado(), "levantou caçando");
+		assertTrue(cacador.estado() == Jubilado.Estado.CACANDO || cacador.estado() == Jubilado.Estado.DESCONFIADO,
+				"levantou e vem atrás do jogador: " + cacador.estado());
 		cacador.receberDano(4.5f);
 		c.quadro(0);
 		assertEquals(Vez.CALMARIA, c.diretor.vez(), "a segunda queda acaba a caçada");

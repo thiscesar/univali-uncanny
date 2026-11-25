@@ -308,6 +308,27 @@ class JubiladoTest {
 	}
 
 	@Test
+	void caçandoDePertoDaBotesMaisRapidosQueOJogadorCorrendo() {
+		Jubilado j = novo();
+		float px = 108; // o jogador a 8 m, fugindo em linha reta a 6 m/s
+		j.definirAlvo(px, 1.7f, 100, true, true, false, false);
+		j.SimulaSe(16);
+		assertEquals(Jubilado.Estado.CACANDO, j.estado());
+		float maior = 0, depois = 0;
+		for (int i = 0; i < 4 * 60; i++) {
+			px += 6 * 0.016f;
+			j.definirAlvo(px, 1.7f, 100, true, true, false, false);
+			j.SimulaSe(16);
+			if (i < (Regras.INVESTIDA_DURA + 0.1f) * 60) maior = Math.max(maior, j.velocidade());
+			if (i > (Regras.INVESTIDA_DURA + 0.6f) * 60 && i < (Regras.INVESTIDA_DURA + Regras.INVESTIDA_ESPERA) * 60) {
+				depois = Math.max(depois, j.velocidade());
+			}
+		}
+		assertTrue(maior > 6.5f, "no bote passa do jogador correndo: " + maior);
+		assertTrue(depois <= Regras.JUBILADO_CACANDO + 1e-3f, "depois do bote, a corrida normal: " + depois);
+	}
+
+	@Test
 	void enfurecidoViraCacadorJaCacando() {
 		Jubilado j = novo();
 		j.encerrarCaca();
