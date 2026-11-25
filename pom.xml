@@ -10,6 +10,8 @@
 	<!-- Java 17+: necessário para o código do algoritmo genético (record, etc.) -->
 	<maven.compiler.release>17</maven.compiler.release>
 	<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+	<!-- ALTERADO: classe principal padrão do exec:java; -Dexec.mainClass=... escolhe outra (ex.: MainTerrenoPrevia) -->
+	<exec.mainClass>main.Main3D</exec.mainClass>
   </properties>
 
 	<!-- Escolhe automaticamente as bibliotecas nativas da LWJGL do sistema operacional.
@@ -148,7 +150,7 @@
 				<artifactId>exec-maven-plugin</artifactId>
 				<version>3.5.0</version>
 				<configuration>
-					<mainClass>main.Main3D</mainClass>
+					<mainClass>${exec.mainClass}</mainClass>
 				</configuration>
 			</plugin>
 		</plugins>

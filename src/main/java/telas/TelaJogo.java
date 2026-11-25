@@ -1708,7 +1708,8 @@ public class TelaJogo implements Tela {
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
 		desenharEfeitosMonstro(overlay);
 		if (tempoSusto < 0 && fim == null && tempoEntrega < 0 && despertar.terminou()) {
-			if (objetivos.temEscopeta()) desenharHudArma(overlay);
+			if (objetivos.temEscopeta()) desenharHudArma(overlay); // a mira e os cartuchos só com a arma
+			desenharHudTextos(overlay); // as dicas, o objetivo e as falas valem desde o começo
 		}
 		if (!despertar.terminou()) desenharPalpebras(overlay);
 		if (tempoEntrega >= 0) {
@@ -1852,6 +1853,16 @@ public class TelaJogo implements Tela {
 					new Color(170, 160, 150), Texto.Alinhamento.DIREITA);
 		}
 
+	}
+
+	/**
+	 * Os textos da partida, com ou sem a escopeta: as provas no canto, a dica do E (pegar, abrir,
+	 * falar), o objetivo no alto, as falas, as dicas do começo e as mensagens.
+	 */
+	private void desenharHudTextos(Overlay2D o) {
+		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
+		float cx = w / 2f;
+		float escala = Math.max(1f, h / 800f);
 		desenharHudProvas(o, escala);
 		Uso uso = usoPerto();
 		if (uso != null && partida.provaAlcancavel(jogador.x, jogador.z) == null && caixaAlcancavel() == null) {
