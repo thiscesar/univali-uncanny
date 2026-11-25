@@ -14,11 +14,18 @@ public class CaixaMunicao extends Object3D {
 
 	/** Giro da caixa no chão, em radianos (cada uma num ângulo, para não parecerem iguais). */
 	public final float giro;
+	/** Quantos cartuchos ela dá. */
+	public final int quantidade;
 	private boolean pega = false;
 
 	public CaixaMunicao(float x, float y, float z, float giro) {
+		this(x, y, z, giro, Regras.CARTUCHOS_POR_CAIXA);
+	}
+
+	public CaixaMunicao(float x, float y, float z, float giro, int quantidade) {
 		super(x, y, z);
 		this.giro = giro;
+		this.quantidade = quantidade;
 	}
 
 	public boolean pega() {
@@ -36,6 +43,6 @@ public class CaixaMunicao extends Object3D {
 		if (pega) return 0;
 		pega = true;
 		vivo = false;
-		return Regras.CARTUCHOS_POR_CAIXA;
+		return quantidade;
 	}
 }

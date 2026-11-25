@@ -1,148 +1,117 @@
 package jogo;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
-import entidades.DragonKnight;
 import entidades.Jubilado;
 
 /**
- * O diretor de sustos: controla o ritmo da partida, para não ficar chato (monstro o tempo todo)
+ * O diretor de sustos: controla o ritmo da floresta, para não ficar chato (monstro o tempo todo)
  * nem sem graça (nada acontecendo). A ideia vem de jogos como Left 4 Dead e Alien: Isolation.
+ * A floresta é dos Jubilados; o Dragon Knight fica para a volta, dentro da Univali.
  *
- * O ciclo é calmaria, ameaça, calmaria, ameaça...
- *  - CALMARIA: nenhum monstro ataca. Os Jubilados só rondam de longe (dá para vê-los entre as
+ * O ciclo é calmaria, caçada, calmaria, caçada...
+ *  - CALMARIA: ninguém ataca. Os Jubilados só rondam de longe (dá para ver os olhos entre as
  *    árvores). A primeira dura a CARENCIA; as outras encurtam conforme as provas (50 s sem
  *    nenhuma, 30 s com as três): o fim é mais tenso, mas nunca sem respiro.
- *  - A vez do DRAGON_KNIGHT: ele surge em alguns segundos; a vez acaba quando ele some.
- *  - A vez do JUBILADO: o Jubilado mais perto do jogador passa a caçar; a vez acaba quando a
- *    caçada termina (ele perde o jogador de vista), quando é derrubado pela segunda vez (desiste,
- *    levanta e foge), ou em 60 s sem achar o jogador.
+ *  - CACADA: o Jubilado mais perto do jogador (às vezes os dois mais perto, com chance que cresce
+ *    com as provas) fareja e vem caçar. A caçada acaba quando nenhum caçador está mais atrás do
+ *    jogador (perderam o jogador de vista), ou em 60 s se nenhum o achou. Um caçador derrubado
+ *    pela segunda vez desiste (levanta e foge).
  *
- * Quem vem depois da calmaria é sorteado: o Dragon Knight começa raro (30%) e vai até 50% com as
- * provas; e nunca a mesma ameaça três vezes seguidas. Como só um monstro tem a vez, os dois
- * nunca atacam juntos. Só lógica (os monstros também): dá para testar e simular sem janela.
+ * Só lógica (os Jubilados também): dá para testar e simular sem janela.
  */
 public class DiretorDeSustos {
 
-	public enum Vez { CALMARIA, JUBILADO, DRAGON_KNIGHT }
+	public enum Vez { CALMARIA, CACADA }
 
-	private final DragonKnight dragonKnight;
 	private final List<Jubilado> jubilados;
 	private final Random random;
 
 	private Vez vez = Vez.CALMARIA;
-	/** Na calmaria: segundos até a próxima ameaça. Na vez de um monstro: o limite da vez. */
+	/** Na calmaria: segundos até a próxima caçada. Na caçada: o limite para achar o jogador. */
 	private float restante = Regras.CARENCIA;
-	private Vez ultima, penultima;
-	/** O monstro da vez já apareceu (a vez só acaba depois que ele sair de cena). */
+	/** Algum caçador já achou o jogador (a caçada só acaba depois que todos o perderem). */
 	private boolean comecou;
-	private Jubilado cacador;
-	/** Quantas quedas o caçador já tinha quando a vez dele começou. */
-	private int quedasNoInicio;
-	private int ameacas;
+	/** Os caçadores desta caçada, com quantas quedas cada um tinha quando ela começou. */
+	private final Map<Jubilado, Integer> cacadores = new HashMap<>();
+	private int cacadas, sobrevividas;
 
-	public DiretorDeSustos(DragonKnight dragonKnight, List<Jubilado> jubilados, Random random) {
-		this.dragonKnight = dragonKnight;
+	public DiretorDeSustos(List<Jubilado> jubilados, Random random) {
 		this.jubilados = jubilados;
 		this.random = random;
 		for (Jubilado j : jubilados) j.encerrarCaca(); // todos começam só rondando
 	}
 
 	/**
-	 * A cada quadro, antes de simular os monstros. ativo = os monstros já estão soltos (o jogador
-	 * já saiu da Univali); antes disso, o tempo não corre.
+	 * A cada quadro, antes de simular os Jubilados. ativo = eles já estão soltos (o jogador já saiu
+	 * da Univali e ainda não voltou com as provas); fora disso, o tempo não corre.
 	 */
 	public void atualizar(float dt, int provas, float jogadorX, float jogadorZ, boolean ativo) {
-		if (vez != Vez.DRAGON_KNIGHT) {
-			dragonKnight.segurarAparicao(1000); // fora da vez dele, ele não surge
-		}
 		if (!ativo) return;
-		if (vez != Vez.DRAGON_KNIGHT && dragonKnight.estado() != DragonKnight.Estado.AUSENTE) {
-			// ele surgiu fora da vez (depuração): a vez passa a ser dele, e o Jubilado para de caçar
-			if (cacador != null) cacador.encerrarCaca();
-			cacador = null;
-			penultima = ultima;
-			ultima = vez = Vez.DRAGON_KNIGHT;
-			comecou = true;
-			ameacas++;
-		}
 		restante -= dt;
-		switch (vez) {
-		case CALMARIA -> {
-			if (restante <= 0) comecar(sortear(provas), jogadorX, jogadorZ);
+		if (vez == Vez.CALMARIA) {
+			if (restante <= 0) comecar(provas, jogadorX, jogadorZ);
+			return;
 		}
-		case DRAGON_KNIGHT -> {
-			if (dragonKnight.estado() != DragonKnight.Estado.AUSENTE) {
-				comecou = true;
-			} else if (comecou || restante <= 0) {
-				terminar(provas); // ele sumiu (ou não achou lugar para surgir)
+		boolean algumAtras = false;
+		for (var it = cacadores.entrySet().iterator(); it.hasNext();) {
+			var e = it.next();
+			Jubilado j = e.getKey();
+			if (j.quedas() - e.getValue() >= Regras.QUEDAS_PARA_DESISTIR) {
+				j.encerrarCaca(); // derrubado de novo: desiste (ainda caído, vira observador e levanta fugindo)
+				it.remove();
+			} else if (ameacando(j)) {
+				algumAtras = true;
 			}
 		}
-		case JUBILADO -> {
-			int quedas = cacador != null ? cacador.quedas() - quedasNoInicio : 0;
-			if (quedas >= Regras.QUEDAS_PARA_DESISTIR) {
-				terminar(provas); // derrubado de novo: desiste (ainda caído, vira observador e levanta fugindo)
-			} else if (ameacando(cacador)) {
-				comecou = true;
-			} else if (comecou || restante <= 0) {
-				terminar(provas); // a caçada acabou (ou ele não achou o jogador a tempo)
-			}
-		}
+		if (algumAtras) {
+			comecou = true;
+		} else if (comecou || restante <= 0 || cacadores.isEmpty()) {
+			terminar(provas); // todos perderam o jogador (ou nenhum o achou a tempo)
 		}
 	}
 
 	/** O Jubilado está atrás do jogador: caçando, caído (vai levantar caçando) ou atacando. */
 	private static boolean ameacando(Jubilado j) {
-		return j != null && (j.estado() == Jubilado.Estado.CACANDO || j.estado() == Jubilado.Estado.CAIDO
-				|| j.estado() == Jubilado.Estado.ATACANDO);
+		return j.estado() == Jubilado.Estado.CACANDO || j.estado() == Jubilado.Estado.CAIDO
+				|| j.estado() == Jubilado.Estado.ATACANDO;
 	}
 
-	/** O Dragon Knight começa raro e fica mais comum com as provas; nunca três vezes seguidas a mesma ameaça. */
-	Vez sortear(int provas) {
-		if (ultima != null && ultima == penultima) {
-			return ultima == Vez.JUBILADO ? Vez.DRAGON_KNIGHT : Vez.JUBILADO;
-		}
-		float chance = Regras.CHANCE_DRAGON_KNIGHT[Math.min(provas, Regras.CHANCE_DRAGON_KNIGHT.length - 1)];
-		return random.nextFloat() < chance ? Vez.DRAGON_KNIGHT : Vez.JUBILADO;
+	/** Quantos caçam nesta caçada: um, ou às vezes dois (mais provável com mais provas). */
+	int sortearQuantos(int provas) {
+		float chance = Regras.CHANCE_DOIS_CACADORES[Math.min(provas, Regras.CHANCE_DOIS_CACADORES.length - 1)];
+		return random.nextFloat() < chance ? 2 : 1;
 	}
 
-	private void comecar(Vez nova, float jogadorX, float jogadorZ) {
-		penultima = ultima;
-		ultima = nova;
-		vez = nova;
+	private void comecar(int provas, float jogadorX, float jogadorZ) {
+		vez = Vez.CACADA;
 		comecou = false;
-		ameacas++;
-		if (nova == Vez.DRAGON_KNIGHT) {
-			restante = Regras.ESPERA_DRAGON_KNIGHT;
-			dragonKnight.apressarProximaAparicao(0.5f + random.nextFloat() * 2.5f);
-		} else {
-			restante = Regras.VEZ_JUBILADO;
-			cacador = maisPerto(jogadorX, jogadorZ);
-			if (cacador != null) {
-				cacador.liberarCaca();
-				quedasNoInicio = cacador.quedas();
-			}
+		restante = Regras.VEZ_JUBILADO;
+		cacadas++;
+		for (Jubilado j : maisPerto(jogadorX, jogadorZ, sortearQuantos(provas))) {
+			j.liberarCaca();
+			cacadores.put(j, j.quedas());
 		}
 	}
 
-	/** O Jubilado mais perto do jogador que pode caçar (não está caído). */
-	private Jubilado maisPerto(float px, float pz) {
-		Jubilado melhor = null;
-		double menor = Double.MAX_VALUE;
+	/** Os "quantos" Jubilados mais perto do jogador que podem caçar (não estão caídos). */
+	private List<Jubilado> maisPerto(float px, float pz, int quantos) {
+		List<Jubilado> livres = new ArrayList<>();
 		for (Jubilado j : jubilados) {
-			double d = Math.hypot(j.x - px, j.z - pz);
-			if (j.estado() != Jubilado.Estado.CAIDO && d < menor) {
-				menor = d;
-				melhor = j;
-			}
+			if (j.estado() != Jubilado.Estado.CAIDO) livres.add(j);
 		}
-		return melhor;
+		livres.sort((a, b) -> Double.compare(Math.hypot(a.x - px, a.z - pz), Math.hypot(b.x - px, b.z - pz)));
+		return livres.subList(0, Math.min(quantos, livres.size()));
 	}
 
 	private void terminar(int provas) {
-		if (cacador != null) cacador.encerrarCaca();
-		cacador = null;
+		if (comecou) sobrevividas++; // acharam o jogador e ele escapou
+		for (Jubilado j : cacadores.keySet()) j.encerrarCaca();
+		cacadores.clear();
 		vez = Vez.CALMARIA;
 		float base = Regras.CALMARIA[Math.min(provas, Regras.CALMARIA.length - 1)];
 		restante = base * (1 + (random.nextFloat() * 2 - 1) * Regras.VARIACAO_INTERVALO);
@@ -153,30 +122,39 @@ public class DiretorDeSustos {
 		if (vez == Vez.CALMARIA) restante = Math.min(restante, Regras.AMEACA_DEPOIS_DA_PROVA);
 	}
 
-	/** Já dá a vez a um monstro agora (na volta com as provas, e na depuração), se ninguém estiver em cena. */
-	public void forcar(Vez nova, float jogadorX, float jogadorZ) {
-		if (vez != Vez.CALMARIA && comecou) return;
-		if (cacador != null) cacador.encerrarCaca();
-		cacador = null;
-		comecar(nova, jogadorX, jogadorZ);
+	/** Começa uma caçada agora (depuração), se não houver uma em andamento. */
+	public void forcar(int provas, float jogadorX, float jogadorZ) {
+		if (vez == Vez.CALMARIA) comecar(provas, jogadorX, jogadorZ);
+	}
+
+	/** Acaba com tudo (o jogador voltou para a Univali com as provas): todos voltam a só rondar. */
+	public void encerrar() {
+		for (Jubilado j : cacadores.keySet()) j.encerrarCaca();
+		cacadores.clear();
+		vez = Vez.CALMARIA;
+		restante = Float.MAX_VALUE;
 	}
 
 	public Vez vez() {
 		return vez;
 	}
 
-	/** Segundos que faltam: da calmaria, ou do limite da vez. */
+	/** Segundos que faltam: da calmaria, ou do limite da caçada. */
 	public float restante() {
 		return restante;
 	}
 
-	/** O Jubilado da vez (null fora da vez dele). */
-	public Jubilado cacador() {
-		return cacador;
+	/** Os caçadores desta caçada (vazio na calmaria). */
+	public List<Jubilado> cacadores() {
+		return new ArrayList<>(cacadores.keySet());
 	}
 
-	/** Quantas ameaças já começaram na partida. */
-	public int ameacas() {
-		return ameacas;
+	/** Quantas caçadas já começaram, e de quantas o jogador escapou (acharam e ele sobreviveu). */
+	public int cacadas() {
+		return cacadas;
+	}
+
+	public int sobrevividas() {
+		return sobrevividas;
 	}
 }

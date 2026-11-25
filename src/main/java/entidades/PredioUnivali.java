@@ -174,6 +174,17 @@ public class PredioUnivali extends Object3D {
 		return lista;
 	}
 
+	/**
+	 * A escopeta deitada no balcão do saguão (o cano para a TV) e a carta ao lado dela, no modelo
+	 * {x, y, z}: quem tentou fugir antes deixou as duas ali.
+	 */
+	public static final float[] ESCOPETA = { 0.35f, 1.15f, 9.0f }, CARTA = { -0.75f, 1.12f, 9.0f };
+
+	/** Onde o jogador pega a escopeta e a carta (o meio entre as duas, no chão do modelo: {x, z}). */
+	public float[] escopetaNoModelo() {
+		return new float[] { (ESCOPETA[0] + CARTA[0]) / 2, ESCOPETA[2] };
+	}
+
 	/** Os móveis que o jogador não atravessa: a mesa do professor, o balcão do saguão e as fileiras de carteiras. */
 	public List<AndarUnivali.Caixa> moveis() {
 		List<AndarUnivali.Caixa> lista = new ArrayList<>();

@@ -29,6 +29,10 @@ class ObjetivosTest {
 		assertFalse(o.portaEntradaAberta(), "a porta da frente só abre depois da conversa");
 		List<String> falas = o.falarSemAsProvas(List.of("M1", "M2", "M3"));
 		assertEquals(3, falas.size());
+		assertFalse(o.portaEntradaAberta(), "sem a escopeta, ninguém sai");
+		assertEquals(Objetivos.Etapa.PEGAR_ESCOPETA, o.etapa(0, 3));
+		assertEquals("Pegue a escopeta no balcão do saguão.", o.texto(0, 3));
+		o.pegarEscopeta();
 		assertTrue(o.portaEntradaAberta());
 		assertEquals(Objetivos.Etapa.BUSCAR_PROVAS, o.etapa(1, 3));
 		assertEquals("Encontre as provas na floresta (1 de 3).", o.texto(1, 3));

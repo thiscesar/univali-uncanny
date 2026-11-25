@@ -16,8 +16,8 @@ import render.Texto;
  * atualiza a tela de cima, então o tempo da partida e os cronômetros do Dragon Knight param.
  * Todos os sons pausam (alSourcePause) e voltam de onde pararam ao continuar.
  *
- * Botões: Continuar (ou ESC), Opções (o mesmo painel do menu: volumes e sensibilidade) e
- * Desistir, que pede confirmação antes de voltar ao menu. A seed aparece embaixo, para anotar
+ * Botões: Continuar (ou ESC), Carta (relê a carta do balcão, depois de pegá-la), Opções (o mesmo
+ * painel do menu: volumes e sensibilidade) e Desistir, que pede confirmação antes de voltar ao menu. A seed aparece embaixo, para anotar
  * um mapa bom.
  */
 public class TelaPausa implements Tela {
@@ -31,9 +31,7 @@ public class TelaPausa implements Tela {
 	private final long seed;
 
 	private final GrupoBotoes botoes = new GrupoBotoes();
-	private final Botao continuar = criarBotao(botoes, "Continuar");
-	private final Botao opcoes = criarBotao(botoes, "Opções");
-	private final Botao desistir = criarBotao(botoes, "Desistir");
+	private final Botao continuar, carta, opcoes, desistir;
 
 	private final GrupoBotoes confirmacao = new GrupoBotoes();
 	// o "Não" vem primeiro: o foco começa nele, e dois Enter seguidos não desistem sem querer
@@ -44,9 +42,14 @@ public class TelaPausa implements Tela {
 
 	private Painel painel = null;
 
-	public TelaPausa(GerenciadorTelas gerenciador, long seed) {
+	/** temCarta: o jogador já pegou a carta (aparece o botão para relê-la). */
+	public TelaPausa(GerenciadorTelas gerenciador, long seed, boolean temCarta) {
 		this.gerenciador = gerenciador;
 		this.seed = seed;
+		continuar = criarBotao(botoes, "Continuar");
+		carta = temCarta ? criarBotao(botoes, "Carta") : null;
+		opcoes = criarBotao(botoes, "Opções");
+		desistir = criarBotao(botoes, "Desistir");
 	}
 
 	private static Botao criarBotao(GrupoBotoes grupo, String texto) {
@@ -99,6 +102,10 @@ public class TelaPausa implements Tela {
 
 		if (acionado == continuar) {
 			gerenciador.fecharSobreposicao();
+		} else if (acionado != null && acionado == carta) {
+			// a carta por cima da partida; ao fechar, volta para a pausa
+			gerenciador.sobrepor(new TelaCarta(gerenciador, () -> gerenciador.sobrepor(new TelaPausa(gerenciador, seed, true))));
+			return;
 		} else if (acionado == opcoes) {
 			painel = new PainelOpcoes(gerenciador.audio());
 		} else if (acionado == desistir) {

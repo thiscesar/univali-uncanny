@@ -308,6 +308,25 @@ class JubiladoTest {
 	}
 
 	@Test
+	void farejandoSussurraQuandoChegaPerto() {
+		Jubilado j = novo();
+		int[] sussurros = { 0 };
+		j.definirEventos(new Jubilado.Eventos() {
+			@Override
+			public void sussurrou(Jubilado quem) {
+				sussurros[0]++;
+			}
+		});
+		j.encerrarCaca();
+		j.definirAlvo(100, 1.7f, 160, false, false, false, false); // a 60 m, parado e quieto
+		j.liberarCaca(); // a vez dele: vem farejando
+		simular(j, 2);
+		assertEquals(0, sussurros[0], "longe ainda não sussurra");
+		simular(j, 12);
+		assertTrue(sussurros[0] >= 1, "chegando perto, sussurra");
+	}
+
+	@Test
 	void pausadoFicaParado() {
 		Jubilado j = novo();
 		j.pausado = true;

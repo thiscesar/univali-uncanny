@@ -7,12 +7,12 @@ import entidades.Prova;
 
 /**
  * O estado da partida que não é de nenhuma entidade sozinha: as provas, o tempo jogado e as
- * estatísticas que aparecem no fim (tiros, bagos que acertaram, aparições sobrevividas). Só lógica.
+ * estatísticas que aparecem no fim (tiros, bagos que acertaram, caçadas sobrevividas). Só lógica.
  */
 public class Partida {
 
 	/** Uma "foto" das estatísticas, para as telas de fim. */
-	public record Estatisticas(long seed, float segundos, int aparicoesSobrevividas, int tiros, int bagosDisparados,
+	public record Estatisticas(long seed, float segundos, int cacadasSobrevividas, int tiros, int bagosDisparados,
 			int bagosAcertados, int provasColetadas, int provasTotal) {
 
 		/** Quantos por cento dos bagos acertaram o monstro (0 se não houve tiro). */
@@ -47,8 +47,8 @@ public class Partida {
 		bagosAcertados += acertos;
 	}
 
-	public Estatisticas estatisticas(int aparicoesSobrevividas) {
-		return new Estatisticas(seed, segundos, aparicoesSobrevividas, tiros, bagosDisparados, bagosAcertados,
+	public Estatisticas estatisticas(int cacadasSobrevividas) {
+		return new Estatisticas(seed, segundos, cacadasSobrevividas, tiros, bagosDisparados, bagosAcertados,
 				provasColetadas(), provas.size());
 	}
 

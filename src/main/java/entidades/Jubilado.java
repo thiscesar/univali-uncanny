@@ -54,6 +54,7 @@ public class Jubilado extends Object3D implements Atingivel {
 	public interface Eventos {
 		default void passo(Jubilado j) {}
 		default void grunhiu(Jubilado j) {}
+		default void sussurrou(Jubilado j) {}
 		default void viu(Jubilado j) {}
 		default void perdeu(Jubilado j) {}
 		default void caiu(Jubilado j) {}
@@ -122,6 +123,8 @@ public class Jubilado extends Object3D implements Atingivel {
 	private int quedas;
 	/** Ganhou a vez e ainda não achou o jogador: vai atrás do cheiro dele (onde ele está agora). */
 	private boolean farejando;
+	/** Farejando, segundos até o próximo sussurro. */
+	private float proximoSussurro;
 
 	/** Rotação do modelo em volta do eixo y, em radianos (0 = olhando para +x). */
 	public float guinada = 0;
@@ -294,9 +297,10 @@ public class Jubilado extends Object3D implements Atingivel {
 				replanejar = 3;
 				desconfiar(alvoX, alvoZ); // o jogador andou: refaz o caminho até onde ele está
 			}
-			grunhir(dt);
 			// farejando: longe (na neblina) vem bem rápido; até chegar perto, mais rápido que o jogador andando
 			float dist = (float) Math.hypot(alvoX - x, alvoZ - z);
+			if (farejando) sussurrar(dt, dist);
+			else grunhir(dt);
 			float rapidez = !farejando ? Regras.JUBILADO_DESCONFIADO
 					: dist > Regras.JUBILADO_LONGE ? Regras.JUBILADO_APROXIMANDO
 					: dist > Regras.FAREJA_PERTO ? Regras.JUBILADO_FAREJANDO : Regras.JUBILADO_DESCONFIADO;
@@ -759,6 +763,15 @@ public class Jubilado extends Object3D implements Atingivel {
 				caminho = null;
 				return;
 			}
+		}
+	}
+
+	/** Farejando e já perto (45 m), sussurra de tempos em tempos: o jogador ouve que ele está vindo. */
+	private void sussurrar(float dt, float dist) {
+		proximoSussurro -= dt;
+		if (proximoSussurro <= 0 && dist <= Regras.JUBILADO_SUSSURRA_DE) {
+			proximoSussurro = 5 + random.nextFloat() * 4;
+			eventos.sussurrou(this);
 		}
 	}
 

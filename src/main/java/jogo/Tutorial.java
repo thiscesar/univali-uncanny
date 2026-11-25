@@ -15,7 +15,7 @@ import java.util.Set;
 public class Tutorial {
 
 	/** O que o jogador fez (ou o que aconteceu com ele). */
-	public enum Acao { ANDOU, LANTERNA, USOU, SAIU, ATIROU }
+	public enum Acao { ANDOU, LANTERNA, USOU, ARMOU, SAIU, ATIROU }
 
 	/**
 	 * Uma dica: o texto, a ação que a conclui (null = só o tempo), a que precisa ter acontecido
@@ -25,10 +25,10 @@ public class Tutorial {
 
 	static final List<Dica> DICAS = List.of(
 			new Dica("WASD para andar, mouse para olhar", Acao.ANDOU, null, 20),
-			new Dica("F liga e desliga a lanterna", Acao.LANTERNA, null, 15),
 			new Dica("E para usar: portas, crachá, professor", Acao.USOU, null, 25),
-			new Dica("Encontre M1, M2 e M3 na floresta", null, Acao.SAIU, 6),
-			new Dica("Clique para atirar, R para recarregar", Acao.ATIROU, Acao.SAIU, 10));
+			new Dica("F liga e desliga a lanterna", Acao.LANTERNA, Acao.ARMOU, 15),
+			new Dica("Clique para atirar, R para recarregar", Acao.ATIROU, Acao.ARMOU, 10),
+			new Dica("Encontre M1, M2 e M3 na floresta", null, Acao.SAIU, 6));
 
 	/** Espera antes da primeira dica, e entre uma e outra, em segundos. */
 	static final float ESPERA = 1.5f;

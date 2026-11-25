@@ -179,6 +179,8 @@ public class TelaJogo implements Tela {
 	private Efeito somPorta;
 	/** Com as 3 provas, a Univali deixa de ser segura: ele vem logo na primeira entrada. */
 	private boolean voltouComAsProvas = false;
+	/** O jogador já pôs os pés fora da Univali: os Jubilados e os sustos da floresta começam. */
+	private boolean saiuDaUnivali = false;
 	private int ultimaFalaEntrega = -1;
 	/** audio/risada.ogg (null = sem o arquivo: a risada vira galho). */
 	private Efeito somRisada;
@@ -211,6 +213,15 @@ public class TelaJogo implements Tela {
 	private Efeito somPisadaJubilado, somGrunhido, somGritoJubilado, somQuedaJubilado;
 	/** O que ele fala quando vê o jogador ou levanta (a voz gravada, com o efeito de voz de doido). */
 	private final jogo.FalasJubilado falasJubilado = new jogo.FalasJubilado();
+	/** O susto de quando ele vê o jogador (audio/jubilado_glitch.ogg) e os sussurros de quando vem farejando. */
+	private Efeito somGlitchJubilado;
+	private Efeito[] sussurrosJubilado;
+	/** A fala que vem logo depois do glitch: de quem, qual e daqui a quantos segundos. */
+	private Jubilado quemVaiFalar;
+	private jogo.FalasJubilado.Fala falaPendente;
+	private float atrasoFala;
+	/** Depois do glitch, quanto a fala espera (segundos). */
+	private static final float ATRASO_FALA = 0.9f;
 
 	// a escopeta, os efeitos dela e as caixas de munição
 	private final Escopeta escopeta = new Escopeta();
@@ -306,7 +317,7 @@ public class TelaJogo implements Tela {
 			j.ativo = false; // como o Dragon Knight, só começam quando o jogador sair da Univali
 			jubilados.add(j);
 		}
-		this.diretor = new jogo.DiretorDeSustos(monstro, jubilados, new java.util.Random(System.nanoTime()));
+		this.diretor = new jogo.DiretorDeSustos(jubilados, new java.util.Random(System.nanoTime()));
 		java.util.List<Prova> provas = new java.util.ArrayList<>();
 		for (int i = 0; i < mundo.provas.size(); i++) {
 			float[] lugar = mundo.provas.get(i);
@@ -319,6 +330,7 @@ public class TelaJogo implements Tela {
 	@Override
 	public void entrar() {
 		gerenciador.definirTitulo(TITULO);
+		if (lanterna.ligada() && !objetivos.temEscopeta()) lanterna.alternar(); // a lanterna vem presa na escopeta
 		gerenciador.entrada().prenderCursor(true);
 		texturasTerreno = TexturasFloresta.carregar(); // já carregadas na tela de carregamento: aqui só pega
 		ps1 = Opcoes.atual().modoPs1;
@@ -410,7 +422,7 @@ public class TelaJogo implements Tela {
 		desenhoPlacas = new DesenhoPlacas();
 		desenhoPredio = new DesenhoPredio(mundo.predio);
 		monstro.zonaSegura = mundo.predio.retangulo(); // perto da Univali, ele não surge
-		monstro.ativo = false;                         // e só começa quando o jogador sair dela
+		monstro.ativo = false;                         // e só acorda na volta com as provas (a floresta é dos Jubilados)
 		// as duas portas começam trancadas: um retângulo no vão de cada uma
 		mundo.colisao.adicionarRetangulo(mundo.predio.portaEntrada());
 		mundo.colisao.adicionarRetangulo(mundo.predio.portaProfessor());
@@ -433,6 +445,12 @@ public class TelaJogo implements Tela {
 		caixas = new java.util.ArrayList<>();
 		for (float[] c : mundo.caixas) { // onde o AG da fase pôs as caixas
 			caixas.add(new CaixaMunicao(c[0], mundo.chao.alturaEm(c[0], c[1]), c[1], random.nextFloat() * (float) Math.PI));
+		}
+		// uma caixinha ao lado de cada prova (o aluno da carta deixou), a uns 2 m, num lugar seco e sem tronco
+		for (float[] prova : mundo.provas) {
+			float[] lugar = ladoDaProva(prova);
+			caixas.add(new CaixaMunicao(lugar[0], mundo.chao.alturaEm(lugar[0], lugar[1]), lugar[1],
+					random.nextFloat() * (float) Math.PI, Regras.CARTUCHOS_PERTO_DA_PROVA));
 		}
 		cuboCaixa = Recursos.cubo(); // um só para o jogo inteiro: o VboCube do projeto original não tem como ser apagado
 
@@ -458,6 +476,16 @@ public class TelaJogo implements Tela {
 				gerenciador.audio().tocar(somGrito, 1f);
 			}
 		});
+	}
+
+	/** Um lugar a ~2 m da prova, em terra firme e sem tronco (tenta 12 direções; sem nenhuma boa, a 2 m em x). */
+	private float[] ladoDaProva(float[] prova) {
+		for (int i = 0; i < 12; i++) {
+			double angulo = i * Math.PI / 6;
+			float x = prova[0] + 2.2f * (float) Math.cos(angulo), z = prova[1] + 2.2f * (float) Math.sin(angulo);
+			if (!mundo.chao.ehAgua(x, z) && !mundo.colisao.colide(x, z, 0.5f)) return new float[] { x, z };
+		}
+		return new float[] { prova[0] + 2.2f, prova[1] };
 	}
 
 	/** Os arquivos prefixo1.ogg, prefixo2.ogg... que existirem (até 8), em ordem. */
@@ -525,7 +553,7 @@ public class TelaJogo implements Tela {
 		if (fim != null) {
 			// o desenhar do quadro anterior já fotografou a tela: agora troca
 			if (fotoFim != null || fim == Fim.VITORIA) {
-				Partida.Estatisticas estatisticas = partida.estatisticas(monstro.aparicoesSobrevividas());
+				Partida.Estatisticas estatisticas = partida.estatisticas(diretor.sobrevividas());
 				gerenciador.trocarPara(fim == Fim.VITORIA ? new TelaVitoria(gerenciador, estatisticas)
 						: new TelaDerrota(gerenciador, estatisticas, fotoFim));
 			}
@@ -554,7 +582,7 @@ public class TelaJogo implements Tela {
 			return;
 		}
 		if (entrada.foiPressionada(GLFW_KEY_ESCAPE)) {
-			gerenciador.sobrepor(new TelaPausa(gerenciador, mundo.seed));
+			gerenciador.sobrepor(new TelaPausa(gerenciador, mundo.seed, objetivos.temEscopeta()));
 			return;
 		}
 		if (entrada.foiPressionada(GLFW_KEY_V)) {
@@ -574,7 +602,7 @@ public class TelaJogo implements Tela {
 		if (entrada.foiPressionada(GLFW_KEY_T)) {
 			alternarSomTeste();
 		}
-		if (entrada.foiPressionada(GLFW_KEY_F)) {
+		if (entrada.foiPressionada(GLFW_KEY_F) && objetivos.temEscopeta()) { // a lanterna fica presa na escopeta
 			tutorial.registrar(Tutorial.Acao.LANTERNA);
 			lanterna.alternar();
 			gerenciador.audio().tocar(cliqueLanterna, 0.8f);
@@ -588,9 +616,10 @@ public class TelaJogo implements Tela {
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_N)) {
 			Camera c = jogador.camera();
 			for (Jubilado j : jubilados) j.ativo = true;
-			diretor.forcar(jogo.DiretorDeSustos.Vez.JUBILADO, jogador.x, jogador.z);
-			if (diretor.cacador() != null) diretor.cacador().forcarPerto(c.frente.x, c.frente.z);
-			mostrarMensagem("A vez do Jubilado: um deles a 20 m, atrás de você, vindo ver o barulho");
+			diretor.forcar(partida.provasColetadas(), jogador.x, jogador.z);
+			List<Jubilado> cacadores = diretor.cacadores();
+			if (!cacadores.isEmpty()) cacadores.get(0).forcarPerto(c.frente.x, c.frente.z);
+			mostrarMensagem("Caçada: um Jubilado a 20 m, atrás de você, vindo ver o barulho");
 		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_H)) {
 			sustos.forcar(SustosFalsos.Tipo.SILHUETA);
@@ -637,7 +666,8 @@ public class TelaJogo implements Tela {
 			tocarSonsDoJogador();
 			if (monstro.estado() != DragonKnight.Estado.ATACANDO && !algumJubilado(Jubilado.Estado.ATACANDO)
 					&& despertar.terminou()) {
-				comandarArma(entrada);
+				if (objetivos.temEscopeta()) comandarArma(entrada); // atirar e recarregar, só com a escopeta
+				usar(entrada);
 			}
 		}
 		atualizarMonstro(diftime);
@@ -659,7 +689,7 @@ public class TelaJogo implements Tela {
 				c.frente.x, c.frente.y, c.frente.z, c.cima.x, c.cima.y, c.cima.z);
 	}
 
-	/** Clique esquerdo atira, R recarrega, E pega a caixa de munição que estiver perto. */
+	/** Clique esquerdo atira e R recarrega (só depois de pegar a escopeta). */
 	private void comandarArma(Entrada entrada) {
 		if (entrada.botaoFoiPressionado(GLFW_MOUSE_BUTTON_LEFT) && escopeta.gatilho()) {
 			atirar();
@@ -667,6 +697,10 @@ public class TelaJogo implements Tela {
 		if (entrada.foiPressionada(GLFW_KEY_R)) {
 			escopeta.recarregar();
 		}
+	}
+
+	/** E pega a prova ou a caixa de munição que estiver perto, ou usa o que houver no prédio. */
+	private void usar(Entrada entrada) {
 		if (entrada.foiPressionada(GLFW_KEY_E)) {
 			tutorial.registrar(Tutorial.Acao.USOU);
 			Prova prova = partida.provaAlcancavel(jogador.x, jogador.z);
@@ -674,9 +708,10 @@ public class TelaJogo implements Tela {
 			if (prova != null) {
 				coletar(prova);
 			} else if (perto != null) {
-				escopeta.adicionarReserva(perto.pegar());
+				int cartuchos = perto.pegar();
+				escopeta.adicionarReserva(cartuchos);
 				gerenciador.audio().tocar(somCartucho, 1f);
-				mostrarMensagem("+" + Regras.CARTUCHOS_POR_CAIXA + " cartuchos");
+				mostrarMensagem("+" + cartuchos + " cartuchos");
 			} else {
 				usarNoPredio();
 			}
@@ -684,10 +719,11 @@ public class TelaJogo implements Tela {
 	}
 
 	/** O que dá para usar com E dentro da Univali, do mais perto ao mais longe. */
-	private enum Uso { CRACHA, PORTA_PROFESSOR, PROFESSOR, PORTA_ENTRADA, PORTA_TRANCADA }
+	private enum Uso { ESCOPETA, CRACHA, PORTA_PROFESSOR, PROFESSOR, PORTA_ENTRADA, PORTA_TRANCADA }
 
 	private Uso usoPerto() {
 		var p = mundo.predio;
+		if (!objetivos.temEscopeta() && p.perto(jogador.x, jogador.z, p.escopetaNoModelo())) return Uso.ESCOPETA;
 		if (objetivos.podePegarCracha() && p.perto(jogador.x, jogador.z, p.chaveNoModelo())) return Uso.CRACHA;
 		float[] prof = p.professorNoModelo();
 		if (objetivos.portaProfessorAberta() && p.perto(jogador.x, jogador.z, new float[] { prof[0], prof[1] })) return Uso.PROFESSOR;
@@ -698,11 +734,54 @@ public class TelaJogo implements Tela {
 		return null;
 	}
 
+	/**
+	 * Pega a escopeta e a carta no balcão: a carta abre na tela (como os arquivos de Resident Evil),
+	 * a lanterna presa na arma acende, as dicas da arma aparecem e, se o professor já mandou buscar
+	 * as provas, a porta da frente abre.
+	 */
+	private void pegarEscopeta() {
+		objetivos.pegarEscopeta();
+		desenhoPredio.escopetaPega = true;
+		gerenciador.audio().tocar(somCartucho, 1f);
+		if (!lanterna.ligada()) {
+			lanterna.alternar();
+			gerenciador.audio().tocar(cliqueLanterna, 0.8f);
+		}
+		tutorial.registrar(Tutorial.Acao.ARMOU);
+		abrirPortaEntradaSePuder();
+		gerenciador.sobrepor(new TelaCarta(gerenciador, null));
+	}
+
+	/** A porta da frente abre quando o jogador já falou com o professor e pegou a escopeta. */
+	private void abrirPortaEntradaSePuder() {
+		if (objetivos.portaEntradaAberta() && !desenhoPredio.portaEntradaAberta) {
+			mundo.colisao.removerRetangulo(mundo.predio.portaEntrada());
+			desenhoPredio.portaEntradaAberta = true;
+		}
+	}
+
+	/** A escopeta deitada no balcão do saguão, até ser pega (o cano apontando para a TV). */
+	private void desenharEscopetaNoBalcao() {
+		if (objetivos.temEscopeta()) return;
+		var p = mundo.predio;
+		float[] e = entidades.PredioUnivali.ESCOPETA;
+		float[] pos = p.noMundo(e[0], e[1], e[2]);
+		// o giro do prédio: para onde vai o eixo x do modelo
+		float[] origem = p.noMundo(0, 0, 0), eixoX = p.noMundo(1, 0, 0);
+		float giroPredio = DragonKnight.guinadaPara(eixoX[0] - origem[0], eixoX[2] - origem[2]);
+		org.lwjgl.util.vector.Matrix4f m = new org.lwjgl.util.vector.Matrix4f();
+		m.translate(new org.lwjgl.util.vector.Vector3f(pos[0], pos[1], pos[2]));
+		m.rotate(giroPredio - (float) Math.PI / 2, new org.lwjgl.util.vector.Vector3f(0, 1, 0)); // o cano (-z) para +x do modelo
+		m.rotate((float) Math.PI / 2, new org.lwjgl.util.vector.Vector3f(0, 0, 1)); // deitada de lado
+		desenhoEscopeta.desenharNoMundo(bufferProjecao, bufferVisao, ambiente, m);
+	}
+
 	/** O crachá, as portas e o professor. */
 	private void usarNoPredio() {
 		Uso uso = usoPerto();
 		if (uso == null) return;
 		switch (uso) {
+		case ESCOPETA -> pegarEscopeta();
 		case CRACHA -> {
 			objetivos.pegarCracha();
 			desenhoPredio.crachaPego = true;
@@ -733,7 +812,11 @@ public class TelaJogo implements Tela {
 		case PROFESSOR -> falarComProfessor();
 		case PORTA_ENTRADA -> {
 			gerenciador.audio().tocar(somVazia, 1f);
-			mostrarMensagem("A porta da frente está trancada.", 2.5f);
+			if (objetivos.falouComProfessor() && !objetivos.temEscopeta()) {
+				mostrarMensagem("Lá fora tem alguma coisa. Melhor não sair desarmado.", 3f);
+			} else {
+				mostrarMensagem("A porta da frente está trancada.", 2.5f);
+			}
 		}
 		case PORTA_TRANCADA -> {
 			gerenciador.audio().tocar(somVazia, 1f);
@@ -858,10 +941,7 @@ public class TelaJogo implements Tela {
 		falaComVoz = null;
 		falas.addAll(objetivos.falarSemAsProvas(partida.faltando()));
 		tempoFala = 0;
-		if (primeira) {
-			mundo.colisao.removerRetangulo(mundo.predio.portaEntrada());
-			desenhoPredio.portaEntradaAberta = true;
-		}
+		if (primeira) abrirPortaEntradaSePuder();
 	}
 
 	/**
@@ -1014,15 +1094,20 @@ public class TelaJogo implements Tela {
 		// as provas no canto só aparecem quando o professor termina de passar a missão
 		if (tempoMissao < 0 && objetivos.falouComProfessor() && falas.isEmpty()) tempoMissao = 0;
 		if (tempoMissao >= 0) tempoMissao += dt;
-		// o Dragon Knight acorda na primeira vez que o jogador põe os pés fora do prédio
-		// com as 3 provas, a Univali deixa de ser segura: ele pode surgir lá dentro, e vem logo na entrada
+		// com as 3 provas, a volta para a Univali: os Jubilados ficam para trás e o Dragon Knight acorda lá dentro
 		if (partida.todasColetadas() && !voltouComAsProvas && mundo.predio.dentro(jogador.x, jogador.z)) {
 			voltouComAsProvas = true;
-			monstro.zonaSegura = null;
-			diretor.forcar(jogo.DiretorDeSustos.Vez.DRAGON_KNIGHT, jogador.x, jogador.z); // e vem logo na entrada
-		}
-		if (!monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z)) {
+			diretor.encerrar();
 			monstro.ativo = true;
+			monstro.zonaSegura = null;
+			monstro.apressarProximaAparicao(6); // e vem logo na entrada
+			// uma caixa de munição no saguão, na frente do balcão, para a luta final
+			float[] c = mundo.predio.noMundo(-1.6f, 0, 7.7f);
+			caixas.add(new CaixaMunicao(c[0], c[1], c[2], 0.4f, Regras.CARTUCHOS_NA_VOLTA));
+		}
+		// os Jubilados acordam na primeira vez que o jogador põe os pés fora do prédio
+		if (!saiuDaUnivali && !mundo.predio.dentro(jogador.x, jogador.z)) {
+			saiuDaUnivali = true;
 			for (Jubilado j : jubilados) j.ativo = true;
 			tutorial.registrar(Tutorial.Acao.SAIU);
 			gerenciador.audio().parar(somZumbido); // lá fora o zumbido do saguão não faz falta
@@ -1090,7 +1175,7 @@ public class TelaJogo implements Tela {
 	 * tempo), a risada longe e o galho atrás.
 	 */
 	private void atualizarSustosFalsos(float dt) {
-		boolean naFloresta = tempoEntrega < 0 && monstro.ativo && !mundo.predio.dentro(jogador.x, jogador.z);
+		boolean naFloresta = tempoEntrega < 0 && saiuDaUnivali && !mundo.predio.dentro(jogador.x, jogador.z);
 		boolean monstroEmCena = monstro.estado() != DragonKnight.Estado.AUSENTE;
 		Camera c = jogador.camera();
 		if (silhueta != null) {
@@ -1198,6 +1283,13 @@ public class TelaJogo implements Tela {
 		somGritoJubilado = efeitoOuSintetizado("audio/jubilado_grito.ogg",
 				() -> Sintetizador.rugido(44100, 1200, 165, 70, 0.75, 33));
 		somQuedaJubilado = efeitoOuSintetizado("audio/jubilado_queda.ogg", () -> Sintetizador.rugido(44100, 1300, 95, 35, 0.5, 35));
+		somGlitchJubilado = Caminhos.existe("audio/jubilado_glitch.ogg") ? gerenciador.audio().carregarEfeito("audio/jubilado_glitch.ogg")
+				: null;
+		sussurrosJubilado = carregarVariacoes("audio/jubilado_sussurro_");
+		if (sussurrosJubilado.length == 0) { // sem os arquivos, um sussurro sintetizado
+			sussurrosJubilado = new Efeito[] { gerenciador.audio().criarEfeito("sussurro do jubilado",
+					Sintetizador.sussurro(44100, 41), 44100) };
+		}
 		Audio audio = gerenciador.audio();
 		// todos os sons saem de onde ele está: com fone, dá para saber de que lado ele vem
 		Jubilado.Eventos eventosJubilado = new Jubilado.Eventos() {
@@ -1214,27 +1306,38 @@ public class TelaJogo implements Tela {
 			}
 
 			@Override
-			public void viu(Jubilado j) {
-				gritarOuFalar(j, falasJubilado.aoVer(tempo, partida.provasColetadas()));
-				tremor = Math.max(tremor, 0.5f);
-				pedirMetal(false, true);
+			public void sussurrou(Jubilado j) {
+				Efeito s = sussurrosJubilado[random.nextInt(sussurrosJubilado.length)];
+				audio.tocar3D(s, j.x, j.y + 1.7f, j.z, 0.9f, false, 8f);
 			}
 
 			@Override
-			public void perdeu(Jubilado j) {
-				pedirMetal(false, false);
+			public void viu(Jubilado j) {
+				// o susto: o glitch na hora (o som e a imagem falhando) e, logo depois, a fala
+				if (somGlitchJubilado != null) {
+					audio.tocar(somGlitchJubilado, 0.9f);
+					audio.musica().abafar(ABAFAR_NA_FALA, Math.round(ATRASO_FALA * 1000));
+				}
+				presencaMonstro = 1;
+				tremor = Math.max(tremor, 0.6f);
+				jogo.FalasJubilado.Fala fala = falasJubilado.aoVer(tempo, partida.provasColetadas());
+				if (fala != null) {
+					quemVaiFalar = j;
+					falaPendente = fala;
+					atrasoFala = ATRASO_FALA;
+				} else if (somGlitchJubilado == null) {
+					gritarOuFalar(j, null); // sem o glitch, ao menos o grito
+				}
 			}
 
 			@Override
 			public void caiu(Jubilado j) {
 				audio.tocar3D(somQuedaJubilado, j.x, j.y + 1.2f, j.z, 1f, false, 8f);
-				pedirMetal(false, false);
 			}
 
 			@Override
 			public void levantou(Jubilado j) {
 				gritarOuFalar(j, falasJubilado.aoLevantar(tempo, partida.provasColetadas()));
-				pedirMetal(false, true);
 			}
 
 			@Override
@@ -1289,11 +1392,23 @@ public class TelaJogo implements Tela {
 	 * escondido; com o Dragon Knight em cena, eles param e esperam.
 	 */
 	private void atualizarJubilados(long diftime) {
-		diretor.atualizar(diftime / 1000f, partida.provasColetadas(), jogador.x, jogador.z, monstro.ativo);
+		diretor.atualizar(diftime / 1000f, partida.provasColetadas(), jogador.x, jogador.z,
+				saiuDaUnivali && !voltouComAsProvas);
 		boolean escondido = mundo.predio.dentro(jogador.x, jogador.z) || tempoEntrega >= 0;
 		boolean andando = jogador.velocidade() > 0.5f;
 		boolean dragonEmCena = monstro.estado() != DragonKnight.Estado.AUSENTE;
 		Camera olhos = jogador.camera();
+		// a música de metal toca enquanto algum caçador está atrás do jogador
+		boolean cacando = algumJubilado(Jubilado.Estado.CACANDO);
+		if (cacando != metalJubilado) pedirMetal(false, cacando);
+		// a fala que vem depois do glitch
+		if (falaPendente != null) {
+			atrasoFala -= diftime / 1000f;
+			if (atrasoFala <= 0) {
+				gritarOuFalar(quemVaiFalar, falaPendente);
+				falaPendente = null;
+			}
+		}
 		for (Jubilado j : jubilados) {
 			j.definirAlvo(jogador.x, olhos.y, jogador.z, jogador.correndo(), andando, lanterna.ligada(), escondido);
 			j.definirOlhar(olhos.frente.x, olhos.frente.z);
@@ -1324,10 +1439,13 @@ public class TelaJogo implements Tela {
 	/** De 0 (caçando de longe) a 1 (encostado): o quanto o Jubilado caçando "pesa" na imagem. */
 	private float presencaJubilado() {
 		if (algumJubilado(Jubilado.Estado.ATACANDO)) return 1;
-		Jubilado cacador = diretor.cacador();
-		if (cacador == null || cacador.estado() != Jubilado.Estado.CACANDO) return 0;
-		float d = (float) Math.hypot(cacador.x - jogador.x, cacador.z - jogador.z);
-		return 0.45f * Math.max(0, 1 - d / 25f);
+		float presenca = 0;
+		for (Jubilado cacador : diretor.cacadores()) {
+			if (cacador.estado() != Jubilado.Estado.CACANDO) continue;
+			float d = (float) Math.hypot(cacador.x - jogador.x, cacador.z - jogador.z);
+			presenca = Math.max(presenca, 0.45f * Math.max(0, 1 - d / 25f));
+		}
+		return presenca;
 	}
 
 	/** De 0 (a contagem acabou de começar) a 1 (acabou). Fora da contagem, 0. */
@@ -1531,10 +1649,12 @@ public class TelaJogo implements Tela {
 		desenharCaixas();
 		desenhoPlacas.desenhar(mundo.placas, mundo.chao, bufferProjecao, bufferVisao, ambiente);
 		desenhoPredio.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
+		desenharEscopetaNoBalcao();
 		desenhoProvas.desenhar(partida.provas(), bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		particulas.desenhar(bufferProjecao, bufferVisao, ambiente, alturaImagem);
 		desenhoProvas.desenharFeixes(partida.provas(), camera.x, camera.z, bufferProjecao, bufferVisao, ambiente);
-		if (tempoSusto < 0 && despertar.deitado() <= 0) { // no susto, só a cara dele (e acordando, ainda sem a arma)
+		// no susto, só a cara dele (e acordando, ou antes de pegar a escopeta no balcão, sem arma)
+		if (tempoSusto < 0 && despertar.deitado() <= 0 && objetivos.temEscopeta()) {
 			desenhoEscopeta.desenhar(escopeta, ambiente, gerenciador.proporcao(), alturaImagem);
 		}
 		// a passagem para a tela: amplia (modo PS1), escurece os cantos, granula e, com o monstro, distorce
@@ -1552,7 +1672,7 @@ public class TelaJogo implements Tela {
 		overlay.iniciar(gerenciador.larguraJanela(), gerenciador.alturaJanela());
 		desenharEfeitosMonstro(overlay);
 		if (tempoSusto < 0 && fim == null && tempoEntrega < 0 && despertar.terminou()) {
-			desenharHudArma(overlay);
+			if (objetivos.temEscopeta()) desenharHudArma(overlay);
 		}
 		if (!despertar.terminou()) desenharPalpebras(overlay);
 		if (tempoEntrega >= 0) {
@@ -1701,6 +1821,7 @@ public class TelaJogo implements Tela {
 		if (uso != null && partida.provaAlcancavel(jogador.x, jogador.z) == null && caixaAlcancavel() == null) {
 			String dica = switch (uso) {
 			case CRACHA -> "E: pegar o crachá";
+			case ESCOPETA -> "E: pegar a escopeta e a carta";
 			case PORTA_PROFESSOR -> "E: abrir a porta";
 			case PROFESSOR -> partida.todasColetadas() ? "E: entregar as provas" : "E: falar com o professor";
 			case PORTA_ENTRADA, PORTA_TRANCADA -> "E: abrir a porta";
@@ -1984,10 +2105,10 @@ public class TelaJogo implements Tela {
 				diretor.vez().name().toLowerCase().replace('_', ' '), Math.max(0, diretor.restante())));
 		for (Jubilado j : jubilados) {
 			float d = (float) Math.hypot(j.x - jogador.x, j.z - jogador.z);
-			b.append(String.format("%sjubilado %s a %.0f m   ", j == diretor.cacador() ? "*" : "",
+			b.append(String.format("%sjubilado %s a %.0f m   ", diretor.cacadores().contains(j) ? "*" : "",
 					j.estado().name().toLowerCase(), d));
 		}
-		if (!monstro.ativo) b.append("(inativos até sair da Univali)");
+		if (!saiuDaUnivali) b.append("(inativos até sair da Univali)");
 		return b.toString();
 	}
 

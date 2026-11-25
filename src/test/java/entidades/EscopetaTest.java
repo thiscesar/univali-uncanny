@@ -111,12 +111,19 @@ class EscopetaTest {
 	}
 
 	@Test
-	void caixaDaSeisCartuchosUmaVezSo() {
+	void caixaDaOsCartuchosUmaVezSo() {
 		CaixaMunicao c = new CaixaMunicao(10, 0, 10, 0);
 		assertTrue(c.alcancavel(10.5f, 11));
 		assertFalse(c.alcancavel(12, 10));
 		assertEquals(Regras.CARTUCHOS_POR_CAIXA, c.pegar());
 		assertEquals(0, c.pegar());
 		assertFalse(c.alcancavel(10, 10));
+	}
+
+	@Test
+	void caixaComQuantidadePropria() {
+		CaixaMunicao perto = new CaixaMunicao(0, 0, 0, 0, Regras.CARTUCHOS_PERTO_DA_PROVA);
+		assertEquals(Regras.CARTUCHOS_PERTO_DA_PROVA, perto.pegar());
+		assertEquals(0, perto.pegar(), "já foi pega");
 	}
 }

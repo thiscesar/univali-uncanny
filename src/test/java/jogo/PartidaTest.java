@@ -65,6 +65,6 @@ class PartidaTest {
 		assertEquals(38, e.precisao()); // 6 de 16
 		assertEquals(1, e.provasColetadas());
 		assertEquals(2, e.provasTotal());
-		assertEquals(3, e.aparicoesSobrevividas());
+		assertEquals(3, e.cacadasSobrevividas());
 	}
 }

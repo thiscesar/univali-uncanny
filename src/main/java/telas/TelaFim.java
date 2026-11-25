@@ -228,9 +228,9 @@ public abstract class TelaFim implements Tela {
 		if (tempo > 1.4f) {
 			Partida.Estatisticas e = estatisticas;
 			int minutos = (int) (e.segundos() / 60), segundos = (int) (e.segundos() % 60);
-			int n = e.aparicoesSobrevividas();
+			int n = e.cacadasSobrevividas();
 			String linha1 = String.format("Mapa %d   ·   %d:%02d na floresta   ·   %d %s", e.seed(), minutos, segundos, n,
-					n == 1 ? "aparição sobrevivida" : "aparições sobrevividas");
+					n == 1 ? "caçada sobrevivida" : "caçadas sobrevividas");
 			// as provas não entram aqui: o REPROVADO já mostra na linha de destaque, e o APROVADO é sempre 3 de 3
 			String linha2 = String.format("%d %s   ·   pontaria de %d%%", e.tiros(), e.tiros() == 1 ? "tiro" : "tiros",
 					e.precisao());

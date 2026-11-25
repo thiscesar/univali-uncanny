@@ -53,26 +53,24 @@ public final class Regras {
 	// ---------- o diretor de sustos (o ritmo da partida) ----------
 
 	/**
-	 * Um monstro de cada vez, com calmaria entre um e outro. Segundos de calmaria conforme as
-	 * provas coletadas (0, 1, 2, 3): o fim é mais tenso, mas nunca sem respiro. A primeira calmaria
-	 * é a CARENCIA. Cada calmaria varia ±VARIACAO_INTERVALO.
+	 * Na floresta, caçadas dos Jubilados com calmaria entre uma e outra. Segundos de calmaria
+	 * conforme as provas coletadas (0, 1, 2, 3): o fim é mais tenso, mas nunca sem respiro. A
+	 * primeira calmaria é a CARENCIA. Cada calmaria varia ±VARIACAO_INTERVALO.
 	 */
 	public static final float[] CALMARIA = { 50f, 42f, 36f, 30f };
-	/** A chance de a próxima ameaça ser o Dragon Knight (o resto é o Jubilado), conforme as provas. */
-	public static final float[] CHANCE_DRAGON_KNIGHT = { 0.3f, 0.4f, 0.5f, 0.5f };
+	/** A chance de uma caçada ter dois Jubilados caçando juntos, conforme as provas (o resto é um só). */
+	public static final float[] CHANCE_DOIS_CACADORES = { 0f, 0.15f, 0.25f, 0.35f };
 	/** Derrubado essas vezes na mesma vez, o Jubilado desiste (levanta e foge): a caçada não vira um ciclo sem fim. */
 	public static final int QUEDAS_PARA_DESISTIR = 2;
 	/** A vez do Jubilado dura no máximo isso, se ele não achar o jogador (segundos). */
 	public static final float VEZ_JUBILADO = 60f;
-	/** Se o Dragon Knight não achar lugar para surgir nesse tempo, a vez dele acaba (segundos). */
-	public static final float ESPERA_DRAGON_KNIGHT = 20f;
 	/** Uma prova coletada encurta a calmaria: a próxima ameaça vem em no máximo isso (segundos). */
 	public static final float AMEACA_DEPOIS_DA_PROVA = 15f;
 
 	// ---------- os Jubilados (os monstros que andam pela floresta) ----------
 
-	/** Quantos Jubilados há no mapa: um caça (na vez dele), os outros rondam de longe. */
-	public static final int JUBILADOS = 3;
+	/** Quantos Jubilados há no mapa: um (às vezes dois) caça na caçada, os outros rondam de longe. */
+	public static final int JUBILADOS = 4;
 	/**
 	 * Os que rondam: ficam entre OBSERVA_PERTO e OBSERVA_LONGE metros do jogador (no limite do que
 	 * a neblina deixa ver) e fogem se ele chegar a OBSERVA_FOGE metros ou os iluminar com a lanterna
@@ -112,6 +110,8 @@ public final class Regras {
 	 * (mais rápido que o jogador andando e mais lento que correndo: dá para fugir, mas correr faz barulho).
 	 */
 	public static final float JUBILADO_FAREJANDO = 4.5f, FAREJA_PERTO = 20f;
+	/** Farejando, ele sussurra (dá para ouvir de que lado ele vem) a partir dessa distância, em metros. */
+	public static final float JUBILADO_SUSSURRA_DE = 45f;
 	/** Distância mínima do jogador onde ele começa, e da Univali (ele não chega perto do prédio), em metros. */
 	public static final float JUBILADO_INICIO = 70f, JUBILADO_LONGE_UNIVALI = 12f;
 
@@ -125,8 +125,14 @@ public final class Regras {
 	public static final float ALCANCE_TIRO = 40f;
 	/** Cartuchos: quantos cabem no cano, quantos de reserva no começo e quantos uma caixa dá. */
 	public static final int CAPACIDADE_CANO = 2;
-	public static final int RESERVA_INICIAL = 8;
-	public static final int CARTUCHOS_POR_CAIXA = 6;
+	public static final int RESERVA_INICIAL = 6;
+	public static final int CARTUCHOS_POR_CAIXA = 8;
+	/**
+	 * Mais munição, porque os Jubilados ficaram mais comuns e há o Dragon Knight na volta: uma
+	 * caixinha ao lado de cada prova (o aluno da carta deixou) e uma caixa no saguão que só aparece
+	 * na volta com as provas, para a luta final. Ao todo, uns 50 cartuchos.
+	 */
+	public static final int CARTUCHOS_PERTO_DA_PROVA = 4, CARTUCHOS_NA_VOLTA = 8;
 	/** Caixas de munição no mapa e a distância para pegar uma (tecla E). */
 	public static final int CAIXAS_MUNICAO = 3;
 	public static final float DISTANCIA_PEGAR = 1.5f;

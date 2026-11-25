@@ -13,14 +13,15 @@ import java.util.List;
  */
 public class Objetivos {
 
-	public enum Etapa { ACHAR_A_SALA, FALAR_COM_O_PROFESSOR, BUSCAR_PROVAS, ENTREGAR }
+	public enum Etapa { ACHAR_A_SALA, FALAR_COM_O_PROFESSOR, PEGAR_ESCOPETA, BUSCAR_PROVAS, ENTREGAR }
 
-	private boolean temCracha = false, portaProfessorAberta = false, falouComProfessor = false;
+	private boolean temCracha = false, portaProfessorAberta = false, falouComProfessor = false, temEscopeta = false;
 	private boolean viuPortaTrancada = false, respondeuNaPorta = false;
 
 	public Etapa etapa(int provas, int total) {
 		if (!portaProfessorAberta) return Etapa.ACHAR_A_SALA;
 		if (!falouComProfessor) return Etapa.FALAR_COM_O_PROFESSOR;
+		if (!temEscopeta) return Etapa.PEGAR_ESCOPETA;
 		return provas < total ? Etapa.BUSCAR_PROVAS : Etapa.ENTREGAR;
 	}
 
@@ -30,6 +31,7 @@ public class Objetivos {
 		case ACHAR_A_SALA -> viuPortaTrancada ? (temCracha ? "Abra a sala do professor com o crachá."
 				: "Procure o crachá do professor nas salas.") : "Encontre a sala do professor.";
 		case FALAR_COM_O_PROFESSOR -> "Fale com o professor.";
+		case PEGAR_ESCOPETA -> "Pegue a escopeta no balcão do saguão.";
 		case BUSCAR_PROVAS -> "Encontre as provas na floresta (" + provas + " de " + total + ").";
 		case ENTREGAR -> "Leve as provas ao professor.";
 		};
@@ -74,9 +76,21 @@ public class Objetivos {
 		return portaProfessorAberta;
 	}
 
-	/** A porta da frente só abre depois da conversa com o professor. */
+	/**
+	 * A porta da frente só abre depois da conversa com o professor e com a escopeta na mão
+	 * (ninguém sai desarmado para a floresta).
+	 */
 	public boolean portaEntradaAberta() {
-		return falouComProfessor;
+		return falouComProfessor && temEscopeta;
+	}
+
+	/** Pega a escopeta (e a carta) no balcão do saguão: dá para pegar a qualquer momento. */
+	public void pegarEscopeta() {
+		temEscopeta = true;
+	}
+
+	public boolean temEscopeta() {
+		return temEscopeta;
 	}
 
 	/**

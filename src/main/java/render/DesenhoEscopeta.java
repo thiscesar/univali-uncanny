@@ -175,6 +175,37 @@ public class DesenhoEscopeta {
 		ambiente.intensidadePreenchimento = preenchimentoAntes;
 	}
 
+	/**
+	 * Desenha a arma no mundo, como um objeto da cena (a escopeta deitada no balcão, antes de ser
+	 * pega): com as matrizes da cena e a matriz model pedida, sem limpar o depth buffer.
+	 */
+	public void desenharNoMundo(FloatBuffer projecao, FloatBuffer visao, Ambiente ambiente, Matrix4f model) {
+		ShaderObjeto shader = Recursos.shaderObjeto();
+		shader.start();
+		int p = shader.programID;
+		glUniformMatrix4fv(glGetUniformLocation(p, "projection"), false, projecao);
+		glUniformMatrix4fv(glGetUniformLocation(p, "view"), false, visao);
+		glUniformMatrix4fv(glGetUniformLocation(p, "model"), false, guardar(model));
+		glUniform1f(glGetUniformLocation(p, "emissividade"), 0.15f); // um pouco de brilho: dá para achá-la no saguão
+		glUniform1i(glGetUniformLocation(p, "tex"), 0);
+		glUniform1i(glGetUniformLocation(p, "texNormal"), 1);
+		glUniform1i(glGetUniformLocation(p, "usaNormalMap"), 1);
+		ambiente.enviar(shader);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texturaCor);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, texturaNormal);
+		glActiveTexture(GL_TEXTURE0);
+		if (modelo.temGrupo("corpo")) {
+			modelo.desenharGrupo("corpo");
+			if (modelo.temGrupo("telha")) modelo.desenharGrupo("telha");
+		} else if (modelo instanceof ObjModelGrupos obj) {
+			obj.draw();
+		}
+		glUniform1i(glGetUniformLocation(p, "usaNormalMap"), 0);
+		shader.stop();
+	}
+
 	private FloatBuffer guardar(Matrix4f m) {
 		buffer.clear();
 		m.storeTranspose(buffer);

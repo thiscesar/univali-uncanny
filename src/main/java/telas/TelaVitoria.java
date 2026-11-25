@@ -44,7 +44,7 @@ public class TelaVitoria extends TelaFim {
 	private Efeito somSino;
 
 	public TelaVitoria(GerenciadorTelas gerenciador, Partida.Estatisticas estatisticas) {
-		this(gerenciador, estatisticas, Nota.calcular(estatisticas.segundos(), estatisticas.aparicoesSobrevividas()));
+		this(gerenciador, estatisticas, Nota.calcular(estatisticas.segundos(), estatisticas.cacadasSobrevividas()));
 	}
 
 	private TelaVitoria(GerenciadorTelas gerenciador, Partida.Estatisticas estatisticas, float nota) {

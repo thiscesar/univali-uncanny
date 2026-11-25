@@ -74,7 +74,7 @@ public class DesenhoPredio {
 	private final MalhaCaixas escritaSangue;
 	private final List<MalhaCaixas> placas = new ArrayList<>();
 	private final List<String> nomesPlacas = new ArrayList<>();
-	private final MalhaCaixas cracha, mesa, papeis, luminaria, cadeira;
+	private final MalhaCaixas cracha, carta, mesa, papeis, luminaria, cadeira;
 	private final MalhaCaixas corpoProfessor, cabecaProfessor;
 	private final PontosBrilhantes halos;
 	private final FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
@@ -85,6 +85,8 @@ public class DesenhoPredio {
 
 	// o que muda durante o jogo
 	public boolean portaEntradaAberta = false, portaProfessorAberta = false, crachaPego = false;
+	/** A escopeta e a carta já foram pegas no balcão (a carta some, e o brilho também). */
+	public boolean escopetaPega = false;
 	/** O crachá só aparece depois que o professor diz, lá de dentro, que sem ele ninguém entra. */
 	public boolean crachaVisivel = false;
 
@@ -270,6 +272,10 @@ public class DesenhoPredio {
 		float[] k = p.chaveNoModelo();
 		cracha = new MalhaCaixas().caixa(k[0] - 0.06f, k[0] + 0.06f, 0.76f, 0.78f, k[1] - 0.09f, k[1] + 0.09f, TUDO, TUDO, TUDO)
 				.enviar();
+		// a carta, uma folha em cima do balcão do saguão, ao lado da escopeta
+		float[] cc = PredioUnivali.CARTA;
+		carta = new MalhaCaixas().caixa(cc[0] - 0.15f, cc[0] + 0.15f, cc[1], cc[1] + 0.003f, cc[2] - 0.105f, cc[2] + 0.105f, TUDO, TUDO,
+				TUDO).enviar();
 
 		// a sala do professor: tudo montado no espaço dele (origem na cadeira, olhando para +z) e
 		// depois girado e levado para o lugar pela matriz de modelo
@@ -586,6 +592,7 @@ public class DesenhoPredio {
 			desenhar(p, placas.get(i), "placa da porta: " + nome, () -> placaDaPorta(nome), 0.2f, false);
 		}
 		if (crachaVisivel && !crachaPego) desenhar(p, cracha, "predio: cracha", DesenhoPredio::cracha, 0.6f, false);
+		if (!escopetaPega) desenhar(p, carta, "predio: carta", DesenhoPredio::folhaDaCarta, 0.35f, false);
 
 		// a sala do professor, no espaço dele
 		float[] prof = predio.professorNoModelo();
@@ -621,6 +628,12 @@ public class DesenhoPredio {
 			halos.adicionar(w[0], w[1], w[2]);
 		}
 		halos.desenhar(2.0f, COR_LAMPADA, projecao, visao, ambiente, alturaImagem, 0.3f);
+		if (!escopetaPega) { // um brilho fraco em cima do balcão: tem algo ali
+			halos.limpar();
+			float[] w = predio.noMundo(-0.2f, 1.22f, PredioUnivali.ESCOPETA[2]);
+			halos.adicionar(w[0], w[1], w[2]);
+			halos.desenhar(0.45f, COR_CRACHA, projecao, visao, ambiente, alturaImagem);
+		}
 		if (crachaVisivel && !crachaPego) {
 			halos.limpar();
 			float[] k = predio.chaveNoModelo();
@@ -1119,6 +1132,28 @@ public class DesenhoPredio {
 				img.setRGB(x, y, new Color(v, (int) (v * 0.65), (int) (v * 0.4)).getRGB());
 			}
 		}
+		return img;
+	}
+
+	/** A folha da carta vista de cima: papel amarelado e manchado com linhas de garrancho. */
+	public static BufferedImage folhaDaCarta() {
+		BufferedImage img = new BufferedImage(64, 48, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = pincel(img);
+		g.setColor(new Color(214, 200, 168));
+		g.fillRect(0, 0, 64, 48);
+		java.util.Random r = new java.util.Random(23);
+		g.setColor(new Color(60, 52, 48));
+		for (int linha = 0; linha < 9; linha++) {
+			int y = 7 + linha * 4, x = 6;
+			while (x < 56 && !(linha == 8 && x > 30)) {
+				int palavra = 3 + r.nextInt(7);
+				g.drawLine(x, y + r.nextInt(2), Math.min(57, x + palavra), y + r.nextInt(2));
+				x += palavra + 2;
+			}
+		}
+		g.setColor(new Color(120, 30, 20, 120)); // uma mancha
+		g.fillOval(44, 30, 9, 7);
+		g.dispose();
 		return img;
 	}
 
