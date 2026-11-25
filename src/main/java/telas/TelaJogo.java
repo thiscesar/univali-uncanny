@@ -75,10 +75,9 @@ import Model.VboCube;
 /**
  * A partida: o jogador andando pela floresta à noite, em primeira pessoa, com a lanterna.
  *
- * F liga e desliga a lanterna. ESC abre a pausa por cima. F3 mostra o painel de depuração; F4 troca para a câmera livre
- * (voa e atravessa o chão, para inspecionar o mapa). V e X forçam vitória e derrota, e T liga
- * um som 3D de teste: são atalhos provisórios até existirem as regras do jogo. Com o F3 ligado,
- * G faz o Dragon Knight surgir e K o mata, P leva até a próxima prova, I salva a imagem do mapa da fase; as setas e Page Up/Down ajustam a posição da arma.
+ * F liga e desliga a lanterna. ESC abre a pausa por cima. F3 mostra o painel de depuração. Com o F3 ligado,
+ * F4 troca para a câmera livre (voa e atravessa o chão, para inspecionar o mapa), T liga um som 3D de teste,
+ * V e X forçam vitória e derrota, G faz o Dragon Knight surgir e K o mata, P leva até a próxima prova, I salva a imagem do mapa da fase; as setas e Page Up/Down ajustam a posição da arma.
  *
  * A partida começa dentro da Univali, à noite: o térreo é um corredor com salas dos dois lados. A sala do
  * professor está trancada (é preciso achar o crachá); ele nega sem as provas e abre a porta da
@@ -619,21 +618,23 @@ public class TelaJogo implements Tela {
 			gerenciador.sobrepor(new TelaPausa(gerenciador, mundo.seed, objetivos.temEscopeta()));
 			return;
 		}
-		if (entrada.foiPressionada(GLFW_KEY_V)) {
-			fim = Fim.VITORIA;
-			return;
-		}
-		if (entrada.foiPressionada(GLFW_KEY_X)) {
-			fim = Fim.DERROTA;
-			return;
-		}
 		if (entrada.foiPressionada(GLFW_KEY_F3)) {
 			mostrarDepuracao = !mostrarDepuracao;
 		}
-		if (entrada.foiPressionada(GLFW_KEY_F4)) {
+		// atalhos de teste: só com a depuração (F3) ligada
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_V)) {
+			fim = Fim.VITORIA;
+			return;
+		}
+		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_X)) {
+			fim = Fim.DERROTA;
+			return;
+		}
+		// câmera livre e bipe de teste: ligam só com o F3; desligam sempre, para não ficar preso neles
+		if ((mostrarDepuracao || cameraLivre != null) && entrada.foiPressionada(GLFW_KEY_F4)) {
 			alternarCameraLivre();
 		}
-		if (entrada.foiPressionada(GLFW_KEY_T)) {
+		if ((mostrarDepuracao || somTeste != null) && entrada.foiPressionada(GLFW_KEY_T)) {
 			alternarSomTeste();
 		}
 		if (entrada.foiPressionada(GLFW_KEY_F) && objetivos.temEscopeta()) { // a lanterna fica presa na escopeta
