@@ -20,17 +20,14 @@ class TiroTest {
 
 	private static final float[] FRENTE = { 1, 0, 0 }, DIREITA = { 0, 0, 1 }, CIMA = { 0, 1, 0 };
 
-	/** Monstro encarando a d metros à frente (+x) de quem atira em (50, 2.7, 100). */
+	/** Monstro surgindo a d metros à frente (+x) de quem atira em (50, 2.7, 100), de frente para ele. */
 	private static DragonKnight monstroA(float d, GradeColisao grade) {
-		DragonKnight m = new DragonKnight(chao(), grade, null, null, 1);
-		m.definirAlvo(50 + d, 2.7f, 100, 1, 0); // primeiro, para surgir perto deste ponto...
-		boolean surgiu = false;
-		for (int i = 0; i < 50 && !surgiu; i++) {
-			m.forcarAparicao();
-			m.SimulaSe(16);
-			surgiu = m.visivel();
-		}
-		// ...depois, colocado exatamente onde o teste quer, virado para quem atira
+		DragonKnight m = new DragonKnight(null, null, 1);
+		m.definirAlvo(50, 2.7f, 100, 1, 0);
+		var planta = new grafos.PlantaInterna(grade, new GradeColisao.Retangulo(0, 0, 200, 200), 0.9f, 2f,
+				java.util.List.of(new float[] { 50 + d, 100 }), 2.6f);
+		m.despertar(planta, 1);
+		// colocado exatamente onde o teste quer, virado para quem atira
 		m.x = 50 + d;
 		m.z = 100;
 		m.y = 1;
@@ -51,25 +48,26 @@ class TiroTest {
 	}
 
 	@Test
-	void dePertoUmTiroMata() {
-		int mortes = 0;
+	void dePertoTodoTiroEUmGolpe() {
 		for (int s = 0; s < 20; s++) {
 			DragonKnight m = monstroA(4 + DragonKnight.CAIXA_PADRAO[3], new GradeColisao(201));
 			Tiro.disparar(new float[] { 50, 1.5f, 100 }, FRENTE, DIREITA, CIMA, m, new GradeColisao(201), chao(), new Random(s));
-			if (m.estado() == DragonKnight.Estado.MORRENDO) mortes++;
+			assertEquals(1, m.golpes(), "a 4 m da frente do dragão, todo tiro é um golpe");
+			assertEquals(DragonKnight.Estado.CAMBALEANDO, m.estado());
 		}
-		assertEquals(20, mortes, "a 4 m da frente do dragão, todo tiro mata");
 	}
 
 	@Test
-	void deLongeNormalmentePrecisaDeDois() {
-		int mortesNoPrimeiro = 0;
+	void deLongeMenosBagosAcertam() {
+		int perto = 0, longe = 0;
 		for (int s = 0; s < 40; s++) {
-			DragonKnight m = monstroA(14 + DragonKnight.CAIXA_PADRAO[3], new GradeColisao(201));
-			Tiro.disparar(new float[] { 50, 1.5f, 100 }, FRENTE, DIREITA, CIMA, m, new GradeColisao(201), chao(), new Random(s));
-			if (m.estado() == DragonKnight.Estado.MORRENDO) mortesNoPrimeiro++;
+			GradeColisao g = new GradeColisao(201);
+			perto += Tiro.disparar(new float[] { 50, 1.5f, 100 }, FRENTE, DIREITA, CIMA,
+					monstroA(4 + DragonKnight.CAIXA_PADRAO[3], g), g, chao(), new Random(s)).acertos();
+			longe += Tiro.disparar(new float[] { 50, 1.5f, 100 }, FRENTE, DIREITA, CIMA,
+					monstroA(30 + DragonKnight.CAIXA_PADRAO[3], g), g, chao(), new Random(s)).acertos();
 		}
-		assertTrue(mortesNoPrimeiro < 20, "a 14 m, menos da metade dos tiros mata sozinho: " + mortesNoPrimeiro);
+		assertTrue(longe < perto * 0.8f, "de longe o cone abre: " + longe + " contra " + perto + " bagos");
 	}
 
 	@Test

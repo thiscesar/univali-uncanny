@@ -220,9 +220,18 @@ public class PredioUnivali extends Object3D {
 
 	public List<GradeColisao.Retangulo> paredes() {
 		List<GradeColisao.Retangulo> lista = new ArrayList<>();
-		for (AndarUnivali.Caixa c : paredesNoModelo()) lista.add(noMundo(c));
+		List<AndarUnivali.Caixa> moveis = moveis();
+		for (AndarUnivali.Caixa c : paredesNoModelo()) {
+			GradeColisao.Retangulo r = noMundo(c);
+			// um móvel só vai até a altura dele: o tiro e a vista passam por cima
+			if (moveis.contains(c)) r = new GradeColisao.Retangulo(r.xMin(), r.zMin(), r.xMax(), r.zMax(), y + ALTURA_MOVEIS);
+			lista.add(r);
+		}
 		return lista;
 	}
+
+	/** A altura dos móveis (o balcão, as carteiras, a mesa), em metros acima do piso. */
+	public static final float ALTURA_MOVEIS = 1.2f;
 
 	/** O vão da porta de entrada (bloqueado enquanto ela está trancada). */
 	public AndarUnivali.Caixa portaEntradaNoModelo() {

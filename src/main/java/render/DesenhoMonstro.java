@@ -103,8 +103,8 @@ public class DesenhoMonstro {
 		if (!m.visivel()) {
 			return;
 		}
-		// morto, os olhos apagam
-		desenhar(m, m.guinada, m.animador(), m.marcaDano(), m.estado() != DragonKnight.Estado.MORRENDO, projecao, visao,
+		// derrubado, os olhos apagam
+		desenhar(m, m.guinada, m.animador(), m.marcaDano(), m.lutando(), projecao, visao,
 				ambiente, cameraX, cameraZ, alturaImagem);
 	}
 

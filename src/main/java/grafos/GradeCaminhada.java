@@ -60,6 +60,22 @@ public class GradeCaminhada {
 		return g;
 	}
 
+	/**
+	 * Uma grade quadrada de "lado" células em que a célula é livre quando livre(x, z) diz que sim,
+	 * no centro dela (x e z a partir de 0, em metros). Plana. Usada dentro da Univali, onde quem
+	 * diz o que está livre são as paredes e os móveis (ver PlantaInterna).
+	 */
+	public static GradeCaminhada deLivres(float celula, int lado, java.util.function.BiPredicate<Float, Float> livre) {
+		GradeCaminhada g = new GradeCaminhada(celula, lado);
+		for (int j = 0; j < lado; j++) {
+			for (int i = 0; i < lado; i++) {
+				g.caminhavel[j * lado + i] = livre.test(g.centro(i), g.centro(j));
+			}
+		}
+		g.rotularComponentes();
+		return g;
+	}
+
 	private GradeCaminhada(float celula, int lado) {
 		this.celula = celula;
 		this.lado = lado;

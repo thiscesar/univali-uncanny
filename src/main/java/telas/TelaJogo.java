@@ -111,7 +111,6 @@ public class TelaJogo implements Tela {
 	private static final Color COR_PAINEL = new Color(0, 0, 0, 160);
 	private static final Color COR_DEPURACAO = new Color(200, 195, 185);
 	private static final Color COR_DICA = new Color(120, 115, 110, 200);
-	private static final Color COR_CONTAGEM = new Color(215, 25, 18);
 
 	private final GerenciadorTelas gerenciador;
 	/** O mundo pronto (terreno, chão e colisão), entregue pela tela de carregamento. */
@@ -188,7 +187,9 @@ public class TelaJogo implements Tela {
 	// o Dragon Knight
 	private final DragonKnight monstro;
 	private DesenhoMonstro desenhoMonstro;
-	private Efeito somGrito, somMorte, somBatida, somSusto;
+	private Efeito somGrito, somMorte, somBatida, somSusto, somGalope;
+	/** Segundos que ele ainda sangra depois de um golpe. */
+	private float sangrando = 0;
 	/**
 	 * A música do monstro (metal): entra quando ele surge e some quando ele morre. Cada aparição
 	 * continua a música de onde a anterior parou (segundosMetal), para não repetir sempre o começo.
@@ -303,7 +304,7 @@ public class TelaJogo implements Tela {
 		// as animações e o tamanho vêm do MD2; sem ele, o monstro usa tempos e a caixa padrão
 		Animador animador = mundo.monstro != null ? new Animador(mundo.monstro.animacoes()) : null;
 		float[] caixa = mundo.monstro != null ? mundo.monstro.malhaCorpo().limites(0) : null;
-		this.monstro = new DragonKnight(mundo.chao, mundo.colisao, animador, caixa, System.nanoTime());
+		this.monstro = new DragonKnight(animador, caixa, System.nanoTime()); // dorme até a volta com as provas
 		// os Jubilados: espalhados pelo mapa, longe do jogador e uns dos outros; cada um com a sua animação
 		float[] caixaJubilado = mundo.jubilado != null ? mundo.jubilado.malhaCorpo().limites(0) : null;
 		List<float[]> ocupados = new java.util.ArrayList<>();
@@ -421,8 +422,6 @@ public class TelaJogo implements Tela {
 		desenhoProvas = new DesenhoProvas();
 		desenhoPlacas = new DesenhoPlacas();
 		desenhoPredio = new DesenhoPredio(mundo.predio);
-		monstro.zonaSegura = mundo.predio.retangulo(); // perto da Univali, ele não surge
-		monstro.ativo = false;                         // e só acorda na volta com as provas (a floresta é dos Jubilados)
 		// as duas portas começam trancadas: um retângulo no vão de cada uma
 		mundo.colisao.adicionarRetangulo(mundo.predio.portaEntrada());
 		mundo.colisao.adicionarRetangulo(mundo.predio.portaProfessor());
@@ -454,19 +453,36 @@ public class TelaJogo implements Tela {
 		}
 		cuboCaixa = Recursos.cubo(); // um só para o jogo inteiro: o VboCube do projeto original não tem como ser apagado
 
+		somGalope = gerenciador.audio().criarEfeito("galope", Sintetizador.pisadaPesada(44100, 77), 44100);
 		monstro.definirEventos(new DragonKnight.Eventos() {
 			@Override
 			public void surgiu(DragonKnight m) {
 				tremor = 1;
-				if (mundo.predio.dentro(m.x, m.z)) falhasDeLuz.forcarFalhaGeral(); // dentro da Univali, as luzes falham
+				falhasDeLuz.forcarFalhaGeral(); // dentro da Univali, as luzes falham
 				pedirMetal(true, true);
 				// o grito sai de onde ele está: com fone, dá para saber de que lado ele surgiu
-				gerenciador.audio().tocar3D(somGrito, m.x, m.y + 1.6f, m.z, 1f, false);
+				gerenciador.audio().tocar3D(somGrito, m.x, m.y + 1.6f, m.z, 1f, false, 8f);
+			}
+
+			@Override
+			public void golpeado(DragonKnight m, int golpes) {
+				// o tiro entrou: um jorro de sangue do peito, saindo pelas costas, e ele continua sangrando
+				particulas.jorroDeSangue(m.x, m.y + 1.6f, m.z, m.x - jogador.x, m.z - jogador.z, 90);
+				sangrando = 0.9f;
+				tremor = Math.max(tremor, 0.4f);
+				if (golpes < Regras.GOLPES_PARA_MATAR) {
+					gerenciador.audio().tocar3D(somMorte, m.x, m.y + 1.4f, m.z, 0.8f, false, 8f);
+				}
+			}
+
+			@Override
+			public void galope(DragonKnight m) {
+				gerenciador.audio().tocar3D(somGalope, m.x, m.y + 0.1f, m.z, 0.9f, false, 5f);
 			}
 
 			@Override
 			public void morreu(DragonKnight m) {
-				gerenciador.audio().tocar3D(somMorte, m.x, m.y + 1.2f, m.z, 1f, false);
+				gerenciador.audio().tocar3D(somMorte, m.x, m.y + 1.2f, m.z, 1f, false, 10f);
 				pedirMetal(true, false);
 			}
 
@@ -476,6 +492,24 @@ public class TelaJogo implements Tela {
 				gerenciador.audio().tocar(somGrito, 1f);
 			}
 		});
+	}
+
+	/**
+	 * A volta com as provas: o Dragon Knight acorda dentro da Univali. A planta (por onde ele anda)
+	 * é montada agora, com as portas como estão: ele cabe no corredor e no saguão, mas não nas
+	 * salas. Surge no fundo do saguão, de frente para quem entra, e depois pelas pontas do corredor.
+	 */
+	private void acordarDragonKnight() {
+		if (monstro.lutando()) return;
+		var p = mundo.predio;
+		List<float[]> pontas = new java.util.ArrayList<>();
+		for (float[] m : new float[][] { { 0, -0.5f }, { -21, 0 }, { 21, 0 } }) {
+			float[] w = p.noMundo(m[0], 0, m[1]);
+			pontas.add(new float[] { w[0], w[2] });
+		}
+		float piso = p.noMundo(0, 0, 0)[1];
+		grafos.PlantaInterna planta = new grafos.PlantaInterna(mundo.colisao, p.retangulo(), 0.75f, 0.5f, pontas, piso + 1.6f);
+		monstro.despertar(planta, piso);
 	}
 
 	/** Um lugar a ~2 m da prova, em terra firme e sem tronco (tenta 12 direções; sem nenhuma boa, a 2 m em x). */
@@ -608,7 +642,7 @@ public class TelaJogo implements Tela {
 			gerenciador.audio().tocar(cliqueLanterna, 0.8f);
 		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_G)) {
-			monstro.forcarAparicao();
+			acordarDragonKnight();
 		}
 		if (mostrarDepuracao && entrada.foiPressionada(GLFW_KEY_K)) {
 			monstro.matar();
@@ -925,7 +959,7 @@ public class TelaJogo implements Tela {
 
 	/** Sem as 3 provas, ele nega (e a porta da frente abre na primeira vez); com as 3, a cena final. */
 	private void falarComProfessor() {
-		if (partida.todasColetadas() && monstro.estado() != DragonKnight.Estado.AUSENTE) {
+		if (partida.todasColetadas() && monstro.lutando()) {
 			mostrarMensagem("Agora não! Ele está aqui.", 2f); // primeiro, sobreviver
 			return;
 		}
@@ -954,7 +988,6 @@ public class TelaJogo implements Tela {
 		audio.parar(sussurros.remove(prova));
 		audio.tocar(somPegarProva, 1f);
 		pulsoProva.put(prova, 0f);
-		monstro.provasColetadas = partida.provasColetadas();
 		avisarProvasAoJubilado();
 		diretor.provaColetada(); // a floresta reage: a próxima ameaça vem logo
 		if (partida.todasColetadas()) {
@@ -1022,8 +1055,7 @@ public class TelaJogo implements Tela {
 		float[] direita = { c.direita.x, c.direita.y, c.direita.z };
 		float[] cima = { c.cima.x, c.cima.y, c.cima.z };
 		// só vale contar os bagos se ele ainda pode levar dano (não conta o corpo caído)
-		boolean atingivel = monstro.estado() == DragonKnight.Estado.SURGINDO
-				|| monstro.estado() == DragonKnight.Estado.ENCARANDO;
+		boolean atingivel = monstro.atingivel();
 		List<entidades.Atingivel> alvos = new java.util.ArrayList<>();
 		alvos.add(monstro);
 		for (Jubilado j : jubilados) {
@@ -1098,9 +1130,7 @@ public class TelaJogo implements Tela {
 		if (partida.todasColetadas() && !voltouComAsProvas && mundo.predio.dentro(jogador.x, jogador.z)) {
 			voltouComAsProvas = true;
 			diretor.encerrar();
-			monstro.ativo = true;
-			monstro.zonaSegura = null;
-			monstro.apressarProximaAparicao(6); // e vem logo na entrada
+			acordarDragonKnight(); // e ele vem logo na entrada
 			// uma caixa de munição no saguão, na frente do balcão, para a luta final
 			float[] c = mundo.predio.noMundo(-1.6f, 0, 7.7f);
 			caixas.add(new CaixaMunicao(c[0], c[1], c[2], 0.4f, Regras.CARTUCHOS_NA_VOLTA));
@@ -1176,7 +1206,7 @@ public class TelaJogo implements Tela {
 	 */
 	private void atualizarSustosFalsos(float dt) {
 		boolean naFloresta = tempoEntrega < 0 && saiuDaUnivali && !mundo.predio.dentro(jogador.x, jogador.z);
-		boolean monstroEmCena = monstro.estado() != DragonKnight.Estado.AUSENTE;
+		boolean monstroEmCena = monstro.visivel();
 		Camera c = jogador.camera();
 		if (silhueta != null) {
 			silhueta[4] += dt;
@@ -1239,21 +1269,25 @@ public class TelaJogo implements Tela {
 		float dt = diftime / 1000f;
 		Camera olhos = jogador.camera(); // ele mira o jogador, mesmo com a câmera livre ligada
 		monstro.definirAlvo(olhos.x, olhos.y, olhos.z, olhos.frente.x, olhos.frente.z);
-		monstro.lanternaLigada = lanterna.ligada(); // a luz o atrai mais cedo
 		monstro.SimulaSe(diftime);
 		tremor = Math.max(0, tremor - dt * 2.5f);
-		if (metalRestante > 0) { // a música está tocando: anda junto, para a próxima aparição continuar dela
+		if (metalRestante > 0) { // a música está tocando: anda junto, para a próxima vez continuar dela
 			segundosMetal += dt;
 			metalRestante -= dt;
 		}
+		if (sangrando > 0) { // depois do golpe, ele continua sangrando
+			sangrando -= dt;
+			particulas.jorroDeSangue(monstro.x, monstro.y + 1.5f, monstro.z, monstro.x - jogador.x, monstro.z - jogador.z, 2);
+		}
 
+		// quanto mais perto ele vem, mais a lanterna treme, a imagem pesa e o coração bate
 		DragonKnight.Estado estado = monstro.estado();
-		boolean ameacando = estado == DragonKnight.Estado.SURGINDO || estado == DragonKnight.Estado.ENCARANDO;
-		float progresso = progressoContagem();
-		lanterna.definirPanico(ameacando ? 0.3f + 0.7f * progresso : 0);
+		boolean ameacando = monstro.lutando() && monstro.visivel();
+		float perto = ameacando ? Math.max(0, 1 - (float) Math.hypot(monstro.x - jogador.x, monstro.z - jogador.z) / 20f) : 0;
+		lanterna.definirPanico(ameacando ? 0.2f + 0.8f * perto : 0);
 		float presenca = switch (estado) {
 		case SURGINDO -> 0.6f;
-		case ENCARANDO -> 0.45f + 0.55f * progresso;
+		case AVANCANDO, DESVIANDO -> 0.25f + 0.6f * perto;
 		case ATACANDO -> 1f;
 		default -> 0f;
 		};
@@ -1261,11 +1295,11 @@ public class TelaJogo implements Tela {
 		presencaMonstro += (presenca - presencaMonstro) * Math.min(1, dt * 4);
 		atualizarSustosFalsos(dt);
 		if (ameacando && !temMusicaMonstro) {
-			// batimento acelerando: de 0,8 s entre batidas até 0,3 s no fim da contagem
+			// batimento acelerando: de 0,8 s entre batidas (longe) até 0,3 s (encostado)
 			proximaBatida -= dt;
 			if (proximaBatida <= 0) {
-				gerenciador.audio().tocar(somBatida, 0.6f + 0.4f * progresso);
-				proximaBatida = 0.8f - 0.5f * progresso;
+				gerenciador.audio().tocar(somBatida, 0.6f + 0.4f * perto);
+				proximaBatida = 0.8f - 0.5f * perto;
 			}
 		} else {
 			proximaBatida = 0;
@@ -1396,7 +1430,7 @@ public class TelaJogo implements Tela {
 				saiuDaUnivali && !voltouComAsProvas);
 		boolean escondido = mundo.predio.dentro(jogador.x, jogador.z) || tempoEntrega >= 0;
 		boolean andando = jogador.velocidade() > 0.5f;
-		boolean dragonEmCena = monstro.estado() != DragonKnight.Estado.AUSENTE;
+		boolean dragonEmCena = monstro.lutando() && monstro.visivel();
 		Camera olhos = jogador.camera();
 		// a música de metal toca enquanto algum caçador está atrás do jogador
 		boolean cacando = algumJubilado(Jubilado.Estado.CACANDO);
@@ -1446,12 +1480,6 @@ public class TelaJogo implements Tela {
 			presenca = Math.max(presenca, 0.45f * Math.max(0, 1 - d / 25f));
 		}
 		return presenca;
-	}
-
-	/** De 0 (a contagem acabou de começar) a 1 (acabou). Fora da contagem, 0. */
-	private float progressoContagem() {
-		if (monstro.estado() != DragonKnight.Estado.ENCARANDO) return 0;
-		return 1 - monstro.contagem() / Regras.TEMPO_CONTAGEM;
 	}
 
 	/**
@@ -1958,23 +1986,9 @@ public class TelaJogo implements Tela {
 			float t = Math.min(1, monstro.tempoNoEstado() / Regras.DURACAO_SURGIMENTO);
 			o.retangulo(0, 0, w, h, new Color(0f, 0f, 0f, 0.65f * (float) Math.sin(Math.PI * t)));
 		}
-		if (estado != DragonKnight.Estado.ENCARANDO) {
-			return;
-		}
-		float progresso = progressoContagem();
-		o.imagem(texturaVinheta(), 0, 0, w, h, new Color(1f, 1f, 1f, Math.min(1f, 0.35f + 0.65f * progresso)));
-
-		// "5", "4"... "1": cada número começa grande e encolhe até o próximo segundo (o pulso)
-		float restante = monstro.contagem();
-		int numero = Math.max(1, (int) Math.ceil(restante));
-		float fracao = restante - (numero - 1); // 1 quando o número aparece, 0 quando vai trocar
-		TextoTextura.Imagem img = Recursos.textos().obter(String.valueOf(numero), Recursos.fonteTitulo(), 140,
-				COR_CONTAGEM, true, true);
-		if (img != null) {
-			float escala = (h / 800f) * (1 + 0.35f * fracao * fracao);
-			float lw = img.largura() * escala, lh = img.altura() * escala;
-			o.imagem(img.textura(), w / 2f - lw / 2, h * 0.2f - lh / 2, lw, lh,
-					new Color(1f, 1f, 1f, 0.55f + 0.45f * fracao));
+		if (monstro.lutando() && monstro.visivel()) { // as bordas ficam vermelhas conforme ele chega perto
+			float perto = Math.max(0, 1 - (float) Math.hypot(monstro.x - jogador.x, monstro.z - jogador.z) / 15f);
+			if (perto > 0) o.imagem(texturaVinheta(), 0, 0, w, h, new Color(1f, 1f, 1f, Math.min(1f, perto)));
 		}
 	}
 
@@ -2114,16 +2128,12 @@ public class TelaJogo implements Tela {
 
 	/** A linha do monstro no painel F3. */
 	private String textoMonstro() {
-		String base = "monstro " + monstro.estado().name().toLowerCase();
-		String detalhe = switch (monstro.estado()) {
-		case AUSENTE -> String.format(", surge em %.0f s", monstro.cronometro());
-		case ENCARANDO -> String.format(", contagem %.1f s, vida %.1f%s", monstro.contagem(), monstro.life,
-				monstro.ferido() ? ", ferido" : "");
-		default -> "";
-		};
+		String base = "dragon knight " + monstro.estado().name().toLowerCase();
+		String detalhe = monstro.lutando() ? String.format(", golpes %d de %d, a %.0f m", monstro.golpes(),
+				Regras.GOLPES_PARA_MATAR, Math.hypot(monstro.x - jogador.x, monstro.z - jogador.z)) : "";
 		String animacao = monstro.animador() != null ? "   " + monstro.animador().nomeAtual() : "   (substituto)";
-		return base + detalhe + animacao + String.format("   sobrevividas %d   susto falso em %.0f s%s",
-				monstro.aparicoesSobrevividas(), sustos.cronometro(), silhueta != null ? " (silhueta em cena)" : "");
+		return base + detalhe + animacao + String.format("   susto falso em %.0f s%s", sustos.cronometro(),
+				silhueta != null ? " (silhueta em cena)" : "");
 	}
 
 	/**

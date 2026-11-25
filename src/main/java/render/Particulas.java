@@ -86,6 +86,29 @@ public class Particulas {
 		}
 	}
 
+	/**
+	 * Um jorro de sangue (o golpe no Dragon Knight): gotas grandes e vermelho-vivo, lançadas na
+	 * direção (dx, dz) do tiro (saindo pelas costas) e para cima, caindo em arco. Duram mais que o
+	 * sangue de um bago, para dar tempo de ver.
+	 */
+	public void jorroDeSangue(float x, float y, float z, float dx, float dz, int quantidade) {
+		float t = Math.max(1e-4f, (float) Math.hypot(dx, dz));
+		dx /= t;
+		dz /= t;
+		for (int i = 0; i < quantidade; i++) {
+			Particula p = nova(x, y, z, 0.9f + random.nextFloat() * 0.6f);
+			espalhar(p, 1.2f + random.nextFloat() * 1.5f);
+			float forca = 2.5f + random.nextFloat() * 4f;
+			p.vx += dx * forca;
+			p.vz += dz * forca;
+			p.vy += 1.5f + random.nextFloat() * 2.5f;
+			p.tamanho = 0.08f + random.nextFloat() * 0.1f;
+			p.gravidade = 9f;
+			p.arrasto = 0.6f;
+			cor(p, 0.55f + random.nextFloat() * 0.15f, 0.02f, 0.02f, 1f);
+		}
+	}
+
 	/** Fumaça do cano: sobe devagar, cresce e some em ~1 s. */
 	public void fumaca(float x, float y, float z, int quantidade) {
 		for (int i = 0; i < quantidade; i++) {

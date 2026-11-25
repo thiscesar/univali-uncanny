@@ -18,8 +18,16 @@ public class GradeColisao {
 	/** Um círculo no chão: centro (x, z) e raio, em metros. */
 	public record Circulo(float x, float z, float raio) {}
 
-	/** Um retângulo no chão, alinhado aos eixos, em metros. */
-	public record Retangulo(float xMin, float zMin, float xMax, float zMax) {
+	/**
+	 * Um retângulo no chão, alinhado aos eixos, em metros. "topo" é a altura (y do mundo) até onde
+	 * ele vai: as paredes vão até o céu (infinito); um móvel, só até a altura dele (um tiro passa
+	 * por cima do balcão, mas ninguém anda através dele).
+	 */
+	public record Retangulo(float xMin, float zMin, float xMax, float zMax, float topo) {
+
+		public Retangulo(float xMin, float zMin, float xMax, float zMax) {
+			this(xMin, zMin, xMax, zMax, Float.POSITIVE_INFINITY);
+		}
 
 		/** Distância do ponto até o retângulo (0 se estiver dentro). */
 		public float distancia(float x, float z) {
@@ -56,7 +64,8 @@ public class GradeColisao {
 	}
 
 	public void adicionarRetangulo(Retangulo r) {
-		adicionarRetangulo(r.xMin(), r.zMin(), r.xMax(), r.zMax());
+		retangulos.add(r);
+		quantidade++;
 	}
 
 	/** Tira um retângulo (uma porta que foi aberta). */
@@ -69,6 +78,18 @@ public class GradeColisao {
 	}
 
 	/** Um círculo de raio "raio" em (x, z) encosta em algum obstáculo? */
+	/** O ponto (x, y, z) está dentro de algum obstáculo? Os troncos são infinitos; os retângulos vão até o topo. */
+	public boolean colideNaAltura(float x, float y, float z) {
+		for (Circulo c : proximos(x, z)) {
+			float dx = x - c.x(), dz = z - c.z();
+			if (dx * dx + dz * dz < c.raio() * c.raio()) return true;
+		}
+		for (Retangulo r : retangulos) {
+			if (y < r.topo() && r.distancia(x, z) == 0) return true;
+		}
+		return false;
+	}
+
 	public boolean colide(float x, float z, float raio) {
 		for (Circulo c : proximos(x, z)) {
 			float dx = x - c.x(), dz = z - c.z(), soma = raio + c.raio();
@@ -129,10 +150,19 @@ public class GradeColisao {
 	 * obstáculo (o tronco desenhado é mais grosso que o círculo de colisão, e a copa mais ainda).
 	 */
 	public boolean linhaLivre(float x1, float z1, float x2, float z2, float folga) {
+		return linhaLivreNaAltura(x1, z1, x2, z2, folga, Float.NEGATIVE_INFINITY);
+	}
+
+	/**
+	 * O mesmo, olhando na altura y: retângulos mais baixos que isso (um balcão, uma fileira de
+	 * carteiras) não atrapalham a vista. Os troncos sempre atrapalham.
+	 */
+	public boolean linhaLivreNaAltura(float x1, float z1, float x2, float z2, float folga, float y) {
 		// os retângulos: o segmento é percorrido a cada 0,5 m (são poucos e grandes)
 		float comprimento = (float) Math.hypot(x2 - x1, z2 - z1);
 		int passos = Math.max(1, (int) Math.ceil(comprimento / 0.5f));
 		for (Retangulo r : retangulos) {
+			if (r.topo() <= y) continue;
 			for (int k = 0; k <= passos; k++) {
 				float t = (float) k / passos;
 				if (r.distancia(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t) <= folga) return false;

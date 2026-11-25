@@ -4,14 +4,16 @@ Jogo de terror em primeira pessoa feito em **Java + LWJGL 3 (OpenGL 3.3)** para 
 Computação Gráfica da **Univali**, construído sobre o projeto de OpenGL do professor.
 
 Você acorda na carteira, sozinho, com o relógio parado em 23:58. O professor não aceita ninguém
-sem as três provas (**M1, M2 e M3**), e elas estão perdidas na floresta em volta do campus. Na
-neblina vive o **Dragon Knight**: quando ele aparece, você tem **5 segundos** para derrubá-lo com a
-escopeta. Se não conseguir, reprovado.
+sem as três provas (**M1, M2 e M3**), e elas estão perdidas na floresta em volta do campus. No
+balcão do saguão, uma escopeta e a carta de quem tentou sair antes de você.
 
-E a floresta tem outros moradores: os **Jubilados**, alunos que estouraram o prazo do curso e
-nunca saíram de lá. Eles rondam entre as árvores — às vezes só os olhos verdes aparecem na
-neblina — e, de tempos em tempos, um deles vem caçar: ouve quem corre e enxerga a luz da lanterna
-de longe. Se te pegar, reprovado. A escopeta não o mata, só derruba por alguns segundos.
+A floresta é dos **Jubilados**, alunos que estouraram o prazo do curso e nunca saíram de lá. Eles
+rondam entre as árvores — às vezes só os olhos verdes aparecem na neblina — e, de tempos em
+tempos, um deles vem caçar: você ouve ele sussurrando antes, e ele ouve quem corre e enxerga a luz
+da lanterna de longe. Se te pegar, reprovado. A escopeta não o mata, só derruba.
+
+E na volta, com as provas, o **Dragon Knight** espera dentro da Univali: ele avança pelos
+corredores em zigue-zague, desvia da mira e só cai com três tiros bons.
 
 Cada partida tem um mapa diferente: o relevo e a posição das provas, das caixas de munição e da
 Univali são gerados por **algoritmo genético**, com o **A\*** garantindo que tudo é alcançável.
@@ -50,9 +52,12 @@ Requisitos: placa de vídeo com **OpenGL 3.3** e cerca de **1 GB de memória liv
 - **Monstros MD2** (`md2`, `entidades`): leitor do formato do Quake II, com a interpolação entre
   quadros feita no shader. O Jubilado tem uma máquina de estados (vagando, desconfiado, caçando,
   procurando, caído, atacando, fugindo) com visão em cone bloqueada pelos troncos e audição.
-- **Diretor de sustos** (`jogo.DiretorDeSustos`): controla o ritmo — calmaria, a vez de um monstro,
-  calmaria — para que só um ataque de cada vez, o Dragon Knight fique mais comum perto do fim e a
-  partida nunca fique muito tempo sem nada acontecer.
+- **Diretor de sustos** (`jogo.DiretorDeSustos`): controla o ritmo da floresta — calmaria, caçada,
+  calmaria —, com mais caçadas (às vezes dois Jubilados juntos) perto do fim, sem nunca deixar a
+  partida muito tempo sem nada acontecer.
+- **O chefão** (`entidades.DragonKnight`): dentro do prédio, anda pelo A* numa grade montada a
+  partir das paredes e dos móveis (`grafos.PlantaInterna`), em zigue-zague; percebe a mira e pula
+  para o lado; a cada tiro bom, sangra, recua, some e volta por outro corredor.
 - **Renderização** (`render`, `shaders`): texture splatting no terreno, neblina exponencial,
   lanterna com sombras (shadow mapping com PCF), árvores com instancing, escopeta como viewmodel,
   normal mapping e pós-processamento (vinheta, granulado e um filtro opcional no estilo PS1).

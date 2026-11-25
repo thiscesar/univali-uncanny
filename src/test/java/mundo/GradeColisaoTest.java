@@ -79,4 +79,17 @@ class GradeColisaoTest {
 		assertTrue(g.linhaLivre(30, 55, 70, 55));
 		assertFalse(g.linhaLivre(30, 51, 70, 51, 1.2f), "passa perto demais com a folga");
 	}
+
+	@Test
+	void movelBaixoSeguraOAndarMasNaoOTiroNemAVista() {
+		GradeColisao g = new GradeColisao(50);
+		g.adicionarRetangulo(new GradeColisao.Retangulo(10, 10, 12, 12, 1.2f)); // um balcão de 1,2 m
+		assertTrue(g.colide(11, 11, 0.3f), "ninguém anda através dele");
+		assertTrue(g.colideNaAltura(11, 1.0f, 11), "abaixo do topo, o tiro bate");
+		assertFalse(g.colideNaAltura(11, 1.5f, 11), "acima do topo, o tiro passa");
+		assertFalse(g.linhaLivre(5, 11, 20, 11), "no chão, ele bloqueia");
+		assertTrue(g.linhaLivreNaAltura(5, 11, 20, 11, 0, 1.6f), "na altura dos olhos, dá para ver por cima");
+		g.adicionarRetangulo(30, 10, 32, 12); // uma parede: infinita
+		assertTrue(g.colideNaAltura(31, 100, 11));
+	}
 }

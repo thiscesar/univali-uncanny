@@ -3,36 +3,46 @@ package entidades;
 import java.util.List;
 import java.util.Random;
 
+import grafos.PlantaInterna;
 import jogo.Regras;
 import md2.Animador;
-import mundo.ConsultaAltura;
-import mundo.GradeColisao;
 import obj.Object3D;
 
 /**
- * O Dragon Knight: um cavaleiro montado num dragão que surge perto do jogador, encara,
- * e ataca se não morrer em 5 segundos. Só lógica (não usa OpenGL): o desenho fica em
- * render.DesenhoMonstro, e os sons e efeitos de tela na TelaJogo, avisada pelos Eventos.
+ * O Dragon Knight: um cavaleiro montado num dragão, o chefão da volta. Ele dorme até o jogador
+ * voltar para a Univali com as três provas; aí acorda lá dentro e vem atrás dele pelos corredores.
+ * Para vencer, é preciso acertá-lo três vezes com tiros bons (3 bagos ou mais no corpo), e ele não
+ * facilita: corre em zigue-zague e, quando percebe a mira, pula para o lado. Só lógica (não usa
+ * OpenGL): o desenho fica em render.DesenhoMonstro, e os sons e o sangue na TelaJogo, avisada
+ * pelos Eventos.
  *
  * Máquina de estados:
- *   AUSENTE   invisível; o cronômetro conta até a próxima aparição.
- *   SURGINDO  0,4 s: aparece num lugar sorteado em volta do jogador, gritando.
- *   ENCARANDO parado, sempre virado para o jogador; a contagem de 5 s corre. Ao levar um tiro,
- *             toca a animação de dor por cima ("ferido"), mas a contagem NÃO para.
- *   MORRENDO  animação de morte; depois dela e de mais 2 s, volta a AUSENTE.
- *   ATACANDO  vai para a frente do jogador e ataca; no fim da animação, a partida está perdida.
+ *   ADORMECIDO  antes da volta com as provas: não existe.
+ *   SURGINDO    aparece numa das pontas (o fundo do saguão, as pontas do corredor), grita e
+ *               provoca por 1,4 s. Já dá para atirar.
+ *   AVANCANDO   corre até o jogador pelo caminho do A* (dentro do prédio), em zigue-zague.
+ *   DESVIANDO   o jogador mirou nele: um pulo rápido para o lado (0,35 s).
+ *   CAMBALEANDO levou um golpe: a animação de dor, empurrado para trás, sangrando (os tiros
+ *               agora acertam, mas não contam como golpe, nem recuando: ele precisa voltar).
+ *   RECUANDO    corre para longe, para a ponta mais distante, até sair da vista do jogador.
+ *   ESCONDIDO   sumiu; daqui a 2,5 s surge de novo, por outro lado (outra ponta, fora da vista).
+ *   ATACANDO    alcançou o jogador: ataca; no fim da animação, a partida está perdida.
+ *   MORRENDO    o terceiro golpe: a animação de morte; depois fica no chão (MORTO).
  *
- * Herda de Object3D (do projeto original): x, y, z, vivo, life e levaDano são reaproveitados.
- * A frente do modelo MD2 é o eixo +x; "guinada" gira o modelo em volta do eixo y.
+ * Herda de Object3D (do projeto original): x, y, z e vivo são reaproveitados. A frente do modelo
+ * MD2 é o eixo +x; "guinada" gira o modelo em volta do eixo y.
  */
 public class DragonKnight extends Object3D implements Atingivel {
 
-	public enum Estado { AUSENTE, SURGINDO, ENCARANDO, MORRENDO, ATACANDO }
+	public enum Estado { ADORMECIDO, SURGINDO, AVANCANDO, DESVIANDO, CAMBALEANDO, RECUANDO, ESCONDIDO, ATACANDO, MORRENDO, MORTO }
 
-	/** Quem quer saber o que o monstro faz (sons, tremor, susto). Tudo opcional. */
+	/** Quem quer saber o que o monstro faz (sons, sangue, música, susto). Tudo opcional. */
 	public interface Eventos {
 		default void surgiu(DragonKnight monstro) {}
-		default void ferido(DragonKnight monstro) {}
+		/** Levou um golpe (o número dele: 1, 2 ou 3). */
+		default void golpeado(DragonKnight monstro, int golpes) {}
+		default void desviou(DragonKnight monstro) {}
+		default void galope(DragonKnight monstro) {}
 		default void morreu(DragonKnight monstro) {}
 		default void atacou(DragonKnight monstro) {}
 	}
@@ -43,51 +53,43 @@ public class DragonKnight extends Object3D implements Atingivel {
 	 */
 	public static final float[] CAIXA_PADRAO = { -2.85f, 0f, -1.15f, 2.0f, 2.2f, 1.1f };
 	/** Sem o MD2, quanto duram a dor, a morte e o ataque (o que seriam as animações). */
-	private static final float DURACAO_DOR = 0.3f, DURACAO_MORTE = 1.0f, DURACAO_ATAQUE = 0.8f;
-	/** Quanto tempo o tom vermelho do dano leva para sumir, em segundos. */
-	private static final float DURACAO_MARCA_DANO = 0.3f;
+	private static final float DURACAO_DOR = 0.7f, DURACAO_MORTE = 1.0f, DURACAO_ATAQUE = 0.8f;
+	private static final float DURACAO_DESVIO = 0.35f, DURACAO_MARCA_DANO = 0.3f;
+	/** Empurrado para trás pelo golpe (m/s), procurando ficar fora da vista (s) e o máximo recuando (s). */
+	private static final float EMPURRAO = 2.5f, RECUO_MINIMO = 1.0f, RECUO_MAXIMO = 6f;
+	/** De quanto em quanto ele refaz o caminho até o jogador, e a distância entre duas batidas de casco. */
+	private static final float REPLANEJAR = 0.5f, PASSADA = 2.2f;
 
-	private final ConsultaAltura chao;
-	private final GradeColisao colisao;
-	private final Random random;
-	/** As animações do MD2; null quando o modelo não existe (o substituto usa só os tempos). */
 	private final Animador animador;
 	private final float[] caixa;
+	private final Random random;
 	private Eventos eventos = new Eventos() {};
+	private PlantaInterna planta;
 
-	private Estado estado = Estado.AUSENTE;
-	/** Em AUSENTE: segundos até a próxima aparição. Começa com a carência do início da partida. */
-	private float cronometro = Regras.CARENCIA;
+	private Estado estado = Estado.ADORMECIDO;
 	private float tempoNoEstado = 0;
-	private float tempoDor = 0;
-	private float contagem = 0;
-	private boolean ferido = false;
-	private boolean animacaoTerminou = false;
-	private boolean ataqueTerminou = false;
+	private int golpes = 0;
 	private float marcaDano = 0;
-	private int aparicoesSobrevividas = 0;
-	/** Limite para a próxima aparição, pedido por uma prova coletada enquanto ele estava em cena. */
-	private float limiteProximaAparicao = Float.MAX_VALUE;
+	private boolean ataqueTerminou = false, animacaoTerminou = false;
+
+	// o jogador (os olhos) e para onde ele olha (no chão, unitário)
+	private float alvoX, alvoY, alvoZ, frenteX = 1, frenteZ = 0;
+
+	// andar
+	private List<float[]> caminho;
+	private int proximo;
+	private float replanejar, fase, andouDesdeOGalope;
+	private float esperaDesvio, duracaoDesvio;
+	private float ladoX, ladoZ; // a direção do pulo para o lado, ou do empurrão do golpe
+	private float[] ultimaPonta;
 
 	/** Rotação do modelo em volta do eixo y, em radianos (0 = olhando para +x). */
 	public float guinada = 0;
+	/** A altura do chão onde ele anda (o piso da Univali). */
+	public float alturaChao = 0;
 
-	/** Quantas provas o jogador já tem: as aparições ficam mais frequentes (as provas vêm depois). */
-	public int provasColetadas = 0;
-	/** A lanterna do jogador está ligada? A luz o atrai: a próxima aparição chega mais cedo. */
-	public boolean lanternaLigada = false;
-	/** Enquanto falso, ele nem conta o tempo (a partida começa dentro da Univali, onde ele não entra). */
-	public boolean ativo = true;
-	/** As paredes da Univali: ele não surge a menos de 25 m delas (null = sem zona segura). */
-	public GradeColisao.Retangulo zonaSegura = null;
-
-	// o alvo: os olhos do jogador e a direção em que ele olha, no chão
-	private float alvoX, alvoY, alvoZ, frenteX = 0, frenteZ = 1;
-
-	public DragonKnight(ConsultaAltura chao, GradeColisao colisao, Animador animador, float[] caixa, long semente) {
+	public DragonKnight(Animador animador, float[] caixa, long semente) {
 		super(0, 0, 0);
-		this.chao = chao;
-		this.colisao = colisao;
 		this.animador = animador;
 		this.caixa = caixa != null ? caixa.clone() : CAIXA_PADRAO.clone();
 		this.random = new Random(semente);
@@ -103,73 +105,84 @@ public class DragonKnight extends Object3D implements Atingivel {
 		alvoX = x;
 		alvoY = y;
 		alvoZ = z;
-		float t = (float) Math.sqrt(frenteX * frenteX + frenteZ * frenteZ);
+		float t = (float) Math.hypot(frenteX, frenteZ);
 		if (t > 1e-4f) {
 			this.frenteX = frenteX / t;
 			this.frenteZ = frenteZ / t;
 		}
 	}
 
+	/**
+	 * Acorda dentro do prédio: a planta diz por onde ele anda e de onde ele surge. Ele aparece na
+	 * primeira ponta (o fundo do saguão, de frente para quem entra).
+	 */
+	public void despertar(PlantaInterna planta, float alturaChao) {
+		if (estado != Estado.ADORMECIDO) return;
+		this.planta = planta;
+		this.alturaChao = alturaChao;
+		surgir(planta.pontas().get(0));
+	}
+
 	// ---------- simulação ----------
 
 	@Override
 	public void SimulaSe(long diftime) {
-		if (!ativo) return;
+		if (estado == Estado.ADORMECIDO) return;
 		float dt = diftime / 1000f;
 		tempoNoEstado += dt;
-		tempoDor += dt;
-		if (ferido && animador == null && tempoDor >= DURACAO_DOR) {
-			ferido = false; // o substituto não tem animação de dor: só o tempo dela
-		}
+		replanejar -= dt;
+		esperaDesvio -= dt;
 		marcaDano = Math.max(0, marcaDano - dt / DURACAO_MARCA_DANO);
-		if (animador != null) {
-			animador.atualizar(dt);
-		}
+		if (animador != null) animador.atualizar(dt);
 
 		switch (estado) {
-		case AUSENTE -> {
-			cronometro -= dt * (lanternaLigada ? Regras.LANTERNA_ATRAI : 1);
-			if (cronometro <= 0) {
-				float[] lugar = sortearLugar();
-				if (lugar == null) {
-					cronometro = Regras.ESPERA_SEM_LUGAR; // nenhum lugar serviu: tenta de novo daqui a pouco
-				} else {
-					surgir(lugar[0], lugar[1]);
-				}
-			}
-		}
 		case SURGINDO -> {
 			virarParaOAlvo();
-			if (tempoNoEstado >= Regras.DURACAO_SURGIMENTO) {
-				mudarPara(Estado.ENCARANDO);
-				contagem = Regras.TEMPO_CONTAGEM;
-				if (!ferido) tocarEncarando();
-			}
+			if (tempoNoEstado >= Regras.CAVALEIRO_SURGINDO) avancar();
 		}
-		case ENCARANDO -> {
-			virarParaOAlvo();
-			contagem -= dt;
-			if (contagem <= 0) {
-				contagem = 0;
+		case AVANCANDO -> {
+			float dist = (float) Math.hypot(alvoX - x, alvoZ - z);
+			if (dist <= Regras.CAVALEIRO_ALCANCE) {
 				atacar();
+				return;
+			}
+			if (esperaDesvio <= 0 && dist > 4 && dist < 25 && mirandoNele(dist) && desviar()) return;
+			if (caminho == null || replanejar <= 0) {
+				replanejar = REPLANEJAR;
+				planejar(alvoX, alvoZ);
+			}
+			fase += dt * Regras.CAVALEIRO_ZIGUE_RITMO * 2 * (float) Math.PI;
+			seguirCaminho(dt, Regras.CAVALEIRO_AVANCA, true);
+		}
+		case DESVIANDO -> {
+			mover(ladoX * Regras.CAVALEIRO_DESVIA * dt, ladoZ * Regras.CAVALEIRO_DESVIA * dt);
+			virarParaOAlvo();
+			if (tempoNoEstado >= duracaoDesvio) avancar();
+		}
+		case CAMBALEANDO -> {
+			float empurrao = EMPURRAO * Math.max(0, 1 - tempoNoEstado / DURACAO_DOR);
+			mover(ladoX * empurrao * dt, ladoZ * empurrao * dt);
+			if (animador == null ? tempoNoEstado >= DURACAO_DOR : animacaoTerminou) recuar();
+		}
+		case RECUANDO -> {
+			boolean chegou = caminho == null || seguirCaminho(dt, Regras.CAVALEIRO_RECUA, false);
+			boolean foraDaVista = !planta.ve(alvoX, alvoZ, x, z);
+			if (tempoNoEstado >= RECUO_MINIMO && (foraDaVista || chegou) || tempoNoEstado >= RECUO_MAXIMO) {
+				mudarPara(Estado.ESCONDIDO); // sumiu na esquina: vai surgir por outro lado
+				vivo = false;
 			}
 		}
-		case MORRENDO -> {
-			if (animador == null && tempoNoEstado >= DURACAO_MORTE) {
-				animacaoTerminou = true;
-			}
-			if (animacaoTerminou) {
-				cronometro -= dt; // conta os 2 s com o corpo no chão
-				if (cronometro <= 0) {
-					sumir();
-				}
-			}
+		case ESCONDIDO -> {
+			if (tempoNoEstado >= Regras.CAVALEIRO_ESCONDIDO) surgir(outraPonta());
 		}
 		case ATACANDO -> {
-			if (animador == null && tempoNoEstado >= DURACAO_ATAQUE) {
-				ataqueTerminou = true;
-			}
+			virarParaOAlvo();
+			if (animador == null && tempoNoEstado >= DURACAO_ATAQUE) ataqueTerminou = true;
 		}
+		case MORRENDO -> {
+			if (animador == null ? tempoNoEstado >= DURACAO_MORTE : animacaoTerminou) mudarPara(Estado.MORTO);
+		}
+		default -> { }
 		}
 	}
 
@@ -178,51 +191,178 @@ public class DragonKnight extends Object3D implements Atingivel {
 		tempoNoEstado = 0;
 	}
 
-	/**
-	 * Sorteia até 30 lugares em volta do jogador (8 a 15 m, qualquer ângulo, inclusive atrás)
-	 * e devolve o primeiro que serve: dentro do mapa, longe da borda, em terra firme, sem
-	 * declive forte, longe da zona segura, sem nada no lugar e com linha livre (nenhum tronco,
-	 * parede ou móvel a menos de 1,2 m da reta) até o jogador. Sem zona segura (na volta com as
-	 * provas), isso vale dentro da Univali também: ele surge no corredor ou numa sala à vista.
-	 */
-	float[] sortearLugar() {
-		for (int i = 0; i < Regras.TENTATIVAS_APARICAO; i++) {
-			double angulo = random.nextDouble() * 2 * Math.PI;
-			float distancia = Regras.DISTANCIA_MINIMA_APARICAO
-					+ random.nextFloat() * (Regras.DISTANCIA_MAXIMA_APARICAO - Regras.DISTANCIA_MINIMA_APARICAO);
-			float x = alvoX + (float) Math.cos(angulo) * distancia;
-			float z = alvoZ + (float) Math.sin(angulo) * distancia;
-			if (lugarServe(x, z)) {
-				return new float[] { x, z };
-			}
-		}
-		return null;
-	}
+	// ---------- as ações ----------
 
-	boolean lugarServe(float x, float z) {
-		if (!chao.dentroDoMapa(x, z, Regras.MARGEM_BORDA_APARICAO)) return false;
-		if (chao.ehAgua(x, z)) return false;
-		if (chao.anguloEm(x, z) > Jogador.DECLIVE_MAXIMO) return false;
-		if (zonaSegura != null && zonaSegura.distancia(x, z) < Regras.RAIO_ZONA_SEGURA) return false;
-		if (colisao.colide(x, z, 0.6f)) return false; // não surge dentro de um tronco, parede ou móvel
-		return colisao.linhaLivre(x, z, alvoX, alvoZ, Regras.FOLGA_LINHA_DE_VISAO);
-	}
-
-	private void surgir(float x, float z) {
-		this.x = x;
-		this.z = z;
-		this.y = chao.alturaEm(x, z);
-		life = Regras.VIDA_MONSTRO;
+	private void surgir(float[] ponta) {
+		ultimaPonta = ponta;
+		x = ponta[0];
+		z = ponta[1];
+		y = alturaChao;
 		vivo = true;
-		ferido = false;
-		ataqueTerminou = false;
+		caminho = null;
 		virarParaOAlvo();
 		mudarPara(Estado.SURGINDO);
-		tocar("stand", true, null);
+		tocar(temAnimacao("taunt") ? "taunt" : "stand", true, null);
 		eventos.surgiu(this);
 	}
 
-	/** Gira o modelo para a frente (+x) apontar para o jogador. */
+	private void avancar() {
+		mudarPara(Estado.AVANCANDO);
+		caminho = null;
+		tocar("run", true, null);
+	}
+
+	/** A mira do jogador está nele (a poucos graus do centro) e não há parede no meio. */
+	boolean mirandoNele(float dist) {
+		float cosseno = ((x - alvoX) * frenteX + (z - alvoZ) * frenteZ) / dist;
+		return cosseno > (float) Math.cos(Math.toRadians(Regras.CAVALEIRO_MIRA)) && planta.ve(alvoX, alvoZ, x, z);
+	}
+
+	/**
+	 * Pula para o lado onde houver espaço (perpendicular à direção do jogador): o pulo inteiro, ou
+	 * mais curto se não couber (no corredor de 4 m sobra pouco mais de 1 m para cada lado).
+	 * Devolve false se não há espaço nenhum.
+	 */
+	private boolean desviar() {
+		float dx = alvoX - x, dz = alvoZ - z, d = (float) Math.hypot(dx, dz);
+		float px = -dz / d, pz = dx / d;
+		float alcance = Regras.CAVALEIRO_DESVIA * DURACAO_DESVIO;
+		for (float fracao : new float[] { 1f, 0.65f, 0.4f }) {
+			float lado = random.nextBoolean() ? 1 : -1;
+			for (int tentativa = 0; tentativa < 2; tentativa++, lado = -lado) {
+				if (planta.livre(x + px * lado * alcance * fracao, z + pz * lado * alcance * fracao)) {
+					ladoX = px * lado;
+					ladoZ = pz * lado;
+					duracaoDesvio = DURACAO_DESVIO * fracao;
+					esperaDesvio = Regras.CAVALEIRO_ESPERA_DESVIO;
+					mudarPara(Estado.DESVIANDO);
+					eventos.desviou(this);
+					return true;
+				}
+			}
+		}
+		esperaDesvio = 0.4f; // encurralado: tenta de novo daqui a pouco
+		return false;
+	}
+
+	private void atacar() {
+		caminho = null;
+		virarParaOAlvo();
+		mudarPara(Estado.ATACANDO);
+		tocar("attack", false, () -> ataqueTerminou = true);
+		eventos.atacou(this);
+	}
+
+	/** Depois do golpe: corre para a ponta mais longe do jogador, para sair da vista dele. */
+	private void recuar() {
+		float[] longe = null;
+		double maior = -1;
+		for (float[] p : planta.pontas()) {
+			double d = Math.hypot(p[0] - alvoX, p[1] - alvoZ);
+			if (d > maior) {
+				maior = d;
+				longe = p;
+			}
+		}
+		mudarPara(Estado.RECUANDO);
+		planejar(longe[0], longe[1]);
+		tocar("run", true, null);
+	}
+
+	/**
+	 * Por onde surgir de novo: uma ponta diferente da última, fora da vista do jogador e a pelo
+	 * menos 12 m dele; se nenhuma serve, a mais longe dele que não seja a última.
+	 */
+	private float[] outraPonta() {
+		float[] melhor = null;
+		double maior = -1;
+		for (float[] p : planta.pontas()) {
+			if (p == ultimaPonta && planta.pontas().size() > 1) continue;
+			double d = Math.hypot(p[0] - alvoX, p[1] - alvoZ);
+			if (d >= 12 && !planta.ve(alvoX, alvoZ, p[0], p[1])) return p;
+			if (d > maior) {
+				maior = d;
+				melhor = p;
+			}
+		}
+		return melhor;
+	}
+
+	private void cambalear() {
+		float dx = x - alvoX, dz = z - alvoZ, d = Math.max(1e-3f, (float) Math.hypot(dx, dz));
+		ladoX = dx / d; // empurrado para longe do jogador
+		ladoZ = dz / d;
+		animacaoTerminou = false;
+		mudarPara(Estado.CAMBALEANDO);
+		tocar("pain", false, () -> animacaoTerminou = true);
+	}
+
+	private void morrer() {
+		animacaoTerminou = false;
+		mudarPara(Estado.MORRENDO);
+		tocar("death", false, () -> animacaoTerminou = true);
+		eventos.morreu(this);
+	}
+
+	// ---------- andar ----------
+
+	private void planejar(float px, float pz) {
+		caminho = planta.caminho(x, z, px, pz);
+		proximo = caminho != null ? Math.min(1, caminho.size() - 1) : 0;
+	}
+
+	/**
+	 * Anda pelo caminho, pulando pontos que já dá para ver em linha reta. Avançando, soma o
+	 * zigue-zague: uma velocidade para o lado que vai e volta. Devolve true quando chega ao fim.
+	 */
+	private boolean seguirCaminho(float dt, float velocidade, boolean zigue) {
+		if (caminho == null) return true;
+		while (proximo + 1 < caminho.size()) {
+			float[] depois = caminho.get(proximo + 1);
+			if (!planta.linhaLivre(x, z, depois[0], depois[1])) break;
+			proximo++;
+		}
+		float[] p = caminho.get(proximo);
+		float dx = p[0] - x, dz = p[1] - z, d = (float) Math.hypot(dx, dz);
+		if (d < 0.5f) {
+			if (++proximo >= caminho.size()) {
+				caminho = null;
+				return true;
+			}
+			return false;
+		}
+		dx /= d;
+		dz /= d;
+		guinada = guinadaPara(dx, dz);
+		float passo = Math.min(d, velocidade * dt);
+		float mx = dx * passo, mz = dz * passo;
+		if (zigue) { // o lado: perpendicular ao caminho, indo e voltando
+			float lateral = (float) Math.cos(fase) * Regras.CAVALEIRO_ZIGUE * Regras.CAVALEIRO_ZIGUE_RITMO * 2
+					* (float) Math.PI * dt;
+			mx += -dz * lateral;
+			mz += dx * lateral;
+		}
+		mover(mx, mz);
+		return false;
+	}
+
+	/** Anda (mx, mz), se couber; senão tenta só em x ou só em z (escorrega na parede). */
+	private void mover(float mx, float mz) {
+		float nx = x + mx, nz = z + mz;
+		if (!planta.livre(nx, nz)) {
+			if (planta.livre(nx, z)) nz = z;
+			else if (planta.livre(x, nz)) nx = x;
+			else return;
+		}
+		andouDesdeOGalope += (float) Math.hypot(nx - x, nz - z);
+		x = nx;
+		z = nz;
+		if (andouDesdeOGalope >= PASSADA) {
+			andouDesdeOGalope = 0;
+			eventos.galope(this);
+		}
+	}
+
 	private void virarParaOAlvo() {
 		guinada = guinadaPara(alvoX - x, alvoZ - z);
 	}
@@ -233,82 +373,6 @@ public class DragonKnight extends Object3D implements Atingivel {
 	 */
 	public static float guinadaPara(float dx, float dz) {
 		return (float) Math.atan2(-dz, dx);
-	}
-
-	private void tocarEncarando() {
-		boolean temProvocacao = animador != null && animador.animacao("taunt") != null;
-		tocar(temProvocacao ? "taunt" : "stand", true, null);
-	}
-
-	/** Leva dano (só enquanto está surgindo ou encarando). A contagem continua correndo. */
-	@Override
-	public void receberDano(float valor) {
-		if (estado != Estado.SURGINDO && estado != Estado.ENCARANDO) {
-			return;
-		}
-		levaDano(valor); // do Object3D: diminui life e desliga vivo quando chega a zero
-		marcaDano = 1;
-		if (!vivo) {
-			morrer();
-			return;
-		}
-		ferido = true;
-		tempoDor = 0;
-		eventos.ferido(this);
-		tocar("pain", false, () -> {
-			ferido = false;
-			tocarEncarando();
-		});
-	}
-
-	private void morrer() {
-		mudarPara(Estado.MORRENDO);
-		ferido = false;
-		animacaoTerminou = false;
-		cronometro = Regras.ESPERA_DEPOIS_DA_MORTE;
-		aparicoesSobrevividas++;
-		tocar("death", false, () -> animacaoTerminou = true);
-		eventos.morreu(this);
-	}
-
-	/** O corpo some; a próxima aparição vem depois do intervalo, que depende das provas. */
-	private void sumir() {
-		mudarPara(Estado.AUSENTE);
-		vivo = false;
-		cronometro = Math.min(Regras.intervaloAparicao(provasColetadas, random.nextFloat()), limiteProximaAparicao);
-		limiteProximaAparicao = Float.MAX_VALUE;
-	}
-
-	/**
-	 * Uma prova foi coletada: a floresta reage e a próxima aparição vem em no máximo "segundos".
-	 * Se ele já está em cena, vale para a aparição seguinte.
-	 */
-	public void apressarProximaAparicao(float segundos) {
-		if (estado == Estado.AUSENTE) {
-			cronometro = Math.min(cronometro, segundos);
-		} else {
-			limiteProximaAparicao = Math.min(limiteProximaAparicao, segundos);
-		}
-	}
-
-	/** Segura a próxima aparição por pelo menos "segundos" (o outro monstro está atrás do jogador). */
-	public void segurarAparicao(float segundos) {
-		if (estado == Estado.AUSENTE) {
-			cronometro = Math.max(cronometro, segundos);
-		}
-	}
-
-	/** O tempo acabou: vai para a frente do jogador (a frente do dragão a 1,5 m dos olhos) e ataca. */
-	private void atacar() {
-		float distancia = Regras.DISTANCIA_ATAQUE + caixa[3]; // caixa[3]: o focinho, na frente do centro
-		x = alvoX + frenteX * distancia;
-		z = alvoZ + frenteZ * distancia;
-		y = chao.alturaEm(x, z);
-		virarParaOAlvo();
-		ferido = false;
-		mudarPara(Estado.ATACANDO);
-		tocar("attack", false, () -> ataqueTerminou = true);
-		eventos.atacou(this);
 	}
 
 	/**
@@ -325,11 +389,41 @@ public class DragonKnight extends Object3D implements Atingivel {
 		animador.tocar(opcoes.get(random.nextInt(opcoes.size())), loop, aoTerminar);
 	}
 
+	private boolean temAnimacao(String prefixo) {
+		return animador != null && animador.nomes().stream().anyMatch(n -> n.startsWith(prefixo));
+	}
+
 	// ---------- tiro ----------
+
+	/** Dá para acertá-lo: em cena, e não atacando nem morrendo. */
+	public boolean atingivel() {
+		return estado == Estado.SURGINDO || estado == Estado.AVANCANDO || estado == Estado.DESVIANDO
+				|| estado == Estado.CAMBALEANDO || estado == Estado.RECUANDO;
+	}
+
+	/**
+	 * Pode levar um golpe agora: surgindo ou vindo para cima. Cambaleando e recuando, os tiros
+	 * acertam (e ele sangra), mas não contam: cada golpe exige que ele volte e venha de novo.
+	 */
+	public boolean vulneravel() {
+		return estado == Estado.SURGINDO || estado == Estado.AVANCANDO || estado == Estado.DESVIANDO;
+	}
+
+	/** Um tiro com 3 bagos ou mais no corpo, vindo ele para cima, é um golpe: o terceiro o derruba. */
+	@Override
+	public void receberDano(float valor) {
+		if (!atingivel()) return;
+		marcaDano = 1;
+		if (valor < Regras.DANO_DE_GOLPE || !vulneravel()) return;
+		golpes++;
+		eventos.golpeado(this, golpes);
+		if (golpes >= Regras.GOLPES_PARA_MATAR) morrer();
+		else cambalear();
+	}
 
 	/**
 	 * Distância ao longo do raio até a caixa do corpo inteiro (o dragão com o cavaleiro), ou -1
-	 * se não acerta. A direção deve ser unitária. Só acerta enquanto ele surge ou encara.
+	 * se não acerta. A direção deve ser unitária.
 	 *
 	 * O raio é levado para o espaço do modelo (desfazendo a posição e a guinada), onde a caixa
 	 * fica alinhada aos eixos; lá vale o teste das "fatias" (slabs): para cada eixo, o trecho do
@@ -337,9 +431,7 @@ public class DragonKnight extends Object3D implements Atingivel {
 	 */
 	@Override
 	public float intersectaRaio(float[] origem, float[] direcao) {
-		if (estado != Estado.SURGINDO && estado != Estado.ENCARANDO) {
-			return -1;
-		}
+		if (!atingivel()) return -1;
 		float c = (float) Math.cos(guinada), s = (float) Math.sin(guinada);
 		float rx = origem[0] - x, ry = origem[1] - y, rz = origem[2] - z;
 		// girar por -guinada: o inverso do giro do modelo
@@ -365,16 +457,11 @@ public class DragonKnight extends Object3D implements Atingivel {
 		return Math.max(entrada, 0);
 	}
 
-	// ---------- depuração ----------
-
-	/** Faz surgir agora (se estiver ausente). */
-	public void forcarAparicao() {
-		if (estado == Estado.AUSENTE) cronometro = 0;
-	}
-
-	/** Mata na hora (se estiver surgindo ou encarando). */
+	/** Derruba na hora (depuração): conta os golpes que faltam. */
 	public void matar() {
-		receberDano(life);
+		if (!atingivel()) return;
+		golpes = Regras.GOLPES_PARA_MATAR;
+		morrer();
 	}
 
 	// ---------- consultas ----------
@@ -383,27 +470,22 @@ public class DragonKnight extends Object3D implements Atingivel {
 		return estado;
 	}
 
-	/** Aparece na tela? (Em todos os estados, menos AUSENTE.) */
+	/** Aparece na tela? (Acordado e não escondido; morto, o corpo fica.) */
 	public boolean visivel() {
-		return estado != Estado.AUSENTE;
+		return estado != Estado.ADORMECIDO && estado != Estado.ESCONDIDO;
 	}
 
-	/** Segundos que faltam na contagem (só vale em ENCARANDO). */
-	public float contagem() {
-		return contagem;
-	}
-
-	/** Segundos até a próxima aparição (só vale em AUSENTE). */
-	public float cronometro() {
-		return cronometro;
+	/** Acordou e ainda não foi derrubado: a luta está acontecendo. */
+	public boolean lutando() {
+		return estado != Estado.ADORMECIDO && estado != Estado.MORRENDO && estado != Estado.MORTO;
 	}
 
 	public float tempoNoEstado() {
 		return tempoNoEstado;
 	}
 
-	public boolean ferido() {
-		return ferido;
+	public int golpes() {
+		return golpes;
 	}
 
 	/** De 1 (acabou de levar o tiro) a 0: o tom vermelho no modelo. */
@@ -414,10 +496,6 @@ public class DragonKnight extends Object3D implements Atingivel {
 	/** A animação de ataque terminou: hora do susto e da derrota. */
 	public boolean ataqueTerminou() {
 		return ataqueTerminou;
-	}
-
-	public int aparicoesSobrevividas() {
-		return aparicoesSobrevividas;
 	}
 
 	public Animador animador() {

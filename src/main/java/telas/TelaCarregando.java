@@ -236,7 +236,7 @@ public class TelaCarregando implements Tela {
 			registrarPlacas(fase.placas(), colisao);
 			// as paredes do prédio (a casca, as salas e os móveis); as portas trancadas entram e saem durante o jogo
 			for (GradeColisao.Retangulo parede : predio.paredes()) {
-				colisao.adicionarRetangulo(parede.xMin(), parede.zMin(), parede.xMax(), parede.zMax());
+				colisao.adicionarRetangulo(parede); // com o topo: os móveis são baixos
 			}
 			for (float[] poste : predio.postes()) {
 				colisao.adicionar(poste[0], poste[1], 0.15f);

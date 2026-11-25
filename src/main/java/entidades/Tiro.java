@@ -102,7 +102,7 @@ public final class Tiro {
 			float x = o[0] + d[0] * t, y = o[1] + d[1] * t, z = o[2] + d[2] * t;
 			if (!chao.dentroDoMapa(x, z, 0)) return null;
 			if (y <= chao.alturaEm(x, z)) return new Impacto(Alvo.CHAO, x, chao.alturaEm(x, z), z);
-			if (colisao.colide(x, z, 0)) return new Impacto(Alvo.TRONCO, x, y, z);
+			if (colisao.colideNaAltura(x, y, z)) return new Impacto(Alvo.TRONCO, x, y, z); // passa por cima dos móveis
 		}
 		return null;
 	}

@@ -8,45 +8,31 @@ public final class Regras {
 
 	private Regras() {}
 
-	// ---------- aparições do Dragon Knight ----------
+	// ---------- o começo da floresta ----------
 
-	/** Segundos sem nenhuma aparição no começo da partida (para o jogador se situar). */
+	/** Segundos sem nenhuma caçada no começo (depois de sair da Univali), para o jogador se situar. */
 	public static final float CARENCIA = 45f;
-	/** Segundos entre aparições, conforme as provas já coletadas (0, 1, 2 ou 3). */
-	public static final float[] INTERVALOS = { 60f, 40f, 25f, 15f };
-	/** Variação aleatória do intervalo, para mais ou para menos (0,2 = ±20%). */
+	/** Variação aleatória das calmarias, para mais ou para menos (0,2 = ±20%). */
 	public static final float VARIACAO_INTERVALO = 0.2f;
 
-	/** Distância do jogador em que ele surge, em metros. */
-	public static final float DISTANCIA_MINIMA_APARICAO = 8f;
-	public static final float DISTANCIA_MAXIMA_APARICAO = 15f;
-	/** Quantos lugares sorteados testar antes de desistir e tentar de novo mais tarde. */
-	public static final int TENTATIVAS_APARICAO = 30;
-	/** Sem lugar válido, quantos segundos esperar para sortear de novo. */
-	public static final float ESPERA_SEM_LUGAR = 2f;
-	/** Folga da linha de visão até o jogador, além do raio dos troncos (o dragão é largo). */
-	public static final float FOLGA_LINHA_DE_VISAO = 1.2f;
-	/** Não surge a menos disso do prédio da Univali, em metros. */
-	public static final float RAIO_ZONA_SEGURA = 25f;
-	/** Depois de cada prova coletada, a próxima aparição vem em no máximo isto (a floresta reage). */
-	public static final float APARICAO_DEPOIS_DA_PROVA = 15f;
-	/** Com a lanterna ligada, o tempo até a próxima aparição corre essa vez mais rápido (a luz atrai). */
-	public static final float LANTERNA_ATRAI = 1.3f;
-	/** Margem da borda do mapa onde ele não surge (a muralha de árvores). */
-	public static final float MARGEM_BORDA_APARICAO = 20f;
+	// ---------- o Dragon Knight: o chefão da volta, dentro da Univali ----------
 
-	// ---------- o encontro ----------
-
-	/** Duração do surgimento (tremor e tela escurecendo), em segundos. */
+	/** Tiros bons para derrubá-lo, e quanto dano um tiro precisa dar para contar (3 bagos no corpo). */
+	public static final int GOLPES_PARA_MATAR = 3;
+	public static final float DANO_DE_GOLPE = 3 * 1.5f;
+	/** Velocidades em m/s: avançando (o jogador corre a 6), recuando depois de um golpe e no pulo para o lado. */
+	public static final float CAVALEIRO_AVANCA = 4.2f, CAVALEIRO_RECUA = 6f, CAVALEIRO_DESVIA = 7f;
+	/** O zigue-zague: quanto ele vai para cada lado (metros) e quantas vezes por segundo troca de lado. */
+	public static final float CAVALEIRO_ZIGUE = 1.1f, CAVALEIRO_ZIGUE_RITMO = 0.45f;
+	/** Mirando a menos disso (graus) do centro dele, ele pula para o lado; e espera isso (s) para pular de novo. */
+	public static final float CAVALEIRO_MIRA = 7f, CAVALEIRO_ESPERA_DESVIO = 1.8f;
+	/** Daqui (metros, do centro dele) ele alcança o jogador e ataca. */
+	public static final float CAVALEIRO_ALCANCE = 2.6f;
+	/** Quanto ele provoca ao surgir e quanto fica escondido depois de recuar, em segundos. */
+	public static final float CAVALEIRO_SURGINDO = 1.4f, CAVALEIRO_ESCONDIDO = 2.5f;
+	/** A tela escurece e treme no começo do surgimento, por isso (segundos). */
 	public static final float DURACAO_SURGIMENTO = 0.4f;
-	/** Segundos para matar o Dragon Knight depois que ele surge. */
-	public static final float TEMPO_CONTAGEM = 5f;
-	/** Dano total para matá-lo (8 bagos de 1,5 de dano: um tiro de perto mata). */
-	public static final float VIDA_MONSTRO = 10f;
-	/** Depois da animação de morte, quanto tempo o corpo fica no chão antes de sumir. */
-	public static final float ESPERA_DEPOIS_DA_MORTE = 2f;
-	/** No ataque, a frente dele fica a esta distância dos olhos do jogador, em metros. */
-	public static final float DISTANCIA_ATAQUE = 1.5f;
+
 	/** Duração do susto em tela cheia antes da derrota, em segundos. */
 	public static final float DURACAO_SUSTO = 0.8f;
 
@@ -155,10 +141,4 @@ public final class Regras {
 	public static final float CAIXA_MINIMA = 20f, CAIXA_MAXIMA = 50f;
 	/** Peso da inclinação no custo do A* (subir morro custa mais). */
 	public static final float CUSTO_INCLINACAO = 2f;
-
-	/** Intervalo até a próxima aparição: o da tabela, conforme as provas, com ±20% de sorte. */
-	public static float intervaloAparicao(int provasColetadas, float sorteio01) {
-		int i = Math.max(0, Math.min(INTERVALOS.length - 1, provasColetadas));
-		return INTERVALOS[i] * (1 + VARIACAO_INTERVALO * (sorteio01 * 2 - 1));
-	}
 }

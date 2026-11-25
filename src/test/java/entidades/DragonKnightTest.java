@@ -2,223 +2,147 @@ package entidades;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import grafos.PlantaInterna;
 import jogo.Regras;
-import mundo.ConsultaAltura;
 import mundo.GradeColisao;
 
 class DragonKnightTest {
 
-	/** Mapa plano de 101 x 101 m a 1 m de altura; o jogador no meio, olhando para +x. */
-	private static ConsultaAltura chao() {
-		int[][] cm = new int[101][101];
-		for (int[] linha : cm) java.util.Arrays.fill(linha, 100);
-		return new ConsultaAltura(cm, 1f, 0.01f);
+	/** Um corredor de 4 m de largura (z de 3 a 7) e 40 m de comprimento, com três pontas. */
+	private static PlantaInterna corredor() {
+		GradeColisao colisao = new GradeColisao(100);
+		colisao.adicionarRetangulo(0, 0, 40, 3);
+		colisao.adicionarRetangulo(0, 7, 40, 10);
+		List<float[]> pontas = List.of(new float[] { 36, 5 }, new float[] { 20, 5 }, new float[] { 3, 5 });
+		return new PlantaInterna(colisao, new GradeColisao.Retangulo(0, 0, 40, 10), 0.9f, 0.5f, pontas, 1.6f);
 	}
 
-	private static DragonKnight monstro(GradeColisao grade) {
-		DragonKnight m = new DragonKnight(chao(), grade, null, null, 42);
-		m.definirAlvo(50, 2.7f, 50, 1, 0);
+	/** O jogador em (x, 5), olhando para (fx, fz). */
+	private static DragonKnight acordado(PlantaInterna planta, float x, float fx, float fz) {
+		DragonKnight m = new DragonKnight(null, null, 42);
+		m.definirAlvo(x, 1.7f, 5, fx, fz);
+		m.despertar(planta, 0);
 		return m;
 	}
 
 	/** Avança a simulação em passos de 16 ms. */
 	private static void avancar(DragonKnight m, float segundos) {
-		for (int i = 0; i < Math.round(segundos * 1000 / 16); i++) {
+		for (int i = 0; i < Math.round(segundos * 1000 / 16); i++) m.SimulaSe(16);
+	}
+
+	@Test
+	void dormeAteAVoltaComAsProvas() {
+		DragonKnight m = new DragonKnight(null, null, 1);
+		avancar(m, 5);
+		assertEquals(DragonKnight.Estado.ADORMECIDO, m.estado());
+		assertFalse(m.visivel());
+		assertFalse(m.lutando());
+		assertEquals(-1, m.intersectaRaio(new float[] { 0, 1, 0 }, new float[] { 1, 0, 0 }));
+	}
+
+	@Test
+	void surgeNaPrimeiraPontaProvocaEDepoisAvanca() {
+		DragonKnight m = acordado(corredor(), 5, -1, 0); // de costas para ele: não mira
+		assertEquals(DragonKnight.Estado.SURGINDO, m.estado());
+		assertEquals(36, m.x, 1e-3f);
+		avancar(m, Regras.CAVALEIRO_SURGINDO + 0.1f);
+		assertEquals(DragonKnight.Estado.AVANCANDO, m.estado());
+		avancar(m, 2);
+		assertTrue(m.x < 36 - 6, "veio vindo: x = " + m.x);
+	}
+
+	@Test
+	void avancaEmZigueZagueSemAtravessarParede() {
+		PlantaInterna planta = corredor();
+		DragonKnight m = acordado(planta, 5, -1, 0);
+		float menorZ = Float.MAX_VALUE, maiorZ = -Float.MAX_VALUE;
+		for (int i = 0; i < 6 * 60 && m.estado() != DragonKnight.Estado.ATACANDO; i++) {
 			m.SimulaSe(16);
+			assertTrue(planta.livre(m.x, m.z), "dentro da parede em " + m.x + ", " + m.z);
+			if (m.estado() == DragonKnight.Estado.AVANCANDO) {
+				menorZ = Math.min(menorZ, m.z);
+				maiorZ = Math.max(maiorZ, m.z);
+			}
 		}
+		assertTrue(maiorZ - menorZ > 0.6f, "foi para os lados: de " + menorZ + " a " + maiorZ);
 	}
 
 	@Test
-	void segurarAparicaoAdiaOProximoSurgimento() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		avancar(m, Regras.CARENCIA - 1);
-		m.segurarAparicao(30); // a vez é do Jubilado
-		avancar(m, 29);
-		assertEquals(DragonKnight.Estado.AUSENTE, m.estado());
-		avancar(m, 1.1f);
-		assertEquals(DragonKnight.Estado.SURGINDO, m.estado());
-	}
-
-	@Test
-	void respeitaACarenciaESurgeEntre8E15Metros() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		avancar(m, Regras.CARENCIA - 1);
-		assertEquals(DragonKnight.Estado.AUSENTE, m.estado());
-		avancar(m, 1.1f);
-		assertEquals(DragonKnight.Estado.SURGINDO, m.estado());
-		float d = (float) Math.hypot(m.x - 50, m.z - 50);
-		assertTrue(d >= 8 && d <= 15, "distância " + d);
-		assertEquals(1f, m.y, 1e-4f); // em cima do chão
-	}
-
-	@Test
-	void comALanternaLigadaACarenciaAcabaMaisCedo() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		m.lanternaLigada = true;
-		avancar(m, Regras.CARENCIA / Regras.LANTERNA_ATRAI + 0.1f);
-		assertEquals(DragonKnight.Estado.SURGINDO, m.estado(), "a luz atrai");
-	}
-
-	@Test
-	void surgeVirandoParaOJogador() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		m.forcarAparicao();
-		m.SimulaSe(16);
-		// a frente do modelo (+x) girada pela guinada aponta para o jogador
-		float fx = (float) Math.cos(m.guinada), fz = (float) -Math.sin(m.guinada);
-		float dx = 50 - m.x, dz = 50 - m.z, t = (float) Math.hypot(dx, dz);
-		assertEquals(1f, (fx * dx + fz * dz) / t, 1e-4f);
-	}
-
-	@Test
-	void semDanoAContagemAcabaNoAtaqueNaFrenteDoJogador() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		List<String> eventos = new ArrayList<>();
-		m.definirEventos(new DragonKnight.Eventos() {
-			@Override public void surgiu(DragonKnight d) { eventos.add("surgiu"); }
-			@Override public void atacou(DragonKnight d) { eventos.add("atacou"); }
-		});
-		m.forcarAparicao();
-		avancar(m, Regras.DURACAO_SURGIMENTO + 0.05f);
-		assertEquals(DragonKnight.Estado.ENCARANDO, m.estado());
-		avancar(m, Regras.TEMPO_CONTAGEM);
+	void alcancaOJogadorEAtaca() {
+		DragonKnight m = acordado(corredor(), 5, -1, 0);
+		avancar(m, 12);
 		assertEquals(DragonKnight.Estado.ATACANDO, m.estado());
-		assertEquals(List.of("surgiu", "atacou"), eventos);
-		// a frente da caixa fica a 1,5 m dos olhos, na direção em que o jogador olha (+x)
-		assertEquals(50 + Regras.DISTANCIA_ATAQUE + DragonKnight.CAIXA_PADRAO[3], m.x, 1e-3f);
-		assertEquals(50, m.z, 1e-3f);
-		avancar(m, 1f);
 		assertTrue(m.ataqueTerminou());
 	}
 
 	@Test
-	void danoNaoParaAContagemEMorrerContaUmaAparicao() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		m.forcarAparicao();
-		avancar(m, Regras.DURACAO_SURGIMENTO + 0.05f);
-		float antes = m.contagem();
-		m.receberDano(4);
-		assertTrue(m.ferido());
-		assertEquals(1f, m.marcaDano());
-		avancar(m, 0.5f);
-		assertEquals(antes - 0.5f, m.contagem(), 0.05f);
-		assertFalse(m.ferido());
-		m.receberDano(Regras.VIDA_MONSTRO);
-		assertEquals(DragonKnight.Estado.MORRENDO, m.estado());
-		assertEquals(1, m.aparicoesSobrevividas());
-		assertEquals(-1, m.intersectaRaio(new float[] { 50, 1.5f, 50 }, new float[] { 1, 0, 0 }));
-	}
-
-	@Test
-	void depoisDaMorteSomeEVoltaNoIntervalo() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		m.forcarAparicao();
-		avancar(m, 1);
-		m.matar();
-		avancar(m, 1.0f + Regras.ESPERA_DEPOIS_DA_MORTE + 0.1f); // morte (substituto) + 2 s
-		assertEquals(DragonKnight.Estado.AUSENTE, m.estado());
-		float intervalo = m.cronometro();
-		float minimo = Regras.INTERVALOS[0] * (1 - Regras.VARIACAO_INTERVALO);
-		float maximo = Regras.INTERVALOS[0] * (1 + Regras.VARIACAO_INTERVALO);
-		assertTrue(intervalo >= minimo - 0.1f && intervalo <= maximo, "intervalo " + intervalo);
-	}
-
-	@Test
-	void intervaloDiminuiComAsProvas() {
-		assertEquals(60f, Regras.intervaloAparicao(0, 0.5f), 1e-4f);
-		assertEquals(15f, Regras.intervaloAparicao(3, 0.5f), 1e-4f);
-		assertEquals(48f, Regras.intervaloAparicao(0, 0f), 1e-4f);
-		assertEquals(18f, Regras.intervaloAparicao(9, 1f), 1e-4f);
-	}
-
-	@Test
-	void naoSurgeAtrasDeTroncoNaAguaNemNaZonaSegura() {
-		GradeColisao grade = new GradeColisao(101);
-		grade.adicionar(55, 50, 1f);
-		DragonKnight m = monstro(grade);
-		assertFalse(m.lugarServe(60, 50), "tronco no caminho");
-		assertTrue(m.lugarServe(40, 50));
-		m.zonaSegura = new GradeColisao.Retangulo(30, 45, 34, 55);
-		assertFalse(m.lugarServe(40, 50), "perto da Univali");
-		assertFalse(m.lugarServe(5, 50), "na borda");
-	}
-
-	@Test
-	void semLugarTentaDeNovoEm2Segundos() {
-		GradeColisao grade = new GradeColisao(101);
-		// um anel de troncos em volta do jogador: nenhuma linha livre
-		for (int i = 0; i < 64; i++) {
-			double a = i * Math.PI * 2 / 64;
-			grade.adicionar(50 + (float) Math.cos(a) * 3, 50 + (float) Math.sin(a) * 3, 0.4f);
+	void desviaQuandoOJogadorMiraNele() {
+		DragonKnight m = acordado(corredor(), 5, 1, 0); // olhando direto para o corredor, para ele
+		boolean desviou = false;
+		for (int i = 0; i < 8 * 60 && !desviou; i++) {
+			m.definirAlvo(5, 1.7f, 5, m.x - 5, m.z - 5); // a mira acompanha ele
+			m.SimulaSe(16);
+			desviou = m.estado() == DragonKnight.Estado.DESVIANDO;
 		}
-		DragonKnight m = monstro(grade);
-		m.forcarAparicao();
-		m.SimulaSe(16);
-		assertEquals(DragonKnight.Estado.AUSENTE, m.estado());
-		assertEquals(Regras.ESPERA_SEM_LUGAR, m.cronometro(), 0.02f);
+		assertTrue(desviou, "com a mira em cima, ele pula para o lado");
 	}
 
 	@Test
-	void tiroAcertaOCorpoInteiroDoDragao() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		m.forcarAparicao();
-		m.SimulaSe(16);
-		float[] olhos = { 50, 2.7f, 50 };
-		float dx = m.x - 50, dz = m.z - 50, t = (float) Math.hypot(dx, dz);
-		// mirando no centro: acerta a frente da caixa, 2 m (o focinho) antes do centro
-		float d = m.intersectaRaio(new float[] { 50, 1.2f, 50 }, new float[] { dx / t, 0, dz / t });
-		assertEquals(t - DragonKnight.CAIXA_PADRAO[3], d, 1e-3f);
-		// mirando 1 m ao lado do centro (ainda no corpo largo do dragão): acerta
-		float lx = -dz / t, lz = dx / t;
-		float[] dir = normalizar(dx + lx * 1f, 0, dz + lz * 1f);
-		assertTrue(m.intersectaRaio(new float[] { 50, 1.2f, 50 }, dir) > 0);
-		// mirando para cima, por cima da cabeça do cavaleiro: erra
-		assertEquals(-1, m.intersectaRaio(olhos, normalizar(dx, 3 * t, dz)));
-		// de costas para ele: erra
-		assertEquals(-1, m.intersectaRaio(olhos, new float[] { -dx / t, 0, -dz / t }));
+	void umTiroFracoSoMarcaEUmGolpeOFazCambalear() {
+		DragonKnight m = acordado(corredor(), 5, -1, 0);
+		m.receberDano(Regras.DANO_BAGO * 2);
+		assertEquals(DragonKnight.Estado.SURGINDO, m.estado(), "2 bagos não contam");
+		assertEquals(0, m.golpes());
+		m.receberDano(Regras.DANO_DE_GOLPE);
+		assertEquals(DragonKnight.Estado.CAMBALEANDO, m.estado());
+		assertEquals(1, m.golpes());
 	}
 
 	@Test
-	void raioCaixaComecandoDentroDevolveZero() {
-		float[] caixa = { -1, -1, -1, 1, 1, 1 };
-		assertEquals(0f, DragonKnight.raioCaixa(new float[] { 0, 0, 0 }, new float[] { 1, 0, 0 }, caixa));
-		assertEquals(4f, DragonKnight.raioCaixa(new float[] { -5, 0, 0 }, new float[] { 1, 0, 0 }, caixa), 1e-5f);
-		assertEquals(-1f, DragonKnight.raioCaixa(new float[] { -5, 2, 0 }, new float[] { 1, 0, 0 }, caixa));
+	void cambaleandoERecuandoOsTirosNaoContam() {
+		DragonKnight m = acordado(corredor(), 5, -1, 0);
+		m.receberDano(Regras.DANO_DE_GOLPE);
+		assertEquals(1, m.golpes());
+		m.receberDano(Regras.DANO_DE_GOLPE); // logo em seguida, ainda cambaleando
+		assertEquals(1, m.golpes());
+		assertTrue(m.atingivel(), "o tiro acerta (e ele sangra), só não conta");
+		for (int i = 0; i < 10 * 60 && m.estado() != DragonKnight.Estado.RECUANDO; i++) m.SimulaSe(16);
+		m.receberDano(Regras.DANO_DE_GOLPE);
+		assertEquals(1, m.golpes(), "recuando também não conta");
 	}
 
 	@Test
-	void provaColetadaApressaAProximaAparicao() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		m.apressarProximaAparicao(Regras.APARICAO_DEPOIS_DA_PROVA);
-		assertEquals(Regras.APARICAO_DEPOIS_DA_PROVA, m.cronometro(), 1e-4f, "a carência de 45 s vira 15 s");
-		// em cena: vale para a próxima aparição, depois que ele morrer e sumir
-		m.forcarAparicao();
-		avancar(m, 1);
-		m.apressarProximaAparicao(5);
-		m.matar();
-		avancar(m, 1.0f + Regras.ESPERA_DEPOIS_DA_MORTE + 0.1f);
-		assertEquals(DragonKnight.Estado.AUSENTE, m.estado());
-		assertTrue(m.cronometro() <= 5f, "cronômetro " + m.cronometro());
+	void depoisDoGolpeRecuaSomeESurgePorOutroLado() {
+		DragonKnight m = acordado(corredor(), 5, -1, 0);
+		avancar(m, 3);
+		m.receberDano(Regras.DANO_DE_GOLPE);
+		boolean escondeu = false;
+		for (int i = 0; i < 15 * 60 && m.estado() != DragonKnight.Estado.SURGINDO; i++) {
+			m.SimulaSe(16);
+			escondeu |= m.estado() == DragonKnight.Estado.ESCONDIDO;
+		}
+		assertTrue(escondeu, "sumiu depois de recuar");
+		assertEquals(DragonKnight.Estado.SURGINDO, m.estado(), "e voltou");
+		assertTrue(m.x == 20 || m.x == 3, "por outra ponta: x = " + m.x);
 	}
 
 	@Test
-	void comMaisProvasOIntervaloEncolhe() {
-		DragonKnight m = monstro(new GradeColisao(101));
-		m.provasColetadas = 3;
-		m.forcarAparicao();
-		avancar(m, 1);
-		m.matar();
-		avancar(m, 1.0f + Regras.ESPERA_DEPOIS_DA_MORTE + 0.1f);
-		assertTrue(m.cronometro() <= Regras.INTERVALOS[3] * (1 + Regras.VARIACAO_INTERVALO), "cronômetro " + m.cronometro());
-	}
-
-	private static float[] normalizar(float x, float y, float z) {
-		float t = (float) Math.sqrt(x * x + y * y + z * z);
-		return new float[] { x / t, y / t, z / t };
+	void tresGolpesDerrubamEOCorpoFica() {
+		DragonKnight m = acordado(corredor(), 5, -1, 0);
+		for (int golpe = 1; golpe <= Regras.GOLPES_PARA_MATAR; golpe++) {
+			for (int i = 0; i < 20 * 60 && !m.vulneravel(); i++) m.SimulaSe(16);
+			m.receberDano(Regras.DANO_DE_GOLPE);
+			assertEquals(golpe, m.golpes());
+		}
+		assertEquals(DragonKnight.Estado.MORRENDO, m.estado());
+		avancar(m, 2);
+		assertEquals(DragonKnight.Estado.MORTO, m.estado());
+		assertFalse(m.lutando());
+		assertTrue(m.visivel(), "o corpo fica no chão");
+		assertEquals(-1, m.intersectaRaio(new float[] { m.x - 5, 1, m.z }, new float[] { 1, 0, 0 }));
 	}
 }
