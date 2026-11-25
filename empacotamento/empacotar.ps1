@@ -35,10 +35,10 @@ Remove-Item "$Entrada\lwjgl-2.*.jar", "$Entrada\lwjgl-platform-2.*.jar", "$Entra
 foreach ($pasta in 'texturas', 'modelos', 'shaders', 'fontes', 'interface', 'sprites') {
 	Copy-Item -Recurse $pasta $Entrada
 }
-# os sons, sem os MP3 originais e sem as gravações cruas da voz do professor
+# os sons, sem os MP3 originais e sem as gravações cruas das vozes (professor e Jubilado)
 $raizAudio = (Resolve-Path 'audio').Path
 Get-ChildItem -Recurse -File 'audio' |
-	Where-Object { $_.Extension -ne '.mp3' -and $_.FullName -notlike "$raizAudio\professor\*" } |
+	Where-Object { $_.Extension -ne '.mp3' -and $_.FullName -notlike "$raizAudio\professor\*" -and $_.FullName -notlike "$raizAudio\jubilado\*" } |
 	ForEach-Object {
 		$destino = Join-Path "$Entrada\audio" $_.FullName.Substring($raizAudio.Length + 1)
 		New-Item -ItemType Directory -Force (Split-Path $destino) | Out-Null

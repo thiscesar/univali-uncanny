@@ -32,7 +32,12 @@ lampada_falhando.ogg: de flicker.mp3, só as rajadas (1,25 s a 3,6 s), mono (toc
 porta_abrindo.ogg: de door-opening.mp3, só o rangido (1,6 s a 4,4 s), mono (toca em 3D na porta).
 tv_univali.ogg: de voz-univali-tv.mp3 com efeito de rádio/TV velha (faixa 380 Hz-3 kHz, compressão, bits
 reduzidos, sinal caindo, eco curto, chiado e estalos), 2,6 s de chuvisco antes e depois, em loop na TV do saguão.
-voz_professor/*.ogg: as falas do professor, gravadas e passadas por um efeito de "voz maluca" (o original
-fica em audio/professor/, fora do repositório): três vozes da mesma gravação com o tom e o timbre mudados
-(rubberband: 0,7x, 0,5x e 1,28x, a aguda atrasada), tremor no tom, saturação e eco de sala; silêncio cortado.
+voz_professor/*.ogg: as falas do professor, gravadas e passadas por um efeito que muda a voz (o original
+fica em audio/professor/, fora do repositório): o tom e o timbre mais graves (rubberband 0,8x, formantes
+deslocados), uma dobra baixinha a 0,78x, um tremor quase imperceptível e eco curto de sala; silêncio
+cortado e volume igualado (loudnorm).
+voz_jubilado/*.ogg: as falas do Jubilado (o original fica em audio/jubilado/, fora do repositório), com
+voz fina e de doido: 1,48x com formantes deslocados, um guincho a 1,95x e uma sombra grave a 0,62x por
+baixo, um pouco acelerada, tremida (vibrato e tremolo), com phaser, saturação e eco de floresta; mono,
+para sair da cabeça dele em 3D.
 faltam_<provas>.ogg: "Hm, deixa eu ver... ainda faltam" + as provas, uma para cada combinação.

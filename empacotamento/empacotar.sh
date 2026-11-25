@@ -28,9 +28,9 @@ rm -f "$ENTRADA"/lwjgl-2.*.jar "$ENTRADA"/lwjgl-platform-2.*.jar "$ENTRADA"/jinp
 for pasta in texturas modelos shaders fontes interface sprites; do
 	cp -r "$pasta" "$ENTRADA/"
 done
-# os sons, sem os MP3 originais e sem as gravações cruas da voz do professor
+# os sons, sem os MP3 originais e sem as gravações cruas das vozes (professor e Jubilado)
 mkdir -p "$ENTRADA/audio"
-(cd audio && find . -type f ! -name '*.mp3' ! -path './professor/*' -exec cp --parents {} "../$ENTRADA/audio/" \;)
+(cd audio && find . -type f ! -name '*.mp3' ! -path './professor/*' ! -path './jubilado/*' -exec cp --parents {} "../$ENTRADA/audio/" \;)
 cp creditos.txt "$ENTRADA/"
 
 echo "== gerando o aplicativo (jpackage)"

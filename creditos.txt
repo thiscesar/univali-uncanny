@@ -45,7 +45,7 @@ Lâmpada falhando · (autor e licença)
 Porta rangendo · (autor e licença)
 Voz da TV do saguão · (autor e licença)
 Comemoração do APROVADO · (autor e licença)
-Voz do professor · gravada pelos desenvolvedores, com efeito
+Vozes do professor e do Jubilado · gravadas pelos desenvolvedores, com efeito
 Passos na água, sininho e carro da máquina de escrever, galho, tiro, monstro, sussurro, sinal, zumbido e os sons do menu · sintetizados por código
 
 # Fontes

@@ -206,6 +206,8 @@ public class TelaJogo implements Tela {
 	private Efeito somPisadaJubilado, somGrunhido, somGritoJubilado, somQuedaJubilado;
 	/** O susto final é do Jubilado (e não do Dragon Knight): é ele que aparece na frente da câmera. */
 	private boolean sustoDoJubilado;
+	/** O que ele fala quando vê o jogador ou levanta (a voz gravada, com o efeito de voz de doido). */
+	private final jogo.FalasJubilado falasJubilado = new jogo.FalasJubilado();
 
 	// a escopeta, os efeitos dela e as caixas de munição
 	private final Escopeta escopeta = new Escopeta();
@@ -1190,7 +1192,7 @@ public class TelaJogo implements Tela {
 
 			@Override
 			public void viu(Jubilado j) {
-				audio.tocar3D(somGritoJubilado, j.x, j.y + 1.7f, j.z, 1f, false, 10f);
+				gritarOuFalar(j, falasJubilado.aoVer(tempo, partida.provasColetadas()));
 				tremor = Math.max(tremor, 0.5f);
 				pedirMetal(false, true);
 			}
@@ -1208,7 +1210,7 @@ public class TelaJogo implements Tela {
 
 			@Override
 			public void levantou(Jubilado j) {
-				audio.tocar3D(somGritoJubilado, j.x, j.y + 1.7f, j.z, 1f, false, 10f);
+				gritarOuFalar(j, falasJubilado.aoLevantar(tempo, partida.provasColetadas()));
 				pedirMetal(false, true);
 			}
 
@@ -1218,6 +1220,18 @@ public class TelaJogo implements Tela {
 				audio.tocar(somGritoJubilado, 1f);
 			}
 		});
+	}
+
+	/** A fala do Jubilado (a voz saindo da cabeça dele, com a legenda); sem fala ou sem o arquivo, o grito. */
+	private void gritarOuFalar(Jubilado j, jogo.FalasJubilado.Fala fala) {
+		Audio audio = gerenciador.audio();
+		if (fala != null && Caminhos.existe(fala.arquivo())) {
+			Efeito voz = audio.carregarEfeito(fala.arquivo());
+			audio.tocar3D(voz, j.x, j.y + 1.7f, j.z, 1f, false, 9f);
+			mostrarMensagem(fala.legenda(), audio.duracao(voz) + 0.8f);
+		} else {
+			audio.tocar3D(somGritoJubilado, j.x, j.y + 1.7f, j.z, 1f, false, 10f);
+		}
 	}
 
 	/**
