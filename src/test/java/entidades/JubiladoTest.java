@@ -225,6 +225,24 @@ class JubiladoTest {
 	}
 
 	@Test
+	void naTreguaNaoPercebeNemOJogadorNaFrente() {
+		Jubilado j = novo();
+		j.tregua(Regras.INTERVALO_MONSTROS);
+		j.definirAlvo(108, 1.7f, 100, true, true, true, false); // 8 m à frente, correndo, com lanterna
+		j.ouvirTiro(108, 100);
+		simular(j, 1);
+		assertNotEquals(Jubilado.Estado.CACANDO, j.estado());
+		assertNotEquals(Jubilado.Estado.DESCONFIADO, j.estado());
+
+		Jubilado cacando = novo();
+		cacando.definirAlvo(108, 1.7f, 100, false, false, false, false);
+		cacando.SimulaSe(16);
+		assertEquals(Jubilado.Estado.CACANDO, cacando.estado());
+		cacando.tregua(Regras.INTERVALO_MONSTROS); // o Dragon Knight surgiu: ele desiste
+		assertEquals(Jubilado.Estado.PROCURANDO, cacando.estado());
+	}
+
+	@Test
 	void pausadoFicaParado() {
 		Jubilado j = novo();
 		j.pausado = true;

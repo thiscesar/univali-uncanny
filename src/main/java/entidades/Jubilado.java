@@ -94,6 +94,8 @@ public class Jubilado extends Object3D implements Atingivel {
 	private float replanejar;
 	/** Vagando: segundos parado antes de sortear o próximo destino. */
 	private float parado;
+	/** Trégua: segundos em que ele não percebe o jogador (o Dragon Knight está ou acabou de estar em cena). */
+	private float tregua;
 	/** Segundos de respiro que ainda faltam (sem rondar o jogador): a carência do começo e depois de cada caçada. */
 	private float respiro = Regras.JUBILADO_CARENCIA;
 
@@ -198,9 +200,11 @@ public class Jubilado extends Object3D implements Atingivel {
 		tempoNoEstado += dt;
 		replanejar -= dt;
 		respiro = Math.max(0, respiro - dt);
+		tregua = Math.max(0, tregua - dt);
 
-		boolean ve = estado != Estado.CAIDO && estado != Estado.ATACANDO && ve();
-		boolean ouve = estado != Estado.CAIDO && estado != Estado.ATACANDO && !ve && ouve();
+		boolean percebe = tregua <= 0 && estado != Estado.CAIDO && estado != Estado.ATACANDO;
+		boolean ve = percebe && ve();
+		boolean ouve = percebe && !ve && ouve();
 
 		switch (estado) {
 		case VAGANDO -> {
@@ -322,9 +326,9 @@ public class Jubilado extends Object3D implements Atingivel {
 		return alvoCorrendo && dist <= Regras.JUBILADO_OUVE_CORRIDA || alvoAndando && dist <= Regras.JUBILADO_OUVE_PASSOS;
 	}
 
-	/** Um tiro em (tx, tz): se ele ouvir, vai ver o que foi (caçando, continua caçando). */
+	/** Um tiro em (tx, tz): se ele ouvir, vai ver o que foi (caçando, continua caçando; na trégua, nem liga). */
 	public void ouvirTiro(float tx, float tz) {
-		if (!ativo || estado == Estado.CACANDO || estado == Estado.CAIDO || estado == Estado.ATACANDO) return;
+		if (!ativo || tregua > 0 || estado == Estado.CACANDO || estado == Estado.CAIDO || estado == Estado.ATACANDO) return;
 		if (Math.hypot(tx - x, tz - z) <= Regras.JUBILADO_OUVE_TIRO) {
 			desconfiar(tx, tz);
 		}
@@ -684,6 +688,24 @@ public class Jubilado extends Object3D implements Atingivel {
 	/** Para o painel de depuração: quanto falta para desistir (caçando) ou procurar (procurando). */
 	public float semNoticia() {
 		return semNoticia;
+	}
+
+	/**
+	 * Por pelo menos "segundos", não percebe o jogador e não vai atrás dele (o outro monstro está em
+	 * cena). Se estava caçando, desiste.
+	 */
+	public void tregua(float segundos) {
+		tregua = Math.max(tregua, segundos);
+		respiro = Math.max(respiro, segundos);
+		if (estado == Estado.CACANDO || estado == Estado.DESCONFIADO) {
+			eventos.perdeu(this);
+			procurar();
+		}
+	}
+
+	/** Segundos de trégua que ainda faltam. */
+	public float tregua() {
+		return tregua;
 	}
 
 	/** Segundos de respiro que ainda faltam (0 = rondando o jogador). */

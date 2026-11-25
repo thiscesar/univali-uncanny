@@ -291,6 +291,13 @@ public class DragonKnight extends Object3D implements Atingivel {
 		}
 	}
 
+	/** Segura a próxima aparição por pelo menos "segundos" (o outro monstro está atrás do jogador). */
+	public void segurarAparicao(float segundos) {
+		if (estado == Estado.AUSENTE) {
+			cronometro = Math.max(cronometro, segundos);
+		}
+	}
+
 	/** O tempo acabou: vai para a frente do jogador (a frente do dragão a 1,5 m dos olhos) e ataca. */
 	private void atacar() {
 		float distancia = Regras.DISTANCIA_ATAQUE + caixa[3]; // caixa[3]: o focinho, na frente do centro

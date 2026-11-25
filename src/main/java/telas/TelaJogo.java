@@ -44,6 +44,7 @@ import jogo.SustosFalsos;
 import jogo.Tutorial;
 import md2.Animador;
 import mundo.ConsultaAltura;
+import mundo.GradeColisao;
 import mundo.Mundo;
 import mundo.DistribuidorArvores;
 import mundo.TexturasFloresta;
@@ -734,7 +735,8 @@ public class TelaJogo implements Tela {
 	/**
 	 * A voz do professor numa fala: a gravação dela (audio/voz_professor/, ver Objetivos.arquivoDeVoz)
 	 * ou, sem o arquivo, o texto entre aspas vira um sussurro "sem palavras" (sílabas
-	 * sintetizadas com o timbre das vogais do texto), saindo da cabeça dele, em 3D. Cada frase é
+	 * sintetizadas com o timbre das vogais do texto), saindo da cabeça dele, em 3D; com o jogador fora da
+	 * sala, a voz sai da porta (ele responde lá de dentro) e se ouve de mais longe. Cada frase é
 	 * gerada uma vez (o Audio guarda pelo nome). Falas sem letras ("...") ficam em silêncio.
 	 * Devolve a duração da voz, em segundos (0 = sem voz).
 	 */
@@ -745,15 +747,22 @@ public class TelaJogo implements Tela {
 		Audio audio = gerenciador.audio();
 		float[] prof = mundo.predio.professorNoModelo();
 		float[] cabeca = mundo.predio.noMundo(prof[0], 1.3f, prof[1]);
+		float referencia = 3f;
+		if (!naSalaDoProfessor) {
+			GradeColisao.Retangulo porta = mundo.predio.portaProfessor();
+			cabeca[0] = (porta.xMin() + porta.xMax()) / 2;
+			cabeca[2] = (porta.zMin() + porta.zMax()) / 2;
+			referencia = 6f;
+		}
 		String gravacao = jogo.Objetivos.arquivoDeVoz(texto);
-		if (gravacao != null && Caminhos.existe(gravacao)) { // a voz gravada (já com o efeito de voz maluca)
+		if (gravacao != null && Caminhos.existe(gravacao)) { // a voz gravada (já com o efeito)
 			Efeito voz = audio.carregarEfeito(gravacao);
-			audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, 3f);
+			audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, referencia);
 			return audio.duracao(voz);
 		}
 		short[] amostras = Sintetizador.voz(44100, texto, 0.6, 7);
 		Efeito voz = audio.criarEfeito("voz do professor: " + texto, amostras, 44100);
-		audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, 3f);
+		audio.tocar3D(voz, cabeca[0], cabeca[1], cabeca[2], 1f, false, referencia);
 		return amostras.length / 44100f;
 	}
 
@@ -1227,7 +1236,7 @@ public class TelaJogo implements Tela {
 		Audio audio = gerenciador.audio();
 		if (fala != null && Caminhos.existe(fala.arquivo())) {
 			Efeito voz = audio.carregarEfeito(fala.arquivo());
-			audio.tocar3D(voz, j.x, j.y + 1.7f, j.z, 1f, false, 9f);
+			audio.tocar3D(voz, j.x, j.y + 1.7f, j.z, 1f, false, 14f);
 			mostrarMensagem(fala.legenda(), audio.duracao(voz) + 0.8f);
 		} else {
 			audio.tocar3D(somGritoJubilado, j.x, j.y + 1.7f, j.z, 1f, false, 10f);
@@ -1262,8 +1271,15 @@ public class TelaJogo implements Tela {
 		boolean andando = jogador.velocidade() > 0.5f;
 		jubilado.definirAlvo(jogador.x, jogador.camera().y, jogador.z, jogador.correndo(), andando, lanterna.ligada(),
 				escondido);
-		jubilado.pausado = monstro.estado() != DragonKnight.Estado.AUSENTE;
+		// um monstro de cada vez, com pelo menos 30 s entre o fim de uma ameaça e o começo da outra
+		boolean dragonEmCena = monstro.estado() != DragonKnight.Estado.AUSENTE;
+		if (dragonEmCena) jubilado.tregua(Regras.INTERVALO_MONSTROS);
+		jubilado.pausado = dragonEmCena;
 		jubilado.SimulaSe(diftime);
+		Jubilado.Estado ameaca = jubilado.estado();
+		if (ameaca == Jubilado.Estado.CACANDO || ameaca == Jubilado.Estado.CAIDO || ameaca == Jubilado.Estado.ATACANDO) {
+			monstro.segurarAparicao(Regras.INTERVALO_MONSTROS);
+		}
 		if (jubilado.ataqueTerminou()) {
 			sustoDoJubilado = true;
 			comecarSusto();
@@ -1933,6 +1949,7 @@ public class TelaJogo implements Tela {
 		default -> "";
 		};
 		String animacao = jubilado.animador() != null ? "   " + jubilado.animador().nomeAtual() : "   (substituto)";
+		if (jubilado.tregua() > 0) detalhe += String.format(", trégua %.0f s", jubilado.tregua());
 		return String.format("jubilado %s%s   a %.0f m   %.1f m/s%s%s", jubilado.estado().name().toLowerCase(), detalhe, d,
 				jubilado.velocidade(), animacao, jubilado.ativo ? (jubilado.pausado ? "   (esperando o Dragon Knight)" : "")
 						: "   (inativo até sair da Univali)");

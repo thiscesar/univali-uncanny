@@ -52,6 +52,12 @@ public final class Regras {
 
 	// ---------- o Jubilado (o monstro que anda pela floresta) ----------
 
+	/**
+	 * Um monstro de cada vez: segundos mínimos entre o fim de uma ameaça (o Dragon Knight em cena,
+	 * o Jubilado caçando ou caído) e o começo da outra. Matar os dois juntos seria injusto.
+	 */
+	public static final float INTERVALO_MONSTROS = 30f;
+
 	/** Velocidades em m/s: vagando, indo ver um barulho e caçando (o jogador anda a 3,5 e corre a 6). */
 	public static final float JUBILADO_VAGANDO = 1.4f, JUBILADO_DESCONFIADO = 2.4f, JUBILADO_CACANDO = 5.2f;
 	/** Até onde ele enxerga, em metros: normal, com a lanterna ligada (a luz denuncia) e "sente" atrás de si. */

@@ -35,9 +35,9 @@ reduzidos, sinal caindo, eco curto, chiado e estalos), 2,6 s de chuvisco antes e
 voz_professor/*.ogg: as falas do professor, gravadas e passadas por um efeito que muda a voz (o original
 fica em audio/professor/, fora do repositório): o tom e o timbre mais graves (rubberband 0,8x, formantes
 deslocados), uma dobra baixinha a 0,78x, um tremor quase imperceptível e eco curto de sala; silêncio
-cortado e volume igualado (loudnorm).
+cortado e volume igualado (-15 LUFS, medido e com limitador nos picos).
 voz_jubilado/*.ogg: as falas do Jubilado (o original fica em audio/jubilado/, fora do repositório), com
-voz fina e de doido: 1,48x com formantes deslocados, um guincho a 1,95x e uma sombra grave a 0,62x por
-baixo, um pouco acelerada, tremida (vibrato e tremolo), com phaser, saturação e eco de floresta; mono,
-para sair da cabeça dele em 3D.
+voz fina e de doido, mas dá para entender: 1,4x com formantes deslocados, um guincho a 1,9x e uma
+sombra grave a 0,62x bem baixos, tremor leve (vibrato e tremolo), reforço na faixa da fala (3 kHz),
+saturação leve e eco curto; -14 LUFS; mono, para sair da cabeça dele em 3D.
 faltam_<provas>.ogg: "Hm, deixa eu ver... ainda faltam" + as provas, uma para cada combinação.

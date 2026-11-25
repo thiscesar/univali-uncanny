@@ -34,6 +34,17 @@ class DragonKnightTest {
 	}
 
 	@Test
+	void segurarAparicaoAdiaOProximoSurgimento() {
+		DragonKnight m = monstro(new GradeColisao(101));
+		avancar(m, Regras.CARENCIA - 1);
+		m.segurarAparicao(Regras.INTERVALO_MONSTROS); // o Jubilado está caçando
+		avancar(m, Regras.INTERVALO_MONSTROS - 1);
+		assertEquals(DragonKnight.Estado.AUSENTE, m.estado());
+		avancar(m, 1.1f);
+		assertEquals(DragonKnight.Estado.SURGINDO, m.estado());
+	}
+
+	@Test
 	void respeitaACarenciaESurgeEntre8E15Metros() {
 		DragonKnight m = monstro(new GradeColisao(101));
 		avancar(m, Regras.CARENCIA - 1);
