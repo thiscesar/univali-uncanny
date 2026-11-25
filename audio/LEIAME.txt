@@ -43,6 +43,6 @@ saturação leve e eco curto; -14 LUFS; mono, para sair da cabeça dele em 3D.
 voz_jubilado_rapida/*.ogg: as mesmas falas, para a emboscada no corredor do fim: 1,45x mais rápidas sem mudar
 o tom (rubberband), um tremido leve (vibrato) e "atropeladas": no ataque de algumas sílabas, um pedacinho de
 70 a 110 ms se repete (gagueira) ou é cortado (pula); a mesma loudness das falas normais.
-porta_professor_susto.ogg: de porta-professor-susto.mp3, com o volume igualado aos outros sustos (-15 LUFS,
+porta_professor_susto.ogg: de porta-professor-susto.mp3, comprimido e bem mais alto que os outros sustos (-9,7 LUFS,
 limitador nos picos); toca quando a porta do professor bate na emboscada do fim.
 faltam_<provas>.ogg: "Hm, deixa eu ver... ainda faltam" + as provas, uma para cada combinação.

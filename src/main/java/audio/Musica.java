@@ -109,13 +109,29 @@ public class Musica {
 	/**
 	 * Abafa a música (ducking, como no rádio quando o locutor fala): ela baixa até "nivel" (0 a 1)
 	 * em 0,15 s, fica assim por "ms" milissegundos e volta ao normal em 0,6 s. Para uma fala se
-	 * ouvir por cima da música sem precisar pará-la.
+	 * ouvir por cima da música sem precisar pará-la. Se ela já está abafada (duas falas, ou um
+	 * susto com uma fala), os dois se somam: vale o nível mais baixo e o fim mais tarde.
 	 */
 	public synchronized void abafar(float nivel, long ms) {
-		long agora = System.currentTimeMillis();
-		abafarNivel = nivel;
-		abafarDesde = agora;
-		abafarAte = agora + ms;
+		Abafo a = juntar(new Abafo(abafarNivel, abafarDesde, abafarAte), nivel, ms, System.currentTimeMillis());
+		abafarNivel = a.nivel();
+		abafarDesde = a.desde();
+		abafarAte = a.ate();
+	}
+
+	/** Um abafamento: o nível e de quando a quando (ms). */
+	record Abafo(float nivel, long desde, long ate) {}
+
+	/**
+	 * Um pedido novo de abafar ("nivel" por "ms" a partir de "agora") junto com o que está valendo.
+	 * Ainda abafada: fica o nível mais baixo e o fim mais tarde, sem recomeçar a descida (a música
+	 * não sobe e desce de novo no meio). Já livre: um abafamento novo. Função pura, para testar.
+	 */
+	static Abafo juntar(Abafo atual, float nivel, long ms, long agora) {
+		if (agora < atual.ate()) {
+			return new Abafo(Math.min(atual.nivel(), nivel), atual.desde(), Math.max(atual.ate(), agora + ms));
+		}
+		return new Abafo(nivel, agora, agora + ms);
 	}
 
 	/**

@@ -57,6 +57,19 @@ class AudioLogicaTest {
 	}
 
 	@Test
+	void doisAbafamentosAoMesmoTempoSeSomam() {
+		Musica.Abafo fala = Musica.juntar(new Musica.Abafo(1, 0, 0), 0.25f, 3000, 1000); // uma fala de 1 a 4 s
+		assertEquals(new Musica.Abafo(0.25f, 1000, 4000), fala);
+		// no meio dela, um susto pede 8% por 2 s: fica o mais baixo, até o fim mais tarde, sem recomeçar a descida
+		Musica.Abafo susto = Musica.juntar(fala, 0.08f, 2000, 2500);
+		assertEquals(new Musica.Abafo(0.08f, 1000, 4500), susto);
+		// e uma fala curta depois disso não levanta a música nem encurta o abafamento
+		assertEquals(susto, Musica.juntar(susto, 0.25f, 500, 3000));
+		// depois que acabou, um pedido novo começa do zero
+		assertEquals(new Musica.Abafo(0.25f, 6000, 7000), Musica.juntar(susto, 0.25f, 1000, 6000));
+	}
+
+	@Test
 	void audioNaoIniciadoFicaMudoSemErro() {
 		Audio mudo = new Audio(); // sem iniciar(): como um computador sem placa de som
 		Efeito e = mudo.carregarEfeito("audio/nao_existe.ogg");

@@ -237,6 +237,8 @@ public class TelaJogo implements Tela {
 	private static final float EMBOSCADA_ENCARA = 1.3f, EMBOSCADA_DESTRANCA = 1.2f;
 	/** Quando a legenda passa a mostrar as duas falas (logo depois de a segunda voz começar), em segundos. */
 	private static final float LEGENDA_EMBOSCADA = 0.4f;
+	/** Quanto a música fica enquanto a porta bate (quase nada: o susto é o que se ouve). */
+	private static final float ABAFAR_NO_SUSTO_DA_PORTA = 0.08f;
 	/** -1 = ainda não aconteceu; depois, segundos desde que a porta bateu. */
 	private float tempoEmboscada = -1;
 	/** Os dois da emboscada (vazio antes dela). */
@@ -1528,8 +1530,10 @@ public class TelaJogo implements Tela {
 		desenhoPredio.portaProfessorAberta = false;
 		Audio audio = gerenciador.audio();
 		if (somPortaSusto != null) {
+			// o susto bem alto, com a música quase toda abafada enquanto ele toca (as vozes que vêm
+			// junto também abafam, e os dois pedidos se somam: vale o mais baixo)
 			audio.tocar(somPortaSusto, 1f);
-			audio.musica().abafar(ABAFAR_NA_FALA, Math.round(audio.duracao(somPortaSusto) * 1000));
+			audio.musica().abafar(ABAFAR_NO_SUSTO_DA_PORTA, Math.round(audio.duracao(somPortaSusto) * 1000));
 		}
 		falhasDeLuz.forcarFalhaGeral();
 		tremor = Math.max(tremor, 0.8f);
