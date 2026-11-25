@@ -31,6 +31,9 @@ mvn -q 'org.apache.maven.plugins:maven-dependency-plugin:2.8:copy-dependencies' 
 # a lwjgl_util (matrizes do projeto original) puxa junto a LWJGL 2 inteira; o jogo só usa as
 # classes de vetor/matriz dela, e a LWJGL 2 no classpath conflita com a 3 (mesmo pacote org.lwjgl)
 Remove-Item "$Entrada\lwjgl-2.*.jar", "$Entrada\lwjgl-platform-2.*.jar", "$Entrada\jinput*.jar", "$Entrada\jutils*.jar"
+# a Assimp (leitor de modelos 3D) vem no pom.xml, mas o jogo não usa (os modelos são lidos pelo
+# próprio código): são 4 MB a menos
+Remove-Item "$Entrada\lwjgl-assimp-*.jar"
 
 foreach ($pasta in 'texturas', 'modelos', 'shaders', 'fontes', 'interface', 'sprites') {
 	Copy-Item -Recurse $pasta $Entrada
@@ -49,9 +52,16 @@ Copy-Item 'creditos.txt' $Entrada
 Write-Host '== gerando o aplicativo (jpackage)'
 # $APPDIR (entre aspas simples, para o PowerShell não trocar) é a pasta do jogo dentro do pacote:
 # todos os arquivos são procurados lá (util.Caminhos), de onde quer que o jogo seja aberto
+# O Java embutido leva só os módulos que o jogo usa (conferido com o jdeps): java.base, java.desktop
+# (imagens, fontes e texturas de texto), jdk.unsupported (a LWJGL usa) e jdk.localedata só com
+# português e inglês (a nota com vírgula). Sem isso, o jpackage põe o JDK inteiro (compilador,
+# depurador...). As opções do jlink são as padrão do jpackage mais os idiomas.
+$Modulos = 'java.base,java.desktop,jdk.unsupported,jdk.localedata'
+$Jlink = '--strip-native-commands --strip-debug --no-man-pages --no-header-files --include-locales=pt,en'
 jpackage --type app-image --name $Nome --app-version $Versao `
 	--input $Entrada --main-jar $Jar --main-class main.Main3D `
 	--icon empacotamento\icone.ico --dest $Pacote `
+	--add-modules $Modulos --jlink-options $Jlink `
 	--java-options '-Xmx1g' --java-options '-Dunivali.assets=$APPDIR'; Conferir 'jpackage'
 
 Write-Host '== compactando'
