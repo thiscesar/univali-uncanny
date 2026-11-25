@@ -73,7 +73,6 @@ public final class Recursos {
 	/** Fontes da interface (não usam OpenGL, mas ficam aqui por serem compartilhadas). */
 	private static Fonte fonteTitulo;
 	private static Fonte fonteTexto;
-	private static Fonte fonteMaquina;
 
 	private Recursos() {}
 
@@ -330,14 +329,6 @@ public final class Recursos {
 	}
 
 	/** Fonte do HUD e dos botões (fontes/texto.ttf; sem o arquivo, sem serifa do sistema). */
-	/** A letra de máquina de escrever (fontes/maquina.pfb, a Courier 10 Pitch; sem o arquivo, a monoespaçada do sistema). */
-	public static Fonte fonteMaquina() {
-		if (fonteMaquina == null) {
-			fonteMaquina = Fonte.carregar("fontes/maquina.pfb", Font.MONOSPACED, Font.PLAIN);
-		}
-		return fonteMaquina;
-	}
-
 	public static Fonte fonteTexto() {
 		if (fonteTexto == null) {
 			fonteTexto = Fonte.carregar("fontes/texto.ttf", Font.SANS_SERIF, Font.PLAIN);

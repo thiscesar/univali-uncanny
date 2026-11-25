@@ -36,19 +36,18 @@ Foto do campus da Univali (fundo do menu) · (autor e licença)
 
 # Sons
 Música do menu · (autor e licença)
+Música do carregamento (loading-scenario) · (autor e licença)
 Música do Dragon Knight (Headbanger Monster) · (autor e licença)
 Passos na grama, correndo na grama, na terra e no piso da Univali · (autor e licença)
 Risada · (autor e licença)
 Risada do professor · (autor e licença)
-Teclas da máquina de escrever · (autor e licença)
 Lâmpada falhando · (autor e licença)
 Porta rangendo · (autor e licença)
 Voz da TV do saguão · (autor e licença)
 Comemoração do APROVADO · (autor e licença)
 Vozes do professor e do Jubilado · gravadas pelos desenvolvedores, com efeito
-Passos na água, sininho e carro da máquina de escrever, galho, tiro, monstro, sussurro, sinal, zumbido e os sons do menu · sintetizados por código
+Passos na água, galho, tiro, monstro, sussurro, sinal, zumbido, papel e os sons do menu · sintetizados por código
 
 # Fontes
-Courier 10 Pitch (máquina de escrever) · Bitstream · licença livre da Bitstream
 Reenie Beanie (a carta à caneta) · James Grieshaber · SIL Open Font License
 Fontes do sistema (serifada e sem serifa)
