@@ -137,6 +137,29 @@ class DiretorDeSustosTest {
 	}
 
 	@Test
+	void provocarQuemRondaComecaUmaCacadaComEleOuOJuntaAOutra() {
+		Cena c = new Cena(4);
+		Jubilado provocado = c.jubilados.get(0);
+		provocado.x = c.jx + 4; // o jogador chegou perto demais
+		provocado.z = c.jz;
+		c.quadro(0); // ele percebe
+		c.quadro(0); // o diretor fica sabendo
+		assertEquals(Vez.CACADA, c.diretor.vez(), "a calmaria acabou na hora");
+		assertEquals(List.of(provocado), c.diretor.cacadores());
+		assertEquals(Jubilado.Estado.CACANDO, provocado.estado());
+
+		Cena d = new Cena(5);
+		d.diretor.forcar(0, d.jx, d.jz);
+		Jubilado outro = d.jubilados.stream().filter(j -> !d.diretor.cacadores().contains(j)).findFirst().get();
+		outro.x = d.jx - 4;
+		outro.z = d.jz;
+		d.quadro(0);
+		d.quadro(0);
+		assertTrue(d.diretor.cacadores().contains(outro), "entrou na caçada que já estava acontecendo");
+		assertEquals(2, d.diretor.cacadores().size());
+	}
+
+	@Test
 	void pegarUmaProvaEncurtaACalmariaEAVoltaEncerraTudo() {
 		Cena c = new Cena(5);
 		c.quadro(0);

@@ -32,12 +32,15 @@ import obj.Object3D;
  *   CAIDO       levou um tiro de perto: cai e fica 12 s no chão. A escopeta não o mata. Ao
  *               levantar, vai direto para onde o jogador está.
  *   ATACANDO    alcançou o jogador: ataca; no fim da animação, a partida está perdida.
- *   FUGINDO     (só quem ronda) o jogador chegou perto ou o iluminou: corre para longe, na neblina.
+ *   RECUANDO    (só quem ronda) o jogador chegou perto ou o iluminou com a lanterna: para, encara e
+ *               recua de costas, devagar, deslizando, sem mexer as pernas. Se o jogador insistir
+ *               (a luz nele por 2 s ou chegar a 6 m), ele é provocado e o diretor o faz caçador.
+ *   FUGINDO     (só quem ronda) levantou depois de derrubado: corre para longe, na neblina.
  *
  * Há vários Jubilados no mapa, e cada um tem um papel, dado pelo diretor de sustos:
  *   CACADOR     o da vez: ronda, ouve, vê e caça, como descrito acima.
  *   OBSERVADOR  os outros: ficam rondando de longe (18 a 34 m), param e encaram o jogador entre as
- *               árvores, e fogem se ele chegar perto ou apontar a lanterna. Nunca atacam.
+ *               árvores, e recuam se ele chegar perto ou apontar a lanterna. Só atacam provocados.
  *
  * Para andar, usa o A* na grade de caminhada (desvia de morro e de água, contorna a Univali)
  * e, a cada passo, a grade de colisão para escorregar em volta dos troncos, como o jogador.
@@ -46,7 +49,7 @@ import obj.Object3D;
  */
 public class Jubilado extends Object3D implements Atingivel {
 
-	public enum Estado { VAGANDO, DESCONFIADO, CACANDO, PROCURANDO, CAIDO, ATACANDO, FUGINDO }
+	public enum Estado { VAGANDO, DESCONFIADO, CACANDO, PROCURANDO, CAIDO, ATACANDO, RECUANDO, FUGINDO }
 
 	public enum Papel { CACADOR, OBSERVADOR }
 
@@ -125,6 +128,10 @@ public class Jubilado extends Object3D implements Atingivel {
 	private boolean farejando;
 	/** Farejando, segundos até o próximo sussurro. */
 	private float proximoSussurro;
+	/** Quem ronda: segundos (somados) com a lanterna nele; em JUBILADO_PROVOCA, é provocado. */
+	private float provocacao;
+	/** Foi provocado e o diretor ainda não ficou sabendo (ver foiProvocado). */
+	private boolean provocado;
 
 	/** Rotação do modelo em volta do eixo y, em radianos (0 = olhando para +x). */
 	public float guinada = 0;
@@ -198,10 +205,32 @@ public class Jubilado extends Object3D implements Atingivel {
 		}
 	}
 
+	/**
+	 * Provocado: vira caçador na hora, já vendo o jogador (sem farejar). O "viu" dispara o susto
+	 * e a fala, como quando um caçador o encontra.
+	 */
+	public void enfurecer() {
+		papel = Papel.CACADOR;
+		respiro = 0;
+		provocado = false;
+		provocacao = 0;
+		if (estado != Estado.CAIDO && estado != Estado.ATACANDO) {
+			cacar();
+		}
+	}
+
+	/** Foi provocado desde a última vez que o diretor perguntou? (Perguntar apaga o aviso.) */
+	public boolean foiProvocado() {
+		boolean p = provocado;
+		provocado = false;
+		return p;
+	}
+
 	/** Acabou a vez dele: volta a só rondar de longe (caído, termina de levantar e foge). */
 	public void encerrarCaca() {
 		papel = Papel.OBSERVADOR;
 		farejando = false;
+		provocacao = 0;
 		if (estado == Estado.CACANDO || estado == Estado.DESCONFIADO || estado == Estado.PROCURANDO) {
 			mudarPara(Estado.VAGANDO);
 			caminho = null;
@@ -381,11 +410,12 @@ public class Jubilado extends Object3D implements Atingivel {
 	// ---------- quem só ronda ----------
 
 	/**
-	 * O observador: anda até um ponto a 28-50 m do jogador, para e fica encarando; depois escolhe
-	 * outro. Longe demais, vem rápido (escondido na neblina). Perto demais ou na luz da lanterna, foge.
+	 * O observador: anda até um ponto a 18-34 m do jogador, para e fica encarando; depois escolhe
+	 * outro. Longe demais, vem rápido (escondido na neblina). Perto demais ou na luz da lanterna,
+	 * recua de costas encarando; se o jogador insistir, é provocado.
 	 */
 	private void observar(float dt) {
-		if (estado != Estado.VAGANDO && estado != Estado.FUGINDO) {
+		if (estado != Estado.VAGANDO && estado != Estado.RECUANDO && estado != Estado.FUGINDO) {
 			mudarPara(Estado.VAGANDO);
 			caminho = null;
 		}
@@ -398,9 +428,21 @@ public class Jubilado extends Object3D implements Atingivel {
 			return;
 		}
 		float dist = (float) Math.hypot(alvoX - x, alvoZ - z);
-		if (!alvoEscondido && (dist < Regras.OBSERVA_FOGE || iluminado(dist))) {
-			fugir();
+		// recuando, a luz ainda conta um pouco além do alcance: senão bastaria um passo para trás para escapar dela
+		boolean naLuz = !alvoEscondido && iluminado(dist, estado == Estado.RECUANDO ? Regras.OBSERVA_LUZ + 4 : Regras.OBSERVA_LUZ);
+		provocacao = naLuz ? provocacao + dt : Math.max(0, provocacao - dt * 0.5f);
+		if (!alvoEscondido && (provocacao >= Regras.JUBILADO_PROVOCA || dist < Regras.OBSERVA_PROVOCA_PERTO)) {
+			provocado = true; // o diretor fica sabendo no próximo quadro e o faz caçador
+		}
+		if (!alvoEscondido && (dist < Regras.OBSERVA_RECUA || naLuz)) {
+			recuar(dt, dist);
 			return;
+		}
+		if (estado == Estado.RECUANDO) {
+			// a luz saiu dele: fica parado encarando mais um pouco antes de voltar a rondar
+			mudarPara(Estado.VAGANDO);
+			caminho = null;
+			parado = 1.5f + random.nextFloat() * 2;
 		}
 		grunhir(dt);
 		boolean longe = !alvoEscondido && dist > Regras.OBSERVA_LONGE + 10;
@@ -421,9 +463,26 @@ public class Jubilado extends Object3D implements Atingivel {
 		}
 	}
 
-	/** A lanterna ligada, apontada para ele (até 18° do centro do facho), perto e sem tronco no meio. */
-	private boolean iluminado(float dist) {
-		if (!alvoLanterna || dist > Regras.OBSERVA_LUZ || dist < 1e-3f) return false;
+	/**
+	 * Recua de costas, encarando o jogador: a frente continua virada para ele e o corpo desliza para
+	 * trás devagar, sem passos (a animação fica a de parado). Ao começar, um grunhido avisa.
+	 */
+	private void recuar(float dt, float dist) {
+		if (estado != Estado.RECUANDO) {
+			mudarPara(Estado.RECUANDO);
+			caminho = null;
+			eventos.grunhiu(this);
+		}
+		virarPara(guinadaPara(alvoX - x, alvoZ - z), dt);
+		if (dist < 1e-3f) return;
+		velocidade = Math.min(Regras.JUBILADO_RECUANDO, velocidade + ACELERACAO * dt);
+		float passo = velocidade * dt;
+		deslocar(x + (x - alvoX) / dist * passo, z + (z - alvoZ) / dist * passo, false);
+	}
+
+	/** A lanterna ligada, apontada para ele (até 18° do centro do facho), a até "alcance" metros e sem tronco no meio. */
+	private boolean iluminado(float dist, float alcance) {
+		if (!alvoLanterna || dist > alcance || dist < 1e-3f) return false;
 		float cosseno = ((x - alvoX) * alvoFrenteX + (z - alvoZ) * alvoFrenteZ) / dist;
 		return cosseno > (float) Math.cos(Math.toRadians(18)) && colisao.linhaLivre(alvoX, alvoZ, x, z, 0.1f);
 	}
@@ -560,7 +619,7 @@ public class Jubilado extends Object3D implements Atingivel {
 		if (valor >= BAGOS_PARA_CAIR * Regras.DANO_BAGO) {
 			cair();
 		} else if (papel == Papel.OBSERVADOR) {
-			fugir();
+			provocado = true; // atirar em quem ronda também é provocar
 		} else if (estado != Estado.CACANDO) {
 			cacar(); // levou um bago: sabe onde o jogador está
 		}
@@ -702,7 +761,11 @@ public class Jubilado extends Object3D implements Atingivel {
 		velocidade = Math.min(velocidadeMaxima, velocidade + ACELERACAO * dt);
 		if (velocidade > velocidadeMaxima) velocidade = velocidadeMaxima;
 		float passo = Math.min(dist, velocidade * dt);
-		float nx = x + dx / dist * passo, nz = z + dz / dist * passo;
+		deslocar(x + dx / dist * passo, z + dz / dist * passo, true);
+	}
+
+	/** Vai para (nx, nz) escorregando nos troncos e sem entrar em água funda, morro ou perto da Univali. */
+	private void deslocar(float nx, float nz, boolean pisando) {
 		float[] r = colisao.resolver(nx, nz, RAIO);
 		nx = r[0];
 		nz = r[1];
@@ -716,6 +779,7 @@ public class Jubilado extends Object3D implements Atingivel {
 		x = nx;
 		z = nz;
 		y = chao.alturaEm(x, z);
+		if (!pisando) return; // deslizando (recuando), sem som de passos
 		andouDesdeOPasso += andou;
 		if (andouDesdeOPasso >= PASSADA) {
 			andouDesdeOPasso = 0;
@@ -789,7 +853,7 @@ public class Jubilado extends Object3D implements Atingivel {
 	private void animarAndando() {
 		if (animador == null) return;
 		if (estado == Estado.PROCURANDO && !animador.terminou() && !animador.emLoop()) return; // a provocação até o fim
-		if (velocidade < 0.2f) {
+		if (velocidade < 0.2f || estado == Estado.RECUANDO) { // recuando, desliza parado: estranho de propósito
 			tocar("stand", true);
 			animador.definirVelocidade(1f);
 		} else {

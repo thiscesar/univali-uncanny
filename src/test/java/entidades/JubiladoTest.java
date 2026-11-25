@@ -237,38 +237,84 @@ class JubiladoTest {
 	}
 
 	@Test
-	void quemRondaFogeSeOJogadorChegaPerto() {
+	void quemRondaRecuaEncarandoSeOJogadorChegaPerto() {
 		Jubilado j = novo();
 		j.encerrarCaca();
-		j.definirAlvo(110, 1.7f, 100, false, true, false, false); // a 10 m
+		j.definirAlvo(110, 1.7f, 100, false, true, false, false); // a 10 m, lanterna apagada
 		j.SimulaSe(16);
-		assertEquals(Jubilado.Estado.FUGINDO, j.estado());
-		simular(j, 6);
-		assertTrue(Math.hypot(j.x - 110, j.z - 100) > 30, "correu para longe: " + Math.hypot(j.x - 110, j.z - 100));
+		assertEquals(Jubilado.Estado.RECUANDO, j.estado());
+		simular(j, 1.5f);
+		assertTrue(j.x < 100, "recuou, para longe do jogador: x = " + j.x);
+		assertTrue(j.velocidade() <= Regras.JUBILADO_RECUANDO + 1e-4f, "devagar: " + j.velocidade());
+		assertEquals(0, Math.cos(j.guinada) - 1, 0.05, "de frente para o jogador, de costas para onde vai");
+		assertFalse(j.foiProvocado(), "a 10 m ainda não é provocação");
 	}
 
 	@Test
-	void quemRondaFogeDaLuzDaLanterna() {
+	void quemRondaRecuaDaLuzDaLanterna() {
 		Jubilado apagada = novo();
 		apagada.encerrarCaca();
 		apagada.definirAlvo(120, 1.7f, 100, false, false, false, false); // a 20 m, olhando para ele, lanterna apagada
 		apagada.definirOlhar(-1, 0);
 		apagada.SimulaSe(16);
-		assertNotEquals(Jubilado.Estado.FUGINDO, apagada.estado());
+		assertNotEquals(Jubilado.Estado.RECUANDO, apagada.estado());
 
 		Jubilado acesa = novo();
 		acesa.encerrarCaca();
 		acesa.definirAlvo(120, 1.7f, 100, false, false, true, false);
 		acesa.definirOlhar(-1, 0); // a luz bem nele
 		acesa.SimulaSe(16);
-		assertEquals(Jubilado.Estado.FUGINDO, acesa.estado());
+		assertEquals(Jubilado.Estado.RECUANDO, acesa.estado());
 
 		Jubilado deLado = novo();
 		deLado.encerrarCaca();
 		deLado.definirAlvo(120, 1.7f, 100, false, false, true, false);
 		deLado.definirOlhar(0, 1); // a luz para outro lado
 		deLado.SimulaSe(16);
-		assertNotEquals(Jubilado.Estado.FUGINDO, deLado.estado());
+		assertNotEquals(Jubilado.Estado.RECUANDO, deLado.estado());
+	}
+
+	@Test
+	void aLuzPorUmInstanteNaoProvocaMasInsistirProvoca() {
+		Jubilado j = novo();
+		j.encerrarCaca();
+		j.definirAlvo(120, 1.7f, 100, false, false, true, false);
+		j.definirOlhar(-1, 0);
+		simular(j, Regras.JUBILADO_PROVOCA * 0.5f);
+		j.definirOlhar(0, 1); // tirou a luz dele
+		simular(j, 3);
+		assertFalse(j.foiProvocado(), "um instante de luz só o faz recuar");
+		assertEquals(Jubilado.Estado.VAGANDO, j.estado(), "sem a luz, volta a rondar");
+
+		j.definirOlhar((float) (j.x - 120), (float) (j.z - 100)); // a luz nele de novo, e fica
+		simular(j, Regras.JUBILADO_PROVOCA + 0.2f);
+		assertTrue(j.foiProvocado());
+		assertFalse(j.foiProvocado(), "perguntar apaga o aviso");
+	}
+
+	@Test
+	void chegarPertoDemaisOuAtirarEmQuemRondaProvoca() {
+		Jubilado perto = novo();
+		perto.encerrarCaca();
+		perto.definirAlvo(100 + Regras.OBSERVA_PROVOCA_PERTO - 1, 1.7f, 100, false, true, false, false);
+		perto.SimulaSe(16);
+		assertTrue(perto.foiProvocado());
+
+		Jubilado baleado = novo();
+		baleado.encerrarCaca();
+		baleado.definirAlvo(125, 1.7f, 100, false, false, false, false);
+		baleado.receberDano(Regras.DANO_BAGO); // um bago só: não cai
+		assertTrue(baleado.foiProvocado());
+	}
+
+	@Test
+	void enfurecidoViraCacadorJaCacando() {
+		Jubilado j = novo();
+		j.encerrarCaca();
+		j.definirAlvo(115, 1.7f, 100, false, false, true, false);
+		j.enfurecer();
+		assertEquals(Jubilado.Papel.CACADOR, j.papel());
+		assertEquals(Jubilado.Estado.CACANDO, j.estado());
 	}
 
 	@Test
@@ -286,7 +332,7 @@ class JubiladoTest {
 			}
 		}
 		float media = soma / amostras;
-		assertTrue(media > Regras.OBSERVA_FOGE && media < Regras.OBSERVA_LONGE + 12, "distância média " + media);
+		assertTrue(media > Regras.OBSERVA_RECUA && media < Regras.OBSERVA_LONGE + 12, "distância média " + media);
 	}
 
 	@Test

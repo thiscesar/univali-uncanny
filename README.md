@@ -10,7 +10,8 @@ balcão do saguão, uma escopeta e a carta de quem tentou sair antes de você.
 A floresta é dos **Jubilados**, alunos que estouraram o prazo do curso e nunca saíram de lá. Eles
 rondam entre as árvores — às vezes só os olhos verdes aparecem na neblina — e, de tempos em
 tempos, um deles vem caçar: você ouve ele sussurrando antes, e ele ouve quem corre e enxerga a luz
-da lanterna de longe. Se te pegar, reprovado. A escopeta não o mata, só derruba.
+da lanterna de longe. Apontar a lanterna para um deles o faz recuar, encarando você; insistir é
+provocar. Se te pegar, reprovado. A escopeta não o mata, só derruba.
 
 E na volta, com as provas, o **Dragon Knight** espera dentro da Univali: ele avança pelos
 corredores em zigue-zague, desvia da mira e só cai com três tiros bons.

@@ -21,6 +21,9 @@ import entidades.Jubilado;
  *    com as provas) fareja e vem caçar. A caçada acaba quando nenhum caçador está mais atrás do
  *    jogador (perderam o jogador de vista), ou em 60 s se nenhum o achou. Um caçador derrubado
  *    pela segunda vez desiste (levanta e foge).
+ *  - PROVOCAÇÃO: quem ronda recua quando o jogador chega perto ou o ilumina. Se o jogador insistir
+ *    (a lanterna nele por 2 s, chegar a 6 m ou atirar nele), ele vira caçador na hora: começa uma
+ *    caçada, ou ele entra na que já está acontecendo.
  *
  * Só lógica (os Jubilados também): dá para testar e simular sem janela.
  */
@@ -51,6 +54,9 @@ public class DiretorDeSustos {
 	 * da Univali e ainda não voltou com as provas); fora disso, o tempo não corre.
 	 */
 	public void atualizar(float dt, int provas, float jogadorX, float jogadorZ, boolean ativo) {
+		for (Jubilado j : jubilados) {
+			if (j.foiProvocado() && ativo) provocado(j); // fora de hora, o aviso é só descartado
+		}
 		if (!ativo) return;
 		restante -= dt;
 		if (vez == Vez.CALMARIA) {
@@ -88,14 +94,26 @@ public class DiretorDeSustos {
 	}
 
 	private void comecar(int provas, float jogadorX, float jogadorZ) {
-		vez = Vez.CACADA;
-		comecou = false;
-		restante = Regras.VEZ_JUBILADO;
-		cacadas++;
+		abrirCacada();
 		for (Jubilado j : maisPerto(jogadorX, jogadorZ, sortearQuantos(provas))) {
 			j.liberarCaca();
 			cacadores.put(j, j.quedas());
 		}
+	}
+
+	private void abrirCacada() {
+		vez = Vez.CACADA;
+		comecou = false;
+		restante = Regras.VEZ_JUBILADO;
+		cacadas++;
+	}
+
+	/** Um que rondava foi provocado: vira caçador na hora, numa caçada nova ou na que já está acontecendo. */
+	private void provocado(Jubilado j) {
+		if (cacadores.containsKey(j) || j.estado() == Jubilado.Estado.CAIDO) return;
+		if (vez == Vez.CALMARIA) abrirCacada();
+		j.enfurecer();
+		cacadores.put(j, j.quedas());
 	}
 
 	/** Os "quantos" Jubilados mais perto do jogador que podem caçar (não estão caídos). */

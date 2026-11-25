@@ -59,11 +59,19 @@ public final class Regras {
 	public static final int JUBILADOS = 4;
 	/**
 	 * Os que rondam: ficam entre OBSERVA_PERTO e OBSERVA_LONGE metros do jogador (no limite do que
-	 * a neblina deixa ver) e fogem se ele chegar a OBSERVA_FOGE metros ou os iluminar com a lanterna
-	 * a menos de OBSERVA_LUZ metros.
+	 * a neblina deixa ver). Se ele chegar a OBSERVA_RECUA metros ou os iluminar com a lanterna a menos
+	 * de OBSERVA_LUZ metros, param, encaram e recuam de costas, devagar.
 	 */
-	public static final float OBSERVA_PERTO = 18f, OBSERVA_LONGE = 34f, OBSERVA_FOGE = 12f, OBSERVA_LUZ = 26f;
-	/** Velocidade de quem foge, em m/s, e até onde, em metros do jogador. */
+	public static final float OBSERVA_PERTO = 18f, OBSERVA_LONGE = 34f, OBSERVA_RECUA = 12f, OBSERVA_LUZ = 26f;
+	/** Recuando de costas, encarando o jogador, em m/s. */
+	public static final float JUBILADO_RECUANDO = 0.8f;
+	/**
+	 * Provocar quem ronda: a lanterna nele por JUBILADO_PROVOCA segundos (somados; sem a luz, o
+	 * incômodo baixa pela metade desse ritmo) ou o jogador a menos de OBSERVA_PROVOCA_PERTO metros.
+	 * Provocado, ele vira caçador na hora.
+	 */
+	public static final float JUBILADO_PROVOCA = 2f, OBSERVA_PROVOCA_PERTO = 6f;
+	/** Velocidade de quem foge (o derrubado que desistiu), em m/s, e até onde, em metros do jogador. */
 	public static final float JUBILADO_FUGINDO = 5f, FOGE_ATE = 60f;
 
 	/** Velocidades em m/s: vagando, indo ver um barulho e caçando (o jogador anda a 3,5 e corre a 6). */
