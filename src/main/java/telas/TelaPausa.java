@@ -107,7 +107,7 @@ public class TelaPausa implements Tela {
 			gerenciador.sobrepor(new TelaCarta(gerenciador, () -> gerenciador.sobrepor(new TelaPausa(gerenciador, seed, true))));
 			return;
 		} else if (acionado == opcoes) {
-			painel = new PainelOpcoes(gerenciador.audio());
+			painel = new PainelOpcoes(gerenciador);
 		} else if (acionado == desistir) {
 			confirmando = true;
 		} else if (acionado == nao) {

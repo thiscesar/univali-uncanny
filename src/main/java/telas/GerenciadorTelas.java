@@ -1,13 +1,22 @@
 package telas;
 
+import static org.lwjgl.glfw.GLFW.GLFW_DONT_CARE;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_F11;
+import static org.lwjgl.glfw.GLFW.glfwGetPrimaryMonitor;
+import static org.lwjgl.glfw.GLFW.glfwGetVideoMode;
+import static org.lwjgl.glfw.GLFW.glfwGetWindowMonitor;
 import static org.lwjgl.glfw.GLFW.glfwGetWindowSize;
+import static org.lwjgl.glfw.GLFW.glfwSetWindowMonitor;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowShouldClose;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowSizeCallback;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowTitle;
 
 import java.awt.Color;
 
+import org.lwjgl.glfw.GLFWVidMode;
+
 import audio.Audio;
+import dados.Opcoes;
 import dados.Recursos;
 import entrada.Entrada;
 import render.Identidade;
@@ -26,11 +35,15 @@ import render.Overlay2D;
  *
  * Transições: ao trocar de tela, a atual escurece até o preto (congelada) e a nova clareia a
  * partir dele. A sobreposição (a pausa) abre e fecha sem transição.
+ *
+ * Tela cheia: F11, em qualquer tela, alterna entre tela cheia e janela (e grava a escolha nas opções).
  */
 public class GerenciadorTelas {
 
 	/** Maior diftime repassado às telas: depois de um travamento (ex.: gerar o mapa), nada "pula". */
 	public static final long DIFTIME_MAXIMO = 100;
+	/** Tamanho da janela fora da tela cheia (o mesmo com que o Main3D a cria), limitado a 85% do monitor. */
+	public static final int LARGURA_JANELA = 1500, ALTURA_JANELA = 1000;
 
 	private final long janela;
 	private final Entrada entrada;
@@ -150,6 +163,12 @@ public class GerenciadorTelas {
 	// ---------- quadro ----------
 
 	public void atualizar(long diftime) {
+		if (janela != 0 && entrada.foiPressionada(GLFW_KEY_F11)) {
+			Opcoes o = Opcoes.atual();
+			o.telaCheia = !telaCheia();
+			o.salvar();
+			definirTelaCheia(o.telaCheia);
+		}
 		long dt = Math.min(diftime, DIFTIME_MAXIMO);
 		if (saindo >= 0) {
 			saindo += dt / 1000f; // escurecendo: as telas ficam congeladas até a troca
@@ -216,6 +235,31 @@ public class GerenciadorTelas {
 	public void redimensionar(int largura, int altura) {
 		this.largura = Math.max(1, largura);
 		this.altura = Math.max(1, altura);
+	}
+
+	/** A janela está em tela cheia (ligada a um monitor)? */
+	public boolean telaCheia() {
+		return janela != 0 && glfwGetWindowMonitor(janela) != 0;
+	}
+
+	/**
+	 * Põe a janela em tela cheia no monitor principal, na resolução que ele já usa (sem trocar o modo
+	 * de vídeo, então a troca é rápida), ou a devolve para uma janela centralizada. Os callbacks de
+	 * tamanho avisam o redimensionar e o redimensionarJanela, como quando o jogador arrasta a borda.
+	 */
+	public void definirTelaCheia(boolean cheia) {
+		long monitor = glfwGetPrimaryMonitor();
+		if (janela == 0 || monitor == 0 || cheia == telaCheia()) {
+			return;
+		}
+		GLFWVidMode modo = glfwGetVideoMode(monitor);
+		if (cheia) {
+			glfwSetWindowMonitor(janela, monitor, 0, 0, modo.width(), modo.height(), modo.refreshRate());
+		} else {
+			int w = Math.min(LARGURA_JANELA, Math.round(modo.width() * 0.85f));
+			int h = Math.min(ALTURA_JANELA, Math.round(modo.height() * 0.85f));
+			glfwSetWindowMonitor(janela, 0, (modo.width() - w) / 2, (modo.height() - h) / 2, w, h, GLFW_DONT_CARE);
+		}
 	}
 
 	public void redimensionarJanela(int largura, int altura) {

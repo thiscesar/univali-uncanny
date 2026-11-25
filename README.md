@@ -41,6 +41,7 @@ Requisitos: placa de vídeo com **OpenGL 3.3** e cerca de **1 GB de memória liv
 | Usar (portas, crachá, professor, provas, caixas) | E |
 | Pular a introdução | Enter ou Espaço |
 | Pausa | ESC |
+| Tela cheia / janela | F11 |
 
 ## Como funciona
 

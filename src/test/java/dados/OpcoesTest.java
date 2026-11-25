@@ -80,4 +80,16 @@ class OpcoesTest {
 		Files.writeString(arquivo.toPath(), "volume.geral=0.5\n"); // arquivo antigo, sem a opção
 		assertFalse(Opcoes.carregar(arquivo).modoPs1);
 	}
+
+	@Test
+	void telaCheiaComecaLigadaESalvaDesligada() throws IOException {
+		assertTrue(new Opcoes().telaCheia);
+		File arquivo = new File(pasta, "config.properties");
+		Opcoes o = new Opcoes();
+		o.telaCheia = false;
+		o.salvar(arquivo);
+		assertFalse(Opcoes.carregar(arquivo).telaCheia);
+		Files.writeString(arquivo.toPath(), "volume.geral=0.5\n"); // arquivo antigo, sem a opção
+		assertTrue(Opcoes.carregar(arquivo).telaCheia);
+	}
 }

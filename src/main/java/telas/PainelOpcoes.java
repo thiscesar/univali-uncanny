@@ -17,7 +17,7 @@ import render.Overlay2D;
 import render.Seletor;
 
 /**
- * Opções: volumes, mouse (sensibilidade e eixo Y), vídeo (campo de visão, árvores, modo PS1, sombras) e seed do mapa. As mudanças só valem ao
+ * Opções: volumes, mouse (sensibilidade e eixo Y), vídeo (campo de visão, árvores, modo PS1, tela cheia, sombras) e seed do mapa. As mudanças só valem ao
  * "Salvar" (que grava o config.properties); "Cancelar" e ESC descartam.
  *
  * Teclado: setas para cima e para baixo (ou Tab) escolhem a linha; esquerda e direita
@@ -28,7 +28,7 @@ class PainelOpcoes extends Painel {
 	private static final Function<Float, String> PORCENTAGEM = v -> Math.round(v * 100) + "%";
 
 	private final Deslizante volumeGeral, volumeMusica, volumeEfeitos, sensibilidade, campoVisao, densidade;
-	private final Alternador inverterY, modoPs1;
+	private final Alternador inverterY, modoPs1, telaCheia;
 	private final Seletor sombras;
 	private final CampoTexto seed;
 	private final Botao salvar = new Botao("Salvar", 0, 0, 200, 46);
@@ -36,17 +36,20 @@ class PainelOpcoes extends Painel {
 
 	/** Para ouvir a mudança de volume na hora, enquanto o controle é arrastado. */
 	private final Audio audio;
+	/** Para pôr a janela em tela cheia ao salvar. */
+	private final GerenciadorTelas gerenciador;
 
 	/**
 	 * As linhas, de cima para baixo: 0 a 3 volumes e sensibilidade; 4 inverter Y; 5 campo de visão;
-	 * 6 densidade das árvores; 7 modo PS1; 8 sombras; 9 seed; 10 Salvar; 11 Cancelar.
+	 * 6 densidade das árvores; 7 modo PS1; 8 tela cheia; 9 sombras; 10 seed; 11 Salvar; 12 Cancelar.
 	 */
 	private int foco = 0;
-	private static final int INVERTER = 4, CAMPO = 5, DENSIDADE = 6, PS1 = 7, SOMBRAS = 8, SEED = 9, SALVAR = 10,
-			CANCELAR = 11, ITENS = 12, LINHAS = 10;
+	private static final int INVERTER = 4, CAMPO = 5, DENSIDADE = 6, PS1 = 7, TELA_CHEIA = 8, SOMBRAS = 9, SEED = 10,
+			SALVAR = 11, CANCELAR = 12, ITENS = 13, LINHAS = 11;
 
-	PainelOpcoes(Audio audio) {
-		this.audio = audio;
+	PainelOpcoes(GerenciadorTelas gerenciador) {
+		this.gerenciador = gerenciador;
+		this.audio = gerenciador.audio();
 		Opcoes o = Opcoes.atual();
 		volumeGeral = new Deslizante("Volume geral", o.volumeGeral, PORCENTAGEM);
 		volumeMusica = new Deslizante("Música", o.volumeMusica, PORCENTAGEM);
@@ -60,6 +63,7 @@ class PainelOpcoes extends Painel {
 				entre(o.densidadeArvores, Opcoes.DENSIDADE_MINIMA, Opcoes.DENSIDADE_MAXIMA),
 				v -> Math.round(de(v, Opcoes.DENSIDADE_MINIMA, Opcoes.DENSIDADE_MAXIMA) * 100) + "%");
 		modoPs1 = new Alternador("Modo PS1 (pixels grandes)", o.modoPs1);
+		telaCheia = new Alternador("Tela cheia (F11)", gerenciador.telaCheia());
 		sombras = new Seletor("Sombras da lanterna", new String[] { "desligadas", "médias", "altas" }, o.sombras);
 		seed = new CampoTexto("Seed do mapa", o.seed, 9, true, "vazia = mapa novo");
 	}
@@ -78,7 +82,7 @@ class PainelOpcoes extends Painel {
 	}
 
 	private Alternador alternador(int linha) {
-		return linha == INVERTER ? inverterY : linha == PS1 ? modoPs1 : null;
+		return linha == INVERTER ? inverterY : linha == PS1 ? modoPs1 : linha == TELA_CHEIA ? telaCheia : null;
 	}
 
 	@Override
@@ -145,10 +149,10 @@ class PainelOpcoes extends Painel {
 	private String valores() {
 		return volumeGeral.valor + " " + volumeMusica.valor + " " + volumeEfeitos.valor + " " + sensibilidade.valor
 				+ " " + campoVisao.valor + " " + densidade.valor + " " + inverterY.valor + " " + modoPs1.valor + " "
-				+ sombras.indice;
+				+ telaCheia.valor + " " + sombras.indice;
 	}
 
-	/** Nove linhas de controles: a altura de cada uma diminui para caberem acima dos botões. */
+	/** Onze linhas de controles: a altura de cada uma diminui para caberem acima dos botões. */
 	private void posicionar() {
 		float x = px + 50, largura = pl - 100;
 		float y = py + 95;
@@ -178,7 +182,9 @@ class PainelOpcoes extends Painel {
 		o.seed = seed.texto();
 		o.modoPs1 = modoPs1.valor;
 		o.sombras = sombras.indice;
+		o.telaCheia = telaCheia.valor;
 		o.salvar();
+		gerenciador.definirTelaCheia(o.telaCheia);
 	}
 
 	private void restaurarVolumes() {

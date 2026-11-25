@@ -118,7 +118,15 @@ public class Main3D {
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // the window will be resizable
 
         // Create the window
-        window = glfwCreateWindow(1500, 1000, "Hello World!", NULL, NULL);
+        // ALTERADO: com a opção de tela cheia (o padrão), a janela já nasce ocupando o monitor
+        // principal, na resolução que ele usa; F11 ou as Opções voltam para a janela de 1500x1000.
+        long monitor = glfwGetPrimaryMonitor();
+        if (Opcoes.atual().telaCheia && monitor != NULL) {
+            GLFWVidMode modo = glfwGetVideoMode(monitor);
+            window = glfwCreateWindow(modo.width(), modo.height(), "Hello World!", monitor, NULL);
+        } else {
+            window = glfwCreateWindow(1500, 1000, "Hello World!", NULL, NULL);
+        }
         if (window == NULL)
             throw new RuntimeException("Failed to create the GLFW window");
 

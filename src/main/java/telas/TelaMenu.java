@@ -105,7 +105,7 @@ public class TelaMenu implements Tela {
 		} else if (acionado == controles) {
 			painel = new PainelControles();
 		} else if (acionado == opcoes) {
-			painel = new PainelOpcoes(gerenciador.audio());
+			painel = new PainelOpcoes(gerenciador);
 		} else if (acionado == creditos) {
 			painel = new PainelCreditos();
 		} else if (acionado == bestiario) {

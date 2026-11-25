@@ -23,6 +23,7 @@ class PainelControles extends Painel {
 			{ "Lanterna", "F" },
 			{ "Interagir (pegar prova, caixa, entregar)", "E" },
 			{ "Pausa", "ESC" },
+			{ "Tela cheia / janela", "F11" },
 	};
 	private static final Color COR_ACAO = new Color(190, 182, 170);
 	private static final Color COR_TECLA = new Color(225, 60, 50);

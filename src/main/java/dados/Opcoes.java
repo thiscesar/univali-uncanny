@@ -12,7 +12,7 @@ import java.util.Random;
 import util.Caminhos;
 
 /**
- * As opções do jogador (volumes, mouse, vídeo, seed do mapa), salvas no arquivo
+ * As opções do jogador (volumes, mouse, vídeo e tela cheia, seed do mapa), salvas no arquivo
  * config.properties, para continuarem valendo depois de fechar e abrir o jogo.
  */
 public class Opcoes {
@@ -39,6 +39,8 @@ public class Opcoes {
 	public static final int[] LADO_SOMBRA = { 0, 1024, 2048 };
 	/** Mouse para cima olha para baixo (como num avião). */
 	public boolean inverterY = false;
+	/** O jogo ocupa o monitor principal inteiro (F11 alterna durante o jogo). */
+	public boolean telaCheia = true;
 
 	public static final float SENSIBILIDADE_MINIMA = 0.25f;
 	public static final float SENSIBILIDADE_MAXIMA = 3.0f;
@@ -83,6 +85,7 @@ public class Opcoes {
 		o.campoVisao = lerNumero(p, "video.campoVisao", o.campoVisao, CAMPO_VISAO_MINIMO, CAMPO_VISAO_MAXIMO);
 		o.densidadeArvores = lerNumero(p, "video.densidadeArvores", o.densidadeArvores, DENSIDADE_MINIMA, DENSIDADE_MAXIMA);
 		o.inverterY = "true".equals(p.getProperty("mouse.inverterY", "false").trim());
+		o.telaCheia = !"false".equals(p.getProperty("video.telaCheia", "true").trim());
 		o.sombras = Math.round(lerNumero(p, "video.sombras", o.sombras, 0, LADO_SOMBRA.length - 1));
 		return o;
 	}
@@ -103,6 +106,7 @@ public class Opcoes {
 		p.setProperty("video.densidadeArvores", String.valueOf(densidadeArvores));
 		p.setProperty("mouse.inverterY", String.valueOf(inverterY));
 		p.setProperty("video.sombras", String.valueOf(sombras));
+		p.setProperty("video.telaCheia", String.valueOf(telaCheia));
 		try (Writer w = Files.newBufferedWriter(arquivo.toPath(), StandardCharsets.UTF_8)) {
 			p.store(w, "Univali Uncanny - opcoes do jogador");
 		} catch (IOException e) {
@@ -127,6 +131,7 @@ public class Opcoes {
 		densidadeArvores = o.densidadeArvores;
 		inverterY = o.inverterY;
 		sombras = o.sombras;
+		telaCheia = o.telaCheia;
 	}
 
 	/** A seed da próxima partida: a digitada nas opções ou uma nova, sorteada. */
