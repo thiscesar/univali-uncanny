@@ -50,4 +50,5 @@ Passos na água, sininho e carro da máquina de escrever, galho, tiro, monstro, 
 
 # Fontes
 Courier 10 Pitch (máquina de escrever) · Bitstream · licença livre da Bitstream
+Reenie Beanie (a carta à caneta) · James Grieshaber · SIL Open Font License
 Fontes do sistema (serifada e sem serifa)
