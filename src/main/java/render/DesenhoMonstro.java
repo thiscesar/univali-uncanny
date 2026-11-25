@@ -51,6 +51,11 @@ public class DesenhoMonstro {
 	public static final Aparencia JUBILADO = new Aparencia(217.5f / 256f, 147.5f / 256f, 0.11f,
 			new float[] { 0.35f, 1.7f, 0.3f }, 0.06f, 0.8f, 2.0f);
 
+	/** O tamanho mínimo do brilho do olho, por metro de distância (a 30 m, 27 cm: uns 5 pixels). */
+	private static final float OLHO_POR_METRO = 0.009f;
+	/** Quanto da neblina os olhos sofrem (o resto da cena sofre 1; o padrão dos brilhos é 0,5). */
+	private static final float NEBLINA_NOS_OLHOS = 0.3f;
+
 	private final Aparencia aparencia;
 	private final PersonagemMd2 personagem;
 	private final List<PontoMd2> olhos;
@@ -122,7 +127,11 @@ public class DesenhoMonstro {
 			desenharSubstituto(m, dano, projecao, visao, ambiente, cameraX, cameraZ);
 		}
 		if (olhosAcesos) {
-			pontosOlhos.desenhar(aparencia.tamanhoOlho(), aparencia.corOlho(), projecao, visao, ambiente, alturaImagem);
+			// de longe, o olho não encolhe além de um ponto visível e quase não sofre a neblina:
+			// os olhos brilhando na mata, a 30 m
+			float distancia = (float) Math.hypot(m.x - cameraX, m.z - cameraZ);
+			float tamanho = Math.max(aparencia.tamanhoOlho(), distancia * OLHO_POR_METRO);
+			pontosOlhos.desenhar(tamanho, aparencia.corOlho(), projecao, visao, ambiente, alturaImagem, NEBLINA_NOS_OLHOS);
 		}
 	}
 

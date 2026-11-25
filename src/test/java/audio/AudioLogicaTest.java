@@ -46,6 +46,17 @@ class AudioLogicaTest {
 	}
 
 	@Test
+	void abafarBaixaAMusicaDuranteAFalaEDepoisVolta() {
+		// abafada a 25% de 1000 ms a 4000 ms
+		assertEquals(1f, Musica.fatorAbafar(0.25f, 1000, 4000, 900), 1e-6, "antes, normal");
+		assertEquals(0.25f, Musica.fatorAbafar(0.25f, 1000, 4000, 1000 + Musica.ABAFAR_DESCE), 1e-6, "desce rápido");
+		assertEquals(0.25f, Musica.fatorAbafar(0.25f, 1000, 4000, 3999), 1e-6, "baixa durante a fala");
+		assertEquals(0.625f, Musica.fatorAbafar(0.25f, 1000, 4000, 4000 + Musica.ABAFAR_SOBE / 2), 1e-6, "subindo");
+		assertEquals(1f, Musica.fatorAbafar(0.25f, 1000, 4000, 9000), 1e-6, "depois, normal");
+		assertEquals(1f, Musica.fatorAbafar(1, 0, 0, 5000), 1e-6, "sem abafar, normal");
+	}
+
+	@Test
 	void audioNaoIniciadoFicaMudoSemErro() {
 		Audio mudo = new Audio(); // sem iniciar(): como um computador sem placa de som
 		Efeito e = mudo.carregarEfeito("audio/nao_existe.ogg");

@@ -40,6 +40,12 @@ public class Musica {
 	private float fadeAlvo = 1, fadeInicio = 1;
 	private long fadeComeco = 0, fadeDuracao = 0;
 	private float volume = 1;
+	/** Abafamento (ducking): a música baixa para "abafarNivel" entre abafarDesde e abafarAte (ms). */
+	private float abafarNivel = 1;
+	private long abafarDesde = 0, abafarAte = 0;
+
+	/** Quanto tempo a música leva para baixar e para voltar depois de abafada, em ms. */
+	static final long ABAFAR_DESCE = 150, ABAFAR_SOBE = 600;
 
 	// ---- estado da thread da música ----
 	private long decodificador = 0;
@@ -100,6 +106,32 @@ public class Musica {
 		iniciarFade(fatorFade(fadeInicio, fadeAlvo, fadeComeco, fadeDuracao, System.currentTimeMillis()), 0, ms);
 	}
 
+	/**
+	 * Abafa a música (ducking, como no rádio quando o locutor fala): ela baixa até "nivel" (0 a 1)
+	 * em 0,15 s, fica assim por "ms" milissegundos e volta ao normal em 0,6 s. Para uma fala se
+	 * ouvir por cima da música sem precisar pará-la.
+	 */
+	public synchronized void abafar(float nivel, long ms) {
+		long agora = System.currentTimeMillis();
+		abafarNivel = nivel;
+		abafarDesde = agora;
+		abafarAte = agora + ms;
+	}
+
+	/**
+	 * O fator do abafamento no instante "agora" (0 a 1): desce de 1 a "nivel" em ABAFAR_DESCE ms,
+	 * fica em "nivel" até "ate" e sobe de volta a 1 em ABAFAR_SOBE ms. Função pura, para poder testar.
+	 */
+	static float fatorAbafar(float nivel, long desde, long ate, long agora) {
+		if (agora < desde) return 1;
+		if (agora < ate) {
+			float t = Math.min(1, (float) (agora - desde) / ABAFAR_DESCE);
+			return 1 + (nivel - 1) * t;
+		}
+		float t = Math.min(1, (float) (agora - ate) / ABAFAR_SOBE);
+		return nivel + (1 - nivel) * t;
+	}
+
 	/** Volume da música (volume de música das opções), de 0 a 1. */
 	public synchronized void definirVolume(float volume) {
 		this.volume = volume;
@@ -149,7 +181,7 @@ public class Musica {
 			String abrir;
 			boolean loopNovo, parar;
 			float inicio;
-			float fator, vol;
+			float fator, vol, abafo;
 			synchronized (this) {
 				abrir = arquivoPedido;
 				arquivoPedido = null;
@@ -159,6 +191,7 @@ public class Musica {
 				pararPedido = false;
 				fator = fatorFade(fadeInicio, fadeAlvo, fadeComeco, fadeDuracao, System.currentTimeMillis());
 				vol = volume;
+				abafo = fatorAbafar(abafarNivel, abafarDesde, abafarAte, System.currentTimeMillis());
 			}
 			if (parar) {
 				fechar();
@@ -167,7 +200,7 @@ public class Musica {
 				abrir(abrir, loopNovo, inicio);
 			}
 			if (decodificador != 0) {
-				alSourcef(fonte, AL_GAIN, vol * fator);
+				alSourcef(fonte, AL_GAIN, vol * fator * abafo);
 				if (fator <= 0 && fadeAlvoZero()) {
 					fechar(); // fade-out terminou
 				} else {

@@ -50,13 +50,37 @@ public final class Regras {
 	/** Duração do susto em tela cheia antes da derrota, em segundos. */
 	public static final float DURACAO_SUSTO = 0.8f;
 
-	// ---------- o Jubilado (o monstro que anda pela floresta) ----------
+	// ---------- o diretor de sustos (o ritmo da partida) ----------
 
 	/**
-	 * Um monstro de cada vez: segundos mínimos entre o fim de uma ameaça (o Dragon Knight em cena,
-	 * o Jubilado caçando ou caído) e o começo da outra. Matar os dois juntos seria injusto.
+	 * Um monstro de cada vez, com calmaria entre um e outro. Segundos de calmaria conforme as
+	 * provas coletadas (0, 1, 2, 3): o fim é mais tenso, mas nunca sem respiro. A primeira calmaria
+	 * é a CARENCIA. Cada calmaria varia ±VARIACAO_INTERVALO.
 	 */
-	public static final float INTERVALO_MONSTROS = 30f;
+	public static final float[] CALMARIA = { 50f, 42f, 36f, 30f };
+	/** A chance de a próxima ameaça ser o Dragon Knight (o resto é o Jubilado), conforme as provas. */
+	public static final float[] CHANCE_DRAGON_KNIGHT = { 0.3f, 0.4f, 0.5f, 0.5f };
+	/** Derrubado essas vezes na mesma vez, o Jubilado desiste (levanta e foge): a caçada não vira um ciclo sem fim. */
+	public static final int QUEDAS_PARA_DESISTIR = 2;
+	/** A vez do Jubilado dura no máximo isso, se ele não achar o jogador (segundos). */
+	public static final float VEZ_JUBILADO = 60f;
+	/** Se o Dragon Knight não achar lugar para surgir nesse tempo, a vez dele acaba (segundos). */
+	public static final float ESPERA_DRAGON_KNIGHT = 20f;
+	/** Uma prova coletada encurta a calmaria: a próxima ameaça vem em no máximo isso (segundos). */
+	public static final float AMEACA_DEPOIS_DA_PROVA = 15f;
+
+	// ---------- os Jubilados (os monstros que andam pela floresta) ----------
+
+	/** Quantos Jubilados há no mapa: um caça (na vez dele), os outros rondam de longe. */
+	public static final int JUBILADOS = 3;
+	/**
+	 * Os que rondam: ficam entre OBSERVA_PERTO e OBSERVA_LONGE metros do jogador (no limite do que
+	 * a neblina deixa ver) e fogem se ele chegar a OBSERVA_FOGE metros ou os iluminar com a lanterna
+	 * a menos de OBSERVA_LUZ metros.
+	 */
+	public static final float OBSERVA_PERTO = 18f, OBSERVA_LONGE = 34f, OBSERVA_FOGE = 12f, OBSERVA_LUZ = 26f;
+	/** Velocidade de quem foge, em m/s, e até onde, em metros do jogador. */
+	public static final float JUBILADO_FUGINDO = 5f, FOGE_ATE = 60f;
 
 	/** Velocidades em m/s: vagando, indo ver um barulho e caçando (o jogador anda a 3,5 e corre a 6). */
 	public static final float JUBILADO_VAGANDO = 1.4f, JUBILADO_DESCONFIADO = 2.4f, JUBILADO_CACANDO = 5.2f;
@@ -83,6 +107,11 @@ public final class Regras {
 	public static final float JUBILADO_CHANCE_EMBOSCADA = 0.35f;
 	/** No começo (depois que o jogador sai da Univali), segundos em que ele só vaga, sem vir atrás. */
 	public static final float JUBILADO_CARENCIA = 25f;
+	/**
+	 * Na vez dele, farejando o jogador: vem a essa velocidade (m/s) até chegar a FAREJA_PERTO metros
+	 * (mais rápido que o jogador andando e mais lento que correndo: dá para fugir, mas correr faz barulho).
+	 */
+	public static final float JUBILADO_FAREJANDO = 4.5f, FAREJA_PERTO = 20f;
 	/** Distância mínima do jogador onde ele começa, e da Univali (ele não chega perto do prédio), em metros. */
 	public static final float JUBILADO_INICIO = 70f, JUBILADO_LONGE_UNIVALI = 12f;
 

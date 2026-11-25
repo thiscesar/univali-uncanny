@@ -8,8 +8,9 @@ sem as três provas (**M1, M2 e M3**), e elas estão perdidas na floresta em vol
 neblina vive o **Dragon Knight**: quando ele aparece, você tem **5 segundos** para derrubá-lo com a
 escopeta. Se não conseguir, reprovado.
 
-E a floresta tem outro morador: o **Jubilado**, um aluno que estourou o prazo do curso e nunca
-saiu de lá. Ele anda entre as árvores o tempo todo, ouve quem corre e enxerga a luz da lanterna
+E a floresta tem outros moradores: os **Jubilados**, alunos que estouraram o prazo do curso e
+nunca saíram de lá. Eles rondam entre as árvores — às vezes só os olhos verdes aparecem na
+neblina — e, de tempos em tempos, um deles vem caçar: ouve quem corre e enxerga a luz da lanterna
 de longe. Se te pegar, reprovado. A escopeta não o mata, só derruba por alguns segundos.
 
 Cada partida tem um mapa diferente: o relevo e a posição das provas, das caixas de munição e da
@@ -48,7 +49,10 @@ Requisitos: placa de vídeo com **OpenGL 3.3** e cerca de **1 GB de memória liv
   para o Jubilado andar pela floresta desviando de morros, água e da Univali.
 - **Monstros MD2** (`md2`, `entidades`): leitor do formato do Quake II, com a interpolação entre
   quadros feita no shader. O Jubilado tem uma máquina de estados (vagando, desconfiado, caçando,
-  procurando, caído, atacando) com visão em cone bloqueada pelos troncos e audição.
+  procurando, caído, atacando, fugindo) com visão em cone bloqueada pelos troncos e audição.
+- **Diretor de sustos** (`jogo.DiretorDeSustos`): controla o ritmo — calmaria, a vez de um monstro,
+  calmaria — para que só um ataque de cada vez, o Dragon Knight fique mais comum perto do fim e a
+  partida nunca fique muito tempo sem nada acontecer.
 - **Renderização** (`render`, `shaders`): texture splatting no terreno, neblina exponencial,
   lanterna com sombras (shadow mapping com PCF), árvores com instancing, escopeta como viewmodel,
   normal mapping e pós-processamento (vinheta, granulado e um filtro opcional no estilo PS1).

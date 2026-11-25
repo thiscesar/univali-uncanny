@@ -225,21 +225,86 @@ class JubiladoTest {
 	}
 
 	@Test
-	void naTreguaNaoPercebeNemOJogadorNaFrente() {
+	void quemRondaNaoCacaMesmoVendoOJogador() {
 		Jubilado j = novo();
-		j.tregua(Regras.INTERVALO_MONSTROS);
-		j.definirAlvo(108, 1.7f, 100, true, true, true, false); // 8 m à frente, correndo, com lanterna
-		j.ouvirTiro(108, 100);
-		simular(j, 1);
+		j.encerrarCaca();
+		j.definirAlvo(120, 1.7f, 100, true, true, false, false); // 20 m à frente, correndo
+		j.ouvirTiro(120, 100);
+		simular(j, 2);
+		assertEquals(Jubilado.Papel.OBSERVADOR, j.papel());
 		assertNotEquals(Jubilado.Estado.CACANDO, j.estado());
 		assertNotEquals(Jubilado.Estado.DESCONFIADO, j.estado());
+	}
 
-		Jubilado cacando = novo();
-		cacando.definirAlvo(108, 1.7f, 100, false, false, false, false);
-		cacando.SimulaSe(16);
-		assertEquals(Jubilado.Estado.CACANDO, cacando.estado());
-		cacando.tregua(Regras.INTERVALO_MONSTROS); // o Dragon Knight surgiu: ele desiste
-		assertEquals(Jubilado.Estado.PROCURANDO, cacando.estado());
+	@Test
+	void quemRondaFogeSeOJogadorChegaPerto() {
+		Jubilado j = novo();
+		j.encerrarCaca();
+		j.definirAlvo(110, 1.7f, 100, false, true, false, false); // a 10 m
+		j.SimulaSe(16);
+		assertEquals(Jubilado.Estado.FUGINDO, j.estado());
+		simular(j, 6);
+		assertTrue(Math.hypot(j.x - 110, j.z - 100) > 30, "correu para longe: " + Math.hypot(j.x - 110, j.z - 100));
+	}
+
+	@Test
+	void quemRondaFogeDaLuzDaLanterna() {
+		Jubilado apagada = novo();
+		apagada.encerrarCaca();
+		apagada.definirAlvo(120, 1.7f, 100, false, false, false, false); // a 20 m, olhando para ele, lanterna apagada
+		apagada.definirOlhar(-1, 0);
+		apagada.SimulaSe(16);
+		assertNotEquals(Jubilado.Estado.FUGINDO, apagada.estado());
+
+		Jubilado acesa = novo();
+		acesa.encerrarCaca();
+		acesa.definirAlvo(120, 1.7f, 100, false, false, true, false);
+		acesa.definirOlhar(-1, 0); // a luz bem nele
+		acesa.SimulaSe(16);
+		assertEquals(Jubilado.Estado.FUGINDO, acesa.estado());
+
+		Jubilado deLado = novo();
+		deLado.encerrarCaca();
+		deLado.definirAlvo(120, 1.7f, 100, false, false, true, false);
+		deLado.definirOlhar(0, 1); // a luz para outro lado
+		deLado.SimulaSe(16);
+		assertNotEquals(Jubilado.Estado.FUGINDO, deLado.estado());
+	}
+
+	@Test
+	void quemRondaFicaNoAnelEmVoltaDoJogador() {
+		Jubilado j = novo();
+		j.encerrarCaca();
+		j.definirAlvo(100, 1.7f, 150, false, false, false, false); // a 50 m, parado
+		float soma = 0;
+		int amostras = 0;
+		for (int i = 0; i < 60 * 60; i++) {
+			j.SimulaSe(16);
+			if (i > 20 * 60 && i % 60 == 0) {
+				soma += (float) Math.hypot(j.x - 100, j.z - 150);
+				amostras++;
+			}
+		}
+		float media = soma / amostras;
+		assertTrue(media > Regras.OBSERVA_FOGE && media < Regras.OBSERVA_LONGE + 12, "distância média " + media);
+	}
+
+	@Test
+	void caidoQuemRondaLevantaFugindoEOCacadorLevantaCacando() {
+		Jubilado observador = novo();
+		observador.encerrarCaca();
+		observador.definirAlvo(60, 1.7f, 100, false, false, false, false);
+		observador.receberDano(3 * Regras.DANO_BAGO);
+		assertEquals(Jubilado.Estado.CAIDO, observador.estado());
+		simular(observador, Regras.JUBILADO_CAIDO + 0.1f);
+		assertEquals(Jubilado.Estado.FUGINDO, observador.estado());
+
+		Jubilado cacador = novo();
+		cacador.encerrarCaca();
+		cacador.liberarCaca();
+		cacador.definirAlvo(108, 1.7f, 100, false, false, false, false);
+		cacador.SimulaSe(16);
+		assertEquals(Jubilado.Estado.CACANDO, cacador.estado());
 	}
 
 	@Test

@@ -23,6 +23,8 @@ import obj.Object3D;
  *               pouco e sorteia outro. Grunhe de vez em quando. Longe do jogador (escondido
  *               pela neblina), anda rápido até a região dele: assim ele sempre volta a rondar.
  *   DESCONFIADO ouviu algo (o jogador correndo ou andando perto, um tiro): vai até o barulho.
+ *               Quando ganha a vez (o diretor o solta), fareja: vai até onde o jogador está agora,
+ *               refazendo o caminho conforme ele anda, até vê-lo ou ouvi-lo.
  *   CACANDO     viu o jogador: corre atrás dele. Correndo ou à vista, o jogador continua sendo
  *               seguido; sem vê-lo nem ouvi-lo por 4 s, ele desiste.
  *   PROCURANDO  no último lugar onde viu ou ouviu o jogador: para e olha em volta por 7 s.
@@ -30,6 +32,12 @@ import obj.Object3D;
  *   CAIDO       levou um tiro de perto: cai e fica 12 s no chão. A escopeta não o mata. Ao
  *               levantar, vai direto para onde o jogador está.
  *   ATACANDO    alcançou o jogador: ataca; no fim da animação, a partida está perdida.
+ *   FUGINDO     (só quem ronda) o jogador chegou perto ou o iluminou: corre para longe, na neblina.
+ *
+ * Há vários Jubilados no mapa, e cada um tem um papel, dado pelo diretor de sustos:
+ *   CACADOR     o da vez: ronda, ouve, vê e caça, como descrito acima.
+ *   OBSERVADOR  os outros: ficam rondando de longe (18 a 34 m), param e encaram o jogador entre as
+ *               árvores, e fogem se ele chegar perto ou apontar a lanterna. Nunca atacam.
  *
  * Para andar, usa o A* na grade de caminhada (desvia de morro e de água, contorna a Univali)
  * e, a cada passo, a grade de colisão para escorregar em volta dos troncos, como o jogador.
@@ -38,7 +46,9 @@ import obj.Object3D;
  */
 public class Jubilado extends Object3D implements Atingivel {
 
-	public enum Estado { VAGANDO, DESCONFIADO, CACANDO, PROCURANDO, CAIDO, ATACANDO }
+	public enum Estado { VAGANDO, DESCONFIADO, CACANDO, PROCURANDO, CAIDO, ATACANDO, FUGINDO }
+
+	public enum Papel { CACADOR, OBSERVADOR }
 
 	/** Quem quer saber o que ele faz (sons, música, susto). Tudo opcional. */
 	public interface Eventos {
@@ -84,6 +94,8 @@ public class Jubilado extends Object3D implements Atingivel {
 
 	// o jogador, como a tela informa a cada quadro
 	private float alvoX, alvoY, alvoZ;
+	/** Para onde o jogador olha (no chão, unitário; 0 = não informado): para saber se a lanterna aponta para ele. */
+	private float alvoFrenteX, alvoFrenteZ;
 	private boolean alvoCorrendo, alvoAndando, alvoLanterna, alvoEscondido;
 	/** Onde ele viu ou ouviu o jogador pela última vez, e há quanto tempo não o vê nem ouve. */
 	private float ultimoX, ultimoZ, semNoticia;
@@ -94,8 +106,6 @@ public class Jubilado extends Object3D implements Atingivel {
 	private float replanejar;
 	/** Vagando: segundos parado antes de sortear o próximo destino. */
 	private float parado;
-	/** Trégua: segundos em que ele não percebe o jogador (o Dragon Knight está ou acabou de estar em cena). */
-	private float tregua;
 	/** Segundos de respiro que ainda faltam (sem rondar o jogador): a carência do começo e depois de cada caçada. */
 	private float respiro = Regras.JUBILADO_CARENCIA;
 
@@ -108,9 +118,15 @@ public class Jubilado extends Object3D implements Atingivel {
 	private float proximoGrunhido;
 	private float marcaDano;
 	private boolean animacaoTerminou, ataqueTerminou;
+	/** Quantas vezes ele já foi derrubado na partida. */
+	private int quedas;
+	/** Ganhou a vez e ainda não achou o jogador: vai atrás do cheiro dele (onde ele está agora). */
+	private boolean farejando;
 
 	/** Rotação do modelo em volta do eixo y, em radianos (0 = olhando para +x). */
 	public float guinada = 0;
+	/** Caça (o da vez) ou só ronda de longe. Sozinho, sem diretor, ele caça. */
+	private Papel papel = Papel.CACADOR;
 	/** Enquanto falso, ele fica parado no lugar (a partida começa dentro da Univali). */
 	public boolean ativo = true;
 	/** Com o Dragon Knight em cena, ele para e espera (os dois juntos seriam injustos). */
@@ -162,12 +178,48 @@ public class Jubilado extends Object3D implements Atingivel {
 		alvoEscondido = escondido;
 	}
 
-	/**
-	 * Coloca ele no mapa, longe do jogador (x, z) e da Univali, num lugar de onde dá para chegar
-	 * até o jogador. O jogador começa dentro da Univali, que está fora da grade de caminhada: a
-	 * ligação é conferida a partir da célula livre mais perto dele.
-	 */
+	/** Para onde o jogador olha (x, z no chão): com a lanterna ligada, quem ronda foge se a luz o pegar. */
+	public void definirOlhar(float frenteX, float frenteZ) {
+		float t = (float) Math.hypot(frenteX, frenteZ);
+		alvoFrenteX = t > 1e-4f ? frenteX / t : 0;
+		alvoFrenteZ = t > 1e-4f ? frenteZ / t : 0;
+	}
+
+	/** A vez dele: passa a caçar, e vem logo para perto do jogador (sem respiro). */
+	public void liberarCaca() {
+		papel = Papel.CACADOR;
+		respiro = 0;
+		if (estado != Estado.CAIDO && estado != Estado.ATACANDO) {
+			farejando = true;
+			desconfiar(alvoX, alvoZ); // fareja: vai até onde o jogador está
+		}
+	}
+
+	/** Acabou a vez dele: volta a só rondar de longe (caído, termina de levantar e foge). */
+	public void encerrarCaca() {
+		papel = Papel.OBSERVADOR;
+		farejando = false;
+		if (estado == Estado.CACANDO || estado == Estado.DESCONFIADO || estado == Estado.PROCURANDO) {
+			mudarPara(Estado.VAGANDO);
+			caminho = null;
+		}
+	}
+
+	public Papel papel() {
+		return papel;
+	}
+
 	public void posicionarLongeDe(float px, float pz) {
+		posicionarLongeDe(px, pz, List.of());
+	}
+
+	/**
+	 * Coloca ele no mapa, longe do jogador (x, z), da Univali e dos outros Jubilados (pelo menos
+	 * 50 m de cada um em "evitar", {x, z}), num lugar de onde dá para chegar até o jogador. O
+	 * jogador começa dentro da Univali, que está fora da grade de caminhada: a ligação é
+	 * conferida a partir da célula livre mais perto dele.
+	 */
+	public void posicionarLongeDe(float px, float pz, List<float[]> evitar) {
 		float tamanho = grade.lado * grade.celula;
 		int[] perto = celulaCaminhavelPerto(px, pz, grade.lado);
 		int componente = perto != null ? grade.componente(perto[0], perto[1]) : -1;
@@ -175,6 +227,9 @@ public class Jubilado extends Object3D implements Atingivel {
 		for (int tentativa = 0; tentativa < 400; tentativa++) {
 			float cx = borda + random.nextFloat() * (tamanho - 2 * borda), cz = borda + random.nextFloat() * (tamanho - 2 * borda);
 			boolean longe = Math.hypot(cx - px, cz - pz) >= Regras.JUBILADO_INICIO || tentativa > 300;
+			for (float[] o : evitar) {
+				if (tentativa <= 300 && Math.hypot(cx - o[0], cz - o[1]) < 50) longe = false;
+			}
 			if (longe && livre(cx, cz) && (componente < 0 || grade.componenteEm(cx, cz) == componente)) {
 				x = cx;
 				z = cz;
@@ -200,9 +255,13 @@ public class Jubilado extends Object3D implements Atingivel {
 		tempoNoEstado += dt;
 		replanejar -= dt;
 		respiro = Math.max(0, respiro - dt);
-		tregua = Math.max(0, tregua - dt);
+		if (papel == Papel.OBSERVADOR && estado != Estado.CAIDO && estado != Estado.ATACANDO) {
+			observar(dt);
+			animarAndando();
+			return;
+		}
 
-		boolean percebe = tregua <= 0 && estado != Estado.CAIDO && estado != Estado.ATACANDO;
+		boolean percebe = estado != Estado.CAIDO && estado != Estado.ATACANDO;
 		boolean ve = percebe && ve();
 		boolean ouve = percebe && !ve && ouve();
 
@@ -230,10 +289,20 @@ public class Jubilado extends Object3D implements Atingivel {
 		}
 		case DESCONFIADO -> {
 			if (ve) { cacar(); return; }
-			if (ouve && Math.hypot(alvoX - ultimoX, alvoZ - ultimoZ) > 4) desconfiar(alvoX, alvoZ);
+			boolean mudou = Math.hypot(alvoX - ultimoX, alvoZ - ultimoZ) > 4;
+			if (ouve && mudou || farejando && !alvoEscondido && mudou && replanejar <= 0) {
+				replanejar = 3;
+				desconfiar(alvoX, alvoZ); // o jogador andou: refaz o caminho até onde ele está
+			}
 			grunhir(dt);
-			if (caminho == null || seguirCaminho(dt, Regras.JUBILADO_DESCONFIADO) || empacou(dt)) {
-				procurar();
+			// farejando: longe (na neblina) vem bem rápido; até chegar perto, mais rápido que o jogador andando
+			float dist = (float) Math.hypot(alvoX - x, alvoZ - z);
+			float rapidez = !farejando ? Regras.JUBILADO_DESCONFIADO
+					: dist > Regras.JUBILADO_LONGE ? Regras.JUBILADO_APROXIMANDO
+					: dist > Regras.FAREJA_PERTO ? Regras.JUBILADO_FAREJANDO : Regras.JUBILADO_DESCONFIADO;
+			if (caminho == null || seguirCaminho(dt, rapidez) || empacou(dt)) {
+				if (farejando && !alvoEscondido) desconfiar(alvoX, alvoZ); // chegou e ele já foi: continua farejando
+				else procurar();
 			}
 		}
 		case CACANDO -> {
@@ -281,7 +350,9 @@ public class Jubilado extends Object3D implements Atingivel {
 		}
 		case CAIDO -> {
 			velocidade = 0;
-			if (tempoNoEstado >= Regras.JUBILADO_CAIDO) {
+			if (tempoNoEstado >= Regras.JUBILADO_CAIDO && papel == Papel.OBSERVADOR) {
+				fugir(); // quem só ronda levanta e some na neblina
+			} else if (tempoNoEstado >= Regras.JUBILADO_CAIDO) {
 				// levanta e vai direto para onde o jogador está
 				ultimoX = alvoX;
 				ultimoZ = alvoZ;
@@ -300,6 +371,82 @@ public class Jubilado extends Object3D implements Atingivel {
 		}
 		if (estado != Estado.ATACANDO && estado != Estado.CAIDO) {
 			animarAndando();
+		}
+	}
+
+	// ---------- quem só ronda ----------
+
+	/**
+	 * O observador: anda até um ponto a 28-50 m do jogador, para e fica encarando; depois escolhe
+	 * outro. Longe demais, vem rápido (escondido na neblina). Perto demais ou na luz da lanterna, foge.
+	 */
+	private void observar(float dt) {
+		if (estado != Estado.VAGANDO && estado != Estado.FUGINDO) {
+			mudarPara(Estado.VAGANDO);
+			caminho = null;
+		}
+		if (estado == Estado.FUGINDO) {
+			if (caminho == null || seguirCaminho(dt, Regras.JUBILADO_FUGINDO) || empacou(dt)) {
+				mudarPara(Estado.VAGANDO);
+				caminho = null;
+				parado = 2 + random.nextFloat() * 3;
+			}
+			return;
+		}
+		float dist = (float) Math.hypot(alvoX - x, alvoZ - z);
+		if (!alvoEscondido && (dist < Regras.OBSERVA_FOGE || iluminado(dist))) {
+			fugir();
+			return;
+		}
+		grunhir(dt);
+		boolean longe = !alvoEscondido && dist > Regras.OBSERVA_LONGE + 10;
+		if (longe && replanejar <= 0) {
+			replanejar = 4;
+			parado = 0;
+			sortearPontoDeObservacao();
+		}
+		if (parado > 0) {
+			parado -= dt;
+			frear(dt);
+			if (!alvoEscondido) virarPara(guinadaPara(alvoX - x, alvoZ - z), dt); // parado, encara o jogador
+			if (parado <= 0) sortearPontoDeObservacao();
+		} else if (caminho == null || seguirCaminho(dt, longe ? Regras.JUBILADO_APROXIMANDO : Regras.JUBILADO_VAGANDO)
+				|| empacou(dt)) {
+			parado = 3 + random.nextFloat() * 5;
+			caminho = null;
+		}
+	}
+
+	/** A lanterna ligada, apontada para ele (até 18° do centro do facho), perto e sem tronco no meio. */
+	private boolean iluminado(float dist) {
+		if (!alvoLanterna || dist > Regras.OBSERVA_LUZ || dist < 1e-3f) return false;
+		float cosseno = ((x - alvoX) * alvoFrenteX + (z - alvoZ) * alvoFrenteZ) / dist;
+		return cosseno > (float) Math.cos(Math.toRadians(18)) && colisao.linhaLivre(alvoX, alvoZ, x, z, 0.1f);
+	}
+
+	/** Um ponto no anel de 18 a 34 m em volta do jogador (escondido, em volta de si). */
+	private void sortearPontoDeObservacao() {
+		for (int tentativa = 0; tentativa < 25; tentativa++) {
+			double angulo = random.nextDouble() * Math.PI * 2;
+			float cx = alvoEscondido ? x : alvoX, cz = alvoEscondido ? z : alvoZ;
+			float raio = alvoEscondido ? 15 + random.nextFloat() * 25
+					: Regras.OBSERVA_PERTO + random.nextFloat() * (Regras.OBSERVA_LONGE - Regras.OBSERVA_PERTO);
+			float px = cx + raio * (float) Math.cos(angulo), pz = cz + raio * (float) Math.sin(angulo);
+			if (lugarBom(px, pz) && planejar(px, pz)) return;
+		}
+		caminho = null;
+		parado = 2;
+	}
+
+	/** Corre para longe do jogador (uns 60 m, para o lado oposto ao dele), sumindo na neblina. */
+	private void fugir() {
+		mudarPara(Estado.FUGINDO);
+		caminho = null;
+		double oposto = Math.atan2(z - alvoZ, x - alvoX);
+		for (int tentativa = 0; tentativa < 25; tentativa++) {
+			double angulo = oposto + (random.nextDouble() - 0.5) * (1.2 + tentativa * 0.15);
+			float px = alvoX + Regras.FOGE_ATE * (float) Math.cos(angulo), pz = alvoZ + Regras.FOGE_ATE * (float) Math.sin(angulo);
+			if (lugarBom(px, pz) && planejar(px, pz)) return;
 		}
 	}
 
@@ -328,7 +475,8 @@ public class Jubilado extends Object3D implements Atingivel {
 
 	/** Um tiro em (tx, tz): se ele ouvir, vai ver o que foi (caçando, continua caçando; na trégua, nem liga). */
 	public void ouvirTiro(float tx, float tz) {
-		if (!ativo || tregua > 0 || estado == Estado.CACANDO || estado == Estado.CAIDO || estado == Estado.ATACANDO) return;
+		if (!ativo || papel != Papel.CACADOR || estado == Estado.CACANDO || estado == Estado.CAIDO
+				|| estado == Estado.ATACANDO) return;
 		if (Math.hypot(tx - x, tz - z) <= Regras.JUBILADO_OUVE_TIRO) {
 			desconfiar(tx, tz);
 		}
@@ -345,6 +493,7 @@ public class Jubilado extends Object3D implements Atingivel {
 	}
 
 	private void cacar() {
+		farejando = false;
 		mudarPara(Estado.CACANDO);
 		ultimoX = alvoX;
 		ultimoZ = alvoZ;
@@ -384,6 +533,7 @@ public class Jubilado extends Object3D implements Atingivel {
 	}
 
 	private void cair() {
+		quedas++;
 		mudarPara(Estado.CAIDO);
 		caminho = null;
 		velocidade = 0;
@@ -405,6 +555,8 @@ public class Jubilado extends Object3D implements Atingivel {
 		marcaDano = 1;
 		if (valor >= BAGOS_PARA_CAIR * Regras.DANO_BAGO) {
 			cair();
+		} else if (papel == Papel.OBSERVADOR) {
+			fugir();
 		} else if (estado != Estado.CACANDO) {
 			cacar(); // levou um bago: sabe onde o jogador está
 		}
@@ -685,27 +837,14 @@ public class Jubilado extends Object3D implements Atingivel {
 		return caixa;
 	}
 
+	/** Quantas vezes ele já foi derrubado na partida. */
+	public int quedas() {
+		return quedas;
+	}
+
 	/** Para o painel de depuração: quanto falta para desistir (caçando) ou procurar (procurando). */
 	public float semNoticia() {
 		return semNoticia;
-	}
-
-	/**
-	 * Por pelo menos "segundos", não percebe o jogador e não vai atrás dele (o outro monstro está em
-	 * cena). Se estava caçando, desiste.
-	 */
-	public void tregua(float segundos) {
-		tregua = Math.max(tregua, segundos);
-		respiro = Math.max(respiro, segundos);
-		if (estado == Estado.CACANDO || estado == Estado.DESCONFIADO) {
-			eventos.perdeu(this);
-			procurar();
-		}
-	}
-
-	/** Segundos de trégua que ainda faltam. */
-	public float tregua() {
-		return tregua;
 	}
 
 	/** Segundos de respiro que ainda faltam (0 = rondando o jogador). */
