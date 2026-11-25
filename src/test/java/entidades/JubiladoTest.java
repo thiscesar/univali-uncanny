@@ -409,4 +409,46 @@ class JubiladoTest {
 		j.posicionarLongeDe(60, 60);
 		assertTrue(Math.hypot(j.x - 60, j.z - 60) >= Regras.JUBILADO_INICIO);
 	}
+
+	/** Um corredor de 4 m (z de 98 a 102) e 80 m de comprimento, com a planta interna de quem tem o corpo do Jubilado. */
+	private static Object[] corredor() {
+		GradeColisao colisao = new GradeColisao(200);
+		colisao.adicionarRetangulo(60, 90, 140, 98);
+		colisao.adicionarRetangulo(60, 102, 140, 110);
+		grafos.PlantaInterna planta = new grafos.PlantaInterna(colisao, new GradeColisao.Retangulo(60, 90, 140, 110), 0.45f,
+				0.5f, java.util.List.of(), 1.6f);
+		return new Object[] { colisao, planta };
+	}
+
+	@Test
+	void naEmboscadaDoPredioEleCacaPelaPlantaSemAtravessarParede() {
+		Object[] c = corredor();
+		grafos.PlantaInterna planta = (grafos.PlantaInterna) c[1];
+		Jubilado j = novo((GradeColisao) c[0]);
+		j.encerrarCaca(); // estava só rondando na floresta
+		j.entrarNoPredio(planta, 80, 100, 96, 100);
+		assertEquals(Jubilado.Papel.CACADOR, j.papel());
+		assertEquals(Jubilado.Estado.CACANDO, j.estado());
+		for (int i = 0; i < 6 * 60 && j.estado() != Jubilado.Estado.ATACANDO; i++) {
+			j.definirAlvo(96, 1.7f, 100, false, false, false, false);
+			j.SimulaSe(16);
+			assertTrue(planta.livre(j.x, j.z), "dentro da parede em " + j.x + ", " + j.z);
+		}
+		assertEquals(Jubilado.Estado.ATACANDO, j.estado(), "alcançou o jogador no corredor");
+	}
+
+	@Test
+	void naEmboscadaDoPredioDerrubadoNaoLevantaMais() {
+		Object[] c = corredor();
+		Jubilado j = novo((GradeColisao) c[0]);
+		j.entrarNoPredio((grafos.PlantaInterna) c[1], 80, 100, 96, 100);
+		j.receberDano(3 * Regras.DANO_BAGO);
+		assertEquals(Jubilado.Estado.CAIDO, j.estado());
+		for (int i = 0; i < (Regras.JUBILADO_CAIDO + 5) * 60; i++) {
+			j.definirAlvo(96, 1.7f, 100, false, false, false, false);
+			j.SimulaSe(16);
+		}
+		assertEquals(Jubilado.Estado.CAIDO, j.estado(), "fica no chão");
+	}
 }
+

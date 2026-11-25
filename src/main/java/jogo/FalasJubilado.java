@@ -28,6 +28,11 @@ public final class FalasJubilado {
 			return "audio/voz_jubilado/" + arquivo + ".ogg";
 		}
 
+		/** A mesma fala, mais rápida e atropelada (gagueira e cortes): a da emboscada do fim. */
+		public String arquivoRapido() {
+			return "audio/voz_jubilado_rapida/" + arquivo + ".ogg";
+		}
+
 		/** A legenda, como as do professor. */
 		public String legenda() {
 			return "Jubilado: \"" + texto + "\"";

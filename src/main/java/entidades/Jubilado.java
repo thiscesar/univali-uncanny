@@ -6,6 +6,7 @@ import java.util.Random;
 
 import grafos.AEstrela;
 import grafos.GradeCaminhada;
+import grafos.PlantaInterna;
 import jogo.Regras;
 import md2.Animador;
 import mundo.ConsultaAltura;
@@ -46,6 +47,9 @@ import obj.Object3D;
  *
  * Para andar, usa o A* na grade de caminhada (desvia de morro e de água, contorna a Univali)
  * e, a cada passo, a grade de colisão para escorregar em volta dos troncos, como o jogador.
+ * No fim da partida, dois deles entram no prédio (entrarNoPredio): lá dentro, o caminho e os
+ * lugares onde ele cabe vêm da planta interna (paredes e móveis), como no Dragon Knight, e
+ * derrubado ele não levanta mais.
  * Herda de Object3D (do projeto original): x, y, z e vivo são reaproveitados. Como no Dragon
  * Knight, a frente do modelo MD2 é o eixo +x e "guinada" gira o modelo em volta do eixo y.
  */
@@ -136,6 +140,10 @@ public class Jubilado extends Object3D implements Atingivel {
 	 * onde o jogador está agora) até o diretor encerrar a caçada. Sozinho (sem diretor), não.
 	 */
 	private boolean implacavel;
+	/** Dentro do prédio (a emboscada do fim): a planta por onde ele anda; null = na floresta. */
+	private PlantaInterna planta;
+	/** Derrubado, fica no chão de vez (a emboscada do fim: derrubar os dois destranca a porta). */
+	private boolean naoLevanta;
 	/** O bote: segundos que ainda faltam dele, e até poder dar o próximo. */
 	private float investida, esperaInvestida;
 	/** Quem ronda: segundos (somados) com a lanterna nele; em JUBILADO_PROVOCA, é provocado. */
@@ -229,6 +237,31 @@ public class Jubilado extends Object3D implements Atingivel {
 		if (estado != Estado.CAIDO && estado != Estado.ATACANDO) {
 			cacar();
 		}
+	}
+
+	/**
+	 * A emboscada do fim: ele aparece em (px, pz), dentro do prédio, já caçando o jogador que está em
+	 * (alvoX, alvoZ) e virado para ele. Anda pela planta interna e, derrubado, não levanta mais.
+	 */
+	public void entrarNoPredio(PlantaInterna planta, float px, float pz, float jogadorX, float jogadorZ) {
+		this.planta = planta;
+		naoLevanta = true;
+		ativo = true;
+		papel = Papel.CACADOR;
+		implacavel = true;
+		farejando = false;
+		respiro = 0;
+		x = px;
+		z = pz;
+		y = chao.alturaEm(px, pz);
+		velocidade = 0;
+		caminho = null;
+		guinada = guinadaPara(jogadorX - px, jogadorZ - pz);
+		mudarPara(Estado.CACANDO); // sem o "viu": a cena toca as vozes dela
+		ultimoX = jogadorX;
+		ultimoZ = jogadorZ;
+		semNoticia = 0;
+		tocar("run", true);
 	}
 
 	/** Foi provocado desde a última vez que o diretor perguntou? (Perguntar apaga o aviso.) */
@@ -405,7 +438,9 @@ public class Jubilado extends Object3D implements Atingivel {
 		}
 		case CAIDO -> {
 			velocidade = 0;
-			if (tempoNoEstado >= Regras.JUBILADO_CAIDO && papel == Papel.OBSERVADOR) {
+			if (naoLevanta) {
+				// a emboscada do fim: derrubado, fica no chão
+			} else if (tempoNoEstado >= Regras.JUBILADO_CAIDO && papel == Papel.OBSERVADOR) {
 				fugir(); // quem só ronda levanta e some na neblina
 			} else if (tempoNoEstado >= Regras.JUBILADO_CAIDO && implacavel && !ve()) {
 				// levanta e, sem ver o jogador (ele já correu), vem farejando até achá-lo
@@ -733,14 +768,22 @@ public class Jubilado extends Object3D implements Atingivel {
 		return lugarBom(px, pz) && !colisao.colide(px, pz, RAIO + 0.2f);
 	}
 
-	/** Um lugar onde ele pode estar: caminhável e longe da Univali. */
+	/** Um lugar onde ele pode estar: caminhável e longe da Univali (dentro do prédio, onde a planta deixa). */
 	private boolean lugarBom(float px, float pz) {
+		if (planta != null) return planta.livre(px, pz);
 		return grade.caminhavelEm(px, pz)
 				&& (univali == null || univali.distancia(px, pz) >= Regras.JUBILADO_LONGE_UNIVALI + 2);
 	}
 
 	/** O caminho do A* até (px, pz). Devolve false se não há caminho. */
 	boolean planejar(float px, float pz) {
+		if (planta != null) { // dentro do prédio: o A* da planta interna (paredes e móveis)
+			List<float[]> pontos = planta.caminho(x, z, px, pz);
+			if (pontos == null) return false;
+			caminho = new ArrayList<>(pontos);
+			proximo = Math.min(1, caminho.size() - 1);
+			return true;
+		}
 		int[] de = celulaCaminhavelPerto(x, z), para = celulaCaminhavelPerto(px, pz);
 		if (de == null || para == null) return false;
 		AEstrela.Caminho c = AEstrela.buscar(grade, de[0], de[1], para[0], para[1], 2f);

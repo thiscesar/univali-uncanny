@@ -177,6 +177,8 @@ public class TelaJogo implements Tela {
 	private jogo.PortasSozinhas portasSozinhas;
 	private final List<mundo.GradeColisao.Retangulo> colisaoPortas = new java.util.ArrayList<>();
 	private Efeito somPorta;
+	/** Volume da TV do saguão (a voz de rádio) e dos sons de porta (rangido, maçaneta trancada). */
+	private static final float VOLUME_TV = 1f, VOLUME_PORTA = 0.6f;
 	/** Com as 3 provas, a Univali deixa de ser segura: ele vem logo na primeira entrada. */
 	private boolean voltouComAsProvas = false;
 	/** O jogador já pôs os pés fora da Univali: os Jubilados e os sustos da floresta começam. */
@@ -224,6 +226,25 @@ public class TelaJogo implements Tela {
 	private float atrasoFala;
 	/** Depois do glitch, quanto a fala espera (segundos). */
 	private static final float ATRASO_FALA = 0.9f;
+
+	// ---------- a emboscada do fim: a porta do professor bate e dois Jubilados aparecem no corredor ----------
+
+	/** A que distância do vão da porta do professor (metros) ela bate: quase entrando. */
+	private static final float EMBOSCADA_PORTA = 2.3f;
+	/** Onde eles aparecem: metros da porta para o meio do corredor (entre a metade e o fim dele). */
+	private static final float[] EMBOSCADA_RECUO = { 6f, 9f };
+	/** Segundos parados, encarando e falando, antes de correr; e depois de os dois caírem, até destrancar. */
+	private static final float EMBOSCADA_ENCARA = 1.3f, EMBOSCADA_DESTRANCA = 1.2f;
+	/** Quando a legenda passa a mostrar as duas falas (logo depois de a segunda voz começar), em segundos. */
+	private static final float LEGENDA_EMBOSCADA = 0.4f;
+	/** -1 = ainda não aconteceu; depois, segundos desde que a porta bateu. */
+	private float tempoEmboscada = -1;
+	/** Os dois da emboscada (vazio antes dela). */
+	private final List<Jubilado> emboscada = new java.util.ArrayList<>();
+	/** Os dois caíram: segundos até a porta destrancar (-1 = não). */
+	private float destrancando = -1;
+	private boolean emboscadaVencida = false;
+	private Efeito somPortaSusto;
 
 	// a escopeta, os efeitos dela e as caixas de munição
 	private final Escopeta escopeta = new Escopeta();
@@ -442,7 +463,7 @@ public class TelaJogo implements Tela {
 		if (Caminhos.existe("audio/tv_univali.ogg")) { // a voz de rádio da TV, saindo dela (3D)
 			float[] tv = mundo.predio.noMundo(DesenhoPredio.TV[0], DesenhoPredio.TV[1], DesenhoPredio.TV[2]);
 			somTv = gerenciador.audio().tocar3D(gerenciador.audio().carregarEfeito("audio/tv_univali.ogg"), tv[0], tv[1], tv[2],
-					0.85f, true, 2.5f);
+					VOLUME_TV, true, 3.5f);
 		}
 
 		caixas = new java.util.ArrayList<>();
@@ -712,6 +733,7 @@ public class TelaJogo implements Tela {
 		}
 		atualizarMonstro(diftime);
 		atualizarJubilados(diftime);
+		atualizarEmboscada(diftime / 1000f);
 		atualizarArma(entrada, diftime / 1000f);
 
 		tempo += diftime / 1000.0f;
@@ -766,8 +788,9 @@ public class TelaJogo implements Tela {
 		if (!objetivos.temEscopeta() && p.perto(jogador.x, jogador.z, p.escopetaNoModelo())) return Uso.ESCOPETA;
 		if (objetivos.podePegarCracha() && p.perto(jogador.x, jogador.z, p.chaveNoModelo())) return Uso.CRACHA;
 		float[] prof = p.professorNoModelo();
-		if (objetivos.portaProfessorAberta() && p.perto(jogador.x, jogador.z, new float[] { prof[0], prof[1] })) return Uso.PROFESSOR;
-		if (!objetivos.portaProfessorAberta() && p.perto(jogador.x, jogador.z, p.centroPortaProfessor())) return Uso.PORTA_PROFESSOR;
+		boolean portaAberta = objetivos.portaProfessorAberta() && !emboscadaTrancou();
+		if (portaAberta && p.perto(jogador.x, jogador.z, new float[] { prof[0], prof[1] })) return Uso.PROFESSOR;
+		if (!portaAberta && p.perto(jogador.x, jogador.z, p.centroPortaProfessor())) return Uso.PORTA_PROFESSOR;
 		if (!objetivos.portaEntradaAberta() && p.dentro(jogador.x, jogador.z)
 				&& p.perto(jogador.x, jogador.z, p.centroPortaEntrada())) return Uso.PORTA_ENTRADA;
 		if (p.salaTrancadaPerto(jogador.x, jogador.z) != null) return Uso.PORTA_TRANCADA;
@@ -829,10 +852,13 @@ public class TelaJogo implements Tela {
 			mostrarMensagem("Crachá do professor", 2.5f);
 		}
 		case PORTA_PROFESSOR -> {
-			if (objetivos.abrirPortaProfessor()) {
+			if (emboscadaTrancou()) { // a porta bateu sozinha: só abre depois de derrubar os dois
+				gerenciador.audio().tocar(somVazia, 1f);
+				mostrarMensagem("Trancada! Não abre.", 2f);
+			} else if (objetivos.abrirPortaProfessor()) {
 				mundo.colisao.removerRetangulo(mundo.predio.portaProfessor());
 				desenhoPredio.portaProfessorAberta = true;
-				gerenciador.audio().tocar(somTelha, 1f);
+				gerenciador.audio().tocar(somTelha, VOLUME_PORTA);
 				mostrarMensagem("A porta abriu.", 2f);
 			} else {
 				gerenciador.audio().tocar(somVazia, 1f);
@@ -851,7 +877,7 @@ public class TelaJogo implements Tela {
 		}
 		case PROFESSOR -> falarComProfessor();
 		case PORTA_ENTRADA -> {
-			gerenciador.audio().tocar(somVazia, 1f);
+			gerenciador.audio().tocar(somVazia, VOLUME_PORTA);
 			if (objetivos.falouComProfessor() && !objetivos.temEscopeta()) {
 				mostrarMensagem("Lá fora tem alguma coisa. Melhor não sair desarmado.", 3f);
 			} else {
@@ -859,7 +885,7 @@ public class TelaJogo implements Tela {
 			}
 		}
 		case PORTA_TRANCADA -> {
-			gerenciador.audio().tocar(somVazia, 1f);
+			gerenciador.audio().tocar(somVazia, VOLUME_PORTA);
 			mostrarMensagem(mundo.predio.salaTrancadaPerto(jogador.x, jogador.z).nome() + ": trancada.", 2.5f);
 		}
 		}
@@ -926,7 +952,7 @@ public class TelaJogo implements Tela {
 			mundo.colisao.removerRetangulo(colisaoPortas.get(i));
 			float[] c = salas.get(i).porta();
 			float[] w = mundo.predio.noMundo(c[0], 1.2f, c[1]);
-			gerenciador.audio().tocar3D(somPorta, w[0], w[1], w[2], 1f, false, 3f);
+			gerenciador.audio().tocar3D(somPorta, w[0], w[1], w[2], VOLUME_PORTA, false, 2.5f);
 		}
 		for (int i = 0; i < portasSozinhas.quantidade(); i++) desenhoPredio.anguloPortas[i] = portasSozinhas.angulo(i);
 	}
@@ -1323,6 +1349,8 @@ public class TelaJogo implements Tela {
 		somGritoJubilado = efeitoOuSintetizado("audio/jubilado_grito.ogg",
 				() -> Sintetizador.rugido(44100, 1200, 165, 70, 0.75, 33));
 		somQuedaJubilado = efeitoOuSintetizado("audio/jubilado_queda.ogg", () -> Sintetizador.rugido(44100, 1300, 95, 35, 0.5, 35));
+		somPortaSusto = Caminhos.existe("audio/porta_professor_susto.ogg")
+				? gerenciador.audio().carregarEfeito("audio/porta_professor_susto.ogg") : null;
 		somGlitchJubilado = Caminhos.existe("audio/jubilado_glitch.ogg") ? gerenciador.audio().carregarEfeito("audio/jubilado_glitch.ogg")
 				: null;
 		sussurrosJubilado = carregarVariacoes("audio/jubilado_sussurro_");
@@ -1402,8 +1430,11 @@ public class TelaJogo implements Tela {
 	/** A fala do Jubilado (a voz saindo da cabeça dele, com a legenda); sem fala ou sem o arquivo, o grito. */
 	private void gritarOuFalar(Jubilado j, jogo.FalasJubilado.Fala fala) {
 		Audio audio = gerenciador.audio();
-		if (fala != null && Caminhos.existe(fala.arquivo())) {
-			Efeito voz = audio.carregarEfeito(fala.arquivo());
+		// na emboscada do fim, a voz é a rápida e atropelada
+		String arquivo = fala == null ? null
+				: emboscada.contains(j) && Caminhos.existe(fala.arquivoRapido()) ? fala.arquivoRapido() : fala.arquivo();
+		if (fala != null && Caminhos.existe(arquivo)) {
+			Efeito voz = audio.carregarEfeito(arquivo);
 			audio.tocar3D(voz, j.x, j.y + 1.7f, j.z, 1f, false, 20f);
 			float duracao = audio.duracao(voz);
 			mostrarMensagem(fala.legenda(), duracao + 0.8f);
@@ -1438,6 +1469,95 @@ public class TelaJogo implements Tela {
 	 * ficam sabendo onde o jogador está só se o virem ou ouvirem. Dentro da Univali o jogador está
 	 * escondido; com o Dragon Knight em cena, eles param e esperam.
 	 */
+	/**
+	 * A emboscada do fim. Com as 3 provas e o Dragon Knight derrubado, quase entrando na sala do
+	 * professor, a porta bate na cara do jogador (com a trilha do susto), as luzes falham e dois
+	 * Jubilados aparecem no corredor, entre a metade dele e a porta. Ficam um instante parados,
+	 * falando os dois ao mesmo tempo com a voz rápida e atropelada, e correm. Derrubados os dois
+	 * (no prédio eles não levantam), a porta destranca. Se um alcançar o jogador, é a derrota.
+	 */
+	private void atualizarEmboscada(float dt) {
+		var p = mundo.predio;
+		if (tempoEmboscada < 0) {
+			if (emboscadaVencida || !partida.todasColetadas() || !voltouComAsProvas || monstro.lutando()
+					|| !objetivos.portaProfessorAberta() || jubilados.size() < EMBOSCADA_RECUO.length) return;
+			float[] porta = p.noMundo(p.centroPortaProfessor()[0], 0, p.centroPortaProfessor()[1]);
+			float[] noModelo = p.paraModelo(jogador.x, jogador.z);
+			if (!fase.AndarUnivali.noCorredorOuSaguao(noModelo[0], noModelo[1])) return; // já dentro de uma sala
+			if (Math.hypot(jogador.x - porta[0], jogador.z - porta[2]) > EMBOSCADA_PORTA) return;
+			comecarEmboscada();
+			return;
+		}
+		tempoEmboscada += dt;
+		if (tempoEmboscada - dt < LEGENDA_EMBOSCADA && tempoEmboscada >= LEGENDA_EMBOSCADA) {
+			// a segunda voz já começou (e trocou a legenda): as duas falas juntas, uma em cada linha
+			mensagem = jogo.FalasJubilado.Fala.PROVA.legenda();
+			mensagem2 = jogo.FalasJubilado.Fala.AMEACA.legenda();
+			tempoMensagem = 3.5f;
+		}
+		if (destrancando < 0) {
+			for (Jubilado j : emboscada) {
+				if (j.estado() != Jubilado.Estado.CAIDO) return;
+			}
+			destrancando = 0; // os dois no chão
+			return;
+		}
+		destrancando += dt;
+		if (destrancando >= EMBOSCADA_DESTRANCA) {
+			mundo.colisao.removerRetangulo(p.portaProfessor());
+			desenhoPredio.portaProfessorAberta = true;
+			float[] w = p.noMundo(p.centroPortaProfessor()[0], 1.2f, p.centroPortaProfessor()[1]);
+			gerenciador.audio().tocar3D(somPorta, w[0], w[1], w[2], VOLUME_PORTA, false, 2.5f);
+			mostrarMensagem("A porta destrancou.", 2.5f);
+			emboscadaVencida = true;
+			tempoEmboscada = -1;
+			destrancando = -1;
+		}
+	}
+
+	/** A porta do professor está trancada pela emboscada (bateu e os dois ainda não caíram). */
+	private boolean emboscadaTrancou() {
+		return tempoEmboscada >= 0 && !emboscadaVencida;
+	}
+
+	private void comecarEmboscada() {
+		var p = mundo.predio;
+		tempoEmboscada = 0;
+		// a porta bate e tranca: a parede dela volta para a colisão (o jogador ainda está no corredor)
+		mundo.colisao.adicionarRetangulo(p.portaProfessor());
+		desenhoPredio.portaProfessorAberta = false;
+		Audio audio = gerenciador.audio();
+		if (somPortaSusto != null) {
+			audio.tocar(somPortaSusto, 1f);
+			audio.musica().abafar(ABAFAR_NA_FALA, Math.round(audio.duracao(somPortaSusto) * 1000));
+		}
+		falhasDeLuz.forcarFalhaGeral();
+		tremor = Math.max(tremor, 0.8f);
+		presencaMonstro = 1;
+
+		// a planta do prédio com a porta fechada, do tamanho do corpo do Jubilado (passa nas portas das salas)
+		float piso = p.noMundo(0, 0, 0)[1];
+		grafos.PlantaInterna planta = new grafos.PlantaInterna(mundo.colisao, p.retangulo(), 0.45f, 0.5f, List.of(),
+				piso + 1.6f);
+		// no corredor (z = 0 no modelo), da porta para o meio: o jogador fica entre eles e a porta trancada
+		float[] porta = p.centroPortaProfessor();
+		float lado = Math.signum(porta[0]) == 0 ? 1 : Math.signum(porta[0]);
+		jogo.FalasJubilado.Fala[] falas = { jogo.FalasJubilado.Fala.PROVA, jogo.FalasJubilado.Fala.AMEACA };
+		for (int i = 0; i < EMBOSCADA_RECUO.length; i++) {
+			Jubilado j = jubilados.get(i);
+			float lx = porta[0] - lado * EMBOSCADA_RECUO[i], lz = i % 2 == 0 ? 0.9f : -0.9f;
+			float[] w = p.noMundo(lx, 0, lz);
+			if (!planta.livre(w[0], w[2])) w = p.noMundo(lx, 0, 0); // no meio do corredor, se o lado estiver ocupado
+			j.entrarNoPredio(planta, w[0], w[2], jogador.x, jogador.z);
+			emboscada.add(j);
+		}
+		// os dois falam ao mesmo tempo, um pouco defasados: as vozes se atropelam
+		gritarOuFalar(emboscada.get(0), falas[0]);
+		falaPendente = falas[1];
+		quemVaiFalar = emboscada.get(1);
+		atrasoFala = 0.35f;
+	}
+
 	private void atualizarJubilados(long diftime) {
 		diretor.atualizar(diftime / 1000f, partida.provasColetadas(), jogador.x, jogador.z,
 				saiuDaUnivali && !voltouComAsProvas);
@@ -1457,9 +1577,13 @@ public class TelaJogo implements Tela {
 			}
 		}
 		for (Jubilado j : jubilados) {
-			j.definirAlvo(jogador.x, olhos.y, jogador.z, jogador.correndo(), andando, lanterna.ligada(), escondido);
+			// os da emboscada estão no prédio com o jogador: para eles, ele não está escondido
+			boolean naEmboscada = emboscada.contains(j);
+			j.definirAlvo(jogador.x, olhos.y, jogador.z, jogador.correndo(), andando, lanterna.ligada(),
+					naEmboscada ? tempoEntrega >= 0 : escondido);
 			j.definirOlhar(olhos.frente.x, olhos.frente.z);
-			j.pausado = dragonEmCena;
+			// no começo da emboscada, ficam parados encarando e falando antes de correr
+			j.pausado = dragonEmCena || naEmboscada && tempoEmboscada < EMBOSCADA_ENCARA;
 			j.SimulaSe(diftime);
 			if (j.ataqueTerminou() && jubiladoDoSusto == null) {
 				jubiladoDoSusto = j;
