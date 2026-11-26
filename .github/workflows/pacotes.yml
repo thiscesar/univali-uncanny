@@ -32,6 +32,12 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      # as bibliotecas antes do pacote, com uma segunda tentativa: quando o pom.xml muda, o cache
+      # acima não vale e tudo é baixado do Maven Central, que às vezes recusa por excesso de
+      # pedidos (erro 429); esperar um pouco e pedir de novo resolve
+      - name: Baixar as bibliotecas
+        shell: bash
+        run: mvn -B -q dependency:go-offline || { sleep 45; mvn -B -q dependency:go-offline; }
       - name: Gerar pacote
         run: ${{ matrix.script }}
       - uses: actions/upload-artifact@v7

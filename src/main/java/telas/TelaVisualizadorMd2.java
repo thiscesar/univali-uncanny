@@ -29,20 +29,39 @@ import shaders.ShaderMd2;
 import util.Utils3D;
 
 /**
- * Bestiário (botão do menu, ou F9/M): o Dragon Knight girando, para conferir o modelo,
- * a escala e todas as animações.
+ * Bestiário (botão do menu, ou F9/M): os monstros do jogo girando, com uma ficha do que cada um
+ * faz, para conferir o modelo, a escala e todas as animações.
  *
- * Setas esquerda e direita trocam a animação; + e - mudam a velocidade; Espaço recomeça;
- * N liga e desliga o normal map; A liga e desliga a arma; ESC volta ao menu.
+ * Tab (ou setas para cima e para baixo) troca o monstro; setas esquerda e direita trocam a
+ * animação; + e - mudam a velocidade; Espaço recomeça; N liga e desliga o normal map; A liga e
+ * desliga a arma; ESC volta ao menu.
  */
 public class TelaVisualizadorMd2 implements Tela {
 
-	private static final String PASTA = "modelos/dragonknight";
-	private static final float ALTURA = 2.2f; // metros
+	/** Um monstro do bestiário: o modelo, a altura no jogo, de onde a câmera olha e a ficha dele. */
+	private record Ficha(String nome, String pasta, float altura, Camera camera, String[] descricao) {}
+
+	private static final Ficha[] FICHAS = {
+			new Ficha("Jubilado", TelaJogo.PASTA_JUBILADO, TelaJogo.ALTURA_JUBILADO,
+					new Camera(0, 1.25f, 5.4f, 0, (float) Math.toRadians(-8)), new String[] {
+							"O aluno que estourou o prazo do curso e nunca saiu da floresta. São quatro.",
+							"Vê a 16 m (30 m se a lanterna estiver ligada); ouve quem corre a 28 m e um tiro a 70 m.",
+							"Caçando, dá botes mais rápidos que você correndo e fareja até te achar.",
+							"Quem só ronda recua se iluminado, mas, provocado, ataca. A escopeta só o derruba." }),
+			// um cavaleiro montado: 2,2 m de altura, mas quase 5 m de comprimento
+			new Ficha("Dragon Knight", TelaJogo.PASTA_MONSTRO, TelaJogo.ALTURA_MONSTRO,
+					new Camera(0, 1.5f, 7.5f, 0, (float) Math.toRadians(-6)), new String[] {
+							"O chefão da volta: dorme na Univali até você entrar com as três provas.",
+							"Avança em zigue-zague pelos corredores e pula para o lado quando você mira nele.",
+							"Só tiros bons contam (três bagos no corpo): três deles o derrubam de vez." }),
+	};
 	private static final Color COR_TEXTO = new Color(215, 205, 190);
 	private static final Color COR_DICA = new Color(130, 125, 118);
 
 	private final GerenciadorTelas gerenciador;
+	/** Os modelos de cada ficha (null se o arquivo não está na pasta). */
+	private final PersonagemMd2[] personagens = new PersonagemMd2[FICHAS.length];
+	private int ficha = 0;
 	private PersonagemMd2 personagem;
 	private Animador animador;
 	private List<Animacao> animacoes;
@@ -50,8 +69,7 @@ public class TelaVisualizadorMd2 implements Tela {
 	private float angulo = 0;
 	private boolean comNormalMap = true, comArma = true;
 
-	// o Dragon Knight é um cavaleiro montado: 2,2 m de altura, mas quase 5 m de comprimento
-	private final Camera camera = new Camera(0, 1.5f, 7.5f, 0, (float) Math.toRadians(-6));
+	private Camera camera = FICHAS[0].camera();
 	private final Ambiente ambiente = new Ambiente();
 	private final FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
 	private final FiltroPs1 filtroPs1 = new FiltroPs1();
@@ -66,15 +84,13 @@ public class TelaVisualizadorMd2 implements Tela {
 		gerenciador.definirTitulo("Bestiário");
 		gerenciador.entrada().prenderCursor(false);
 
-		PersonagemMd2.Dados dados = PersonagemMd2.ler(PASTA, ALTURA);
-		if (dados != null) {
-			personagem = new PersonagemMd2(dados);
-			ps1 = Opcoes.atual().modoPs1;
-			Recursos.aplicarModoPs1(ps1);
-			animacoes = personagem.animacoes();
-			animador = new Animador(animacoes);
-			tocarAtual();
+		for (int i = 0; i < FICHAS.length; i++) {
+			PersonagemMd2.Dados dados = PersonagemMd2.ler(FICHAS[i].pasta(), FICHAS[i].altura());
+			if (dados != null) personagens[i] = new PersonagemMd2(dados);
 		}
+		ps1 = Opcoes.atual().modoPs1;
+		Recursos.aplicarModoPs1(ps1);
+		mostrar(0);
 
 		// luz de estúdio: lua mais forte e uma "lanterna" larga vinda de cima e da direita
 		ambiente.corCeu[0] = 0.06f; ambiente.corCeu[1] = 0.065f; ambiente.corCeu[2] = 0.075f;
@@ -90,6 +106,21 @@ public class TelaVisualizadorMd2 implements Tela {
 		ambiente.alcanceLanterna = 15;
 	}
 
+	/** Mostra o monstro da ficha i, começando pela primeira animação. */
+	private void mostrar(int i) {
+		ficha = i;
+		camera = FICHAS[i].camera();
+		personagem = personagens[i];
+		indice = 0;
+		if (personagem == null) {
+			animador = null;
+			return;
+		}
+		animacoes = personagem.animacoes();
+		animador = new Animador(animacoes);
+		tocarAtual();
+	}
+
 	/** Morte e "crdeath" param no último quadro; o resto fica em loop. */
 	private void tocarAtual() {
 		Animacao a = animacoes.get(indice);
@@ -99,8 +130,8 @@ public class TelaVisualizadorMd2 implements Tela {
 
 	@Override
 	public void sair() {
-		if (personagem != null) {
-			personagem.liberar();
+		for (PersonagemMd2 p : personagens) {
+			if (p != null) p.liberar();
 		}
 		filtroPs1.liberar();
 	}
@@ -114,6 +145,8 @@ public class TelaVisualizadorMd2 implements Tela {
 		}
 		float dt = diftime / 1000f;
 		angulo += dt * 0.6f;
+		if (e.foiPressionada(GLFW_KEY_TAB) || e.foiPressionada(GLFW_KEY_DOWN)) mostrar((ficha + 1) % FICHAS.length);
+		if (e.foiPressionada(GLFW_KEY_UP)) mostrar((ficha - 1 + FICHAS.length) % FICHAS.length);
 		if (animador == null) {
 			return;
 		}
@@ -173,13 +206,15 @@ public class TelaVisualizadorMd2 implements Tela {
 		int w = gerenciador.larguraJanela(), h = gerenciador.alturaJanela();
 		Overlay2D o = Recursos.overlay();
 		o.iniciar(w, h);
+		Ficha f = FICHAS[ficha];
 		if (personagem == null) {
-			Texto.desenhar(o, "Modelo não encontrado: " + PASTA + "/tris.md2", w / 2f, h / 2f, 22, COR_TEXTO,
+			Texto.desenhar(o, "Bestiário: " + f.nome() + "   (Tab: próximo)", 20, 16, 22, COR_TEXTO, Texto.Alinhamento.ESQUERDA);
+			Texto.desenhar(o, "Modelo não encontrado: " + f.pasta() + "/tris.md2", w / 2f, h / 2f, 22, COR_TEXTO,
 					Texto.Alinhamento.CENTRO);
 		} else {
 			Animacao a = animacoes.get(indice);
 			String[] linhas = {
-					"Bestiário: Dragon Knight",
+					String.format("Bestiário: %s   (%d de %d)", f.nome(), ficha + 1, FICHAS.length),
 					String.format("animação %s   (%d de %d, quadros %d a %d)%s", a.nome(), indice + 1, animacoes.size(),
 							a.primeiro(), a.ultimo(), animador.terminou() ? "   fim" : ""),
 					String.format("quadro %d -> %d   fator %.2f", animador.quadroA(), animador.quadroB(), animador.fator()),
@@ -190,7 +225,12 @@ public class TelaVisualizadorMd2 implements Tela {
 			for (int i = 0; i < linhas.length; i++) {
 				Texto.desenhar(o, linhas[i], 20, 16 + i * 26, i == 0 ? 22 : 18, COR_TEXTO, Texto.Alinhamento.ESQUERDA);
 			}
-			Texto.desenhar(o, "setas: animação    + -: velocidade    Espaço: recomeçar    N: normal map    A: arma    ESC: menu",
+			// a ficha do monstro, embaixo
+			for (int i = 0; i < f.descricao().length; i++) {
+				float y = h - 70 - (f.descricao().length - i) * 26;
+				Texto.desenhar(o, f.descricao()[i], w / 2f, y, 18, COR_TEXTO, Texto.Alinhamento.CENTRO);
+			}
+			Texto.desenhar(o, "Tab: outro monstro    setas: animação    + -: velocidade    Espaço: recomeçar    N: normal map    A: arma    ESC: menu",
 					w / 2f, h - 34, 16, COR_DICA, Texto.Alinhamento.CENTRO);
 		}
 		o.finalizar();
